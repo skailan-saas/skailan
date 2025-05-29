@@ -12,7 +12,8 @@ import {
   Code2,
   LifeBuoy,
   FileText,
-  Zap, // Added for Channel Connections
+  Zap, 
+  UserCircle, // Added for Profile
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -31,7 +32,8 @@ const mainNavItems = [
 ];
 
 const settingsNavItems = [
-  { href: "/settings/roles", label: "Roles & Permissions", icon: Users },
+  { href: "/settings/profile", label: "My Profile", icon: UserCircle },
+  { href: "/settings/roles", label: "Users & Roles", icon: Users },
   { href: "/settings/channels", label: "Channel Connections", icon: Zap },
   { href: "/settings/sdk", label: "Website SDK", icon: Code2 },
   // Add more settings links here
@@ -47,15 +49,15 @@ export function AppSidebarNav() {
   const pathname = usePathname();
   const { state: sidebarState } = useSidebar();
 
-  const renderNavItems = (items: typeof mainNavItems) =>
+  const renderNavItems = (items: typeof mainNavItems) => // Use mainNavItems as a representative type
     items.map((item) => (
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
           asChild
-          isActive={pathname.startsWith(item.href)}
+          isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/settings/profile" && item.href !== "/dashboard" && item.href !== "/flows" && item.href !== "/analytics") || (pathname === "/settings" && item.href === "/settings/profile")} // More specific active check
           tooltip={item.label}
           className={cn(
-            pathname.startsWith(item.href) && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+            (pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/settings/profile" && item.href !== "/dashboard" && item.href !== "/flows" && item.href !== "/analytics") || (pathname === "/settings" && item.href === "/settings/profile") )&& "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
           )}
         >
           <Link href={item.href}>
@@ -85,5 +87,3 @@ export function AppSidebarNav() {
     </>
   );
 }
-
-    

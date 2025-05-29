@@ -1,84 +1,242 @@
 
+"use client";
+
+import { useState, useEffect, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Edit, Trash2, MoreHorizontal, UserPlus, ShieldCheck, Search } from "lucide-react";
+import { PlusCircle, Edit, Trash2, MoreHorizontal, UserPlus, ShieldCheck, Search, Users as UsersIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/lib/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
-const mockRoles = [
-  { id: "1", name: "Administrator", description: "Full access to all features and settings.", userCount: 2 },
-  { id: "2", name: "Agent Supervisor", description: "Manages agents and reviews conversations.", userCount: 5 },
-  { id: "3", name: "Agent", description: "Handles customer conversations.", userCount: 25 },
-  { id: "4", name: "Read-Only Analyst", description: "Views analytics and reports only.", userCount: 3 },
-];
+// Types (can be moved to a types file)
+type Role = {
+  id: string;
+  name: string;
+  description: string;
+  userCount?: number; // Optional, could be derived
+  // tenantId: string; // Add if roles become tenant-specific
+};
 
-const mockUsers = [
-  { id: "u1", name: "Alice Johnson", email: "alice@example.com", role: "Administrator", avatar: "https://placehold.co/40x40.png", dataAiHint:"female avatar" },
-  { id: "u2", name: "Bob Williams", email: "bob@example.com", role: "Agent Supervisor", avatar: "https://placehold.co/40x40.png", dataAiHint:"male avatar" },
-  { id: "u3", name: "Carol Davis", email: "carol@example.com", role: "Agent", avatar: "https://placehold.co/40x40.png", dataAiHint:"person avatar" },
-  { id: "u4", name: "David Miller", email: "david@example.com", role: "Agent", avatar: "https://placehold.co/40x40.png", dataAiHint:"man face" },
-];
+type UserInTenant = {
+  id: string; // Supabase auth user ID
+  name: string; // From user_metadata or profiles table
+  email: string;
+  role: string; // Role name
+  avatar?: string; // From user_metadata or profiles table
+  dataAiHint?: string;
+};
 
-const mockPermissions = [
+type Permission = {
+  id: string;
+  category: string;
+  name: string;
+  description: string;
+};
+
+// Initial mock permissions - in a real app, these would be fetched or predefined
+const mockPermissions: Permission[] = [
     { id: "p1", category: "Conversations", name: "View all conversations", description: "Allows viewing conversations across all agents." },
     { id: "p2", category: "Conversations", name: "Assign conversations", description: "Allows assigning conversations to agents." },
     { id: "p3", category: "CRM", name: "Manage leads", description: "Create, edit, and delete leads." },
     { id: "p4", category: "CRM", name: "Manage products", description: "Add or modify product information." },
     { id: "p5", category: "Flow Builder", name: "Create/Edit flows", description: "Design and modify conversational flows." },
     { id: "p6", category: "Analytics", name: "View dashboards", description: "Access to all analytics dashboards." },
-    { id: "p7", category: "Settings", name: "Manage users & roles", description: "Full control over user accounts and role permissions." },
-    { id: "p8", category: "Settings", name: "Manage billing", description: "Access billing information and subscription details." },
+    { id: "p7", category: "Settings", name: "Manage users & roles (Tenant)", description: "Control over user accounts and role assignments within the tenant." },
+    { id: "p8", category: "Settings", name: "Manage billing", description: "Access billing information and subscription details (Tenant specific)." },
+    { id: "p9", category: "Settings", name: "Manage tenant settings", description: "Configure tenant-specific settings." },
+];
+
+// Initial roles - these could be system-wide defaults or managed by a super-admin
+// Tenant admins would assign these roles to their users.
+const initialSystemRoles: Role[] = [
+  { id: "1", name: "Administrator", description: "Full access to tenant features and settings." },
+  { id: "2", name: "Agent Supervisor", description: "Manages agents and reviews conversations within the tenant." },
+  { id: "3", name: "Agent", description: "Handles customer conversations within the tenant." },
+  { id: "4", name: "Read-Only Analyst", description: "Views analytics and reports for the tenant." },
 ];
 
 
 export default function RolesPage() {
+  const { toast } = useToast();
+  const [roles, setRoles] = useState<Role[]>(initialSystemRoles);
+  const [users, setUsers] = useState<UserInTenant[]>([]); // To be fetched for the current tenant
+  const [selectedRole, setSelectedRole] = useState<Role | null>(roles[0] || null);
+  
+  const [isInviteUserOpen, setIsInviteUserOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<string>(roles[0]?.id || "");
+
+  const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleDescription, setNewRoleDescription] = useState("");
+
+  // TODO: Fetch users for the current tenant
+  // useEffect(() => {
+  //   const fetchTenantUsers = async () => {
+  //     // 1. Get current user's tenant ID
+  //     // 2. Fetch users associated with that tenantId from your 'user_profiles' or similar table
+  //     //    (this table would store user's role within the tenant)
+  //     // setUsers(fetchedUsers);
+  //   };
+  //   fetchTenantUsers();
+  // }, []);
+
+  const handleInviteUser = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!inviteEmail || !inviteRole) {
+        toast({ title: "Missing Information", description: "Please provide email and role.", variant: "destructive" });
+        return;
+    }
+    // In a real app, you'd get the tenant ID of the current admin user.
+    // For now, we'll simulate sending it in metadata.
+    // The actual user creation & linking to tenant/role happens on the backend (e.g., via Supabase Admin SDK or Triggers)
+    // This call is just an example of an invitation, you might need to use Supabase Admin API from a server action for full user creation.
+    
+    // const { data, error } = await supabase.auth.admin.inviteUserByEmail(inviteEmail, {
+    //   data: { role_id: inviteRole, tenant_id: 'CURRENT_ADMIN_TENANT_ID' } 
+    //   // redirectTo: `${window.location.origin}/set-password` // Example redirect
+    // });
+
+    // For now, just a toast message as backend logic is needed.
+    toast({ title: "Simulated Invitation", description: `User ${inviteEmail} invited with role ID ${inviteRole}. Backend implementation needed.`});
+    console.log("Invite user:", { email: inviteEmail, roleId: inviteRole });
+    setInviteEmail("");
+    setInviteRole(roles[0]?.id || "");
+    setIsInviteUserOpen(false);
+  };
+
+  const handleAddRole = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!newRoleName.trim()) {
+      toast({ title: "Role Name Required", description: "Please enter a name for the new role.", variant: "destructive" });
+      return;
+    }
+    const newRole: Role = {
+      id: `role-${Date.now()}`, // Temporary ID generation
+      name: newRoleName,
+      description: newRoleDescription,
+      // tenantId: 'CURRENT_ADMIN_TENANT_ID' // Associate with current tenant
+    };
+    setRoles(prev => [...prev, newRole]);
+    toast({ title: "Role Added", description: `Role "${newRoleName}" has been added.` });
+    setNewRoleName("");
+    setNewRoleDescription("");
+    setIsAddRoleOpen(false);
+  };
+
   return (
     <ScrollArea className="h-[calc(100vh-4rem)]">
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-            <h1 className="text-3xl font-bold">Roles & Permissions</h1>
-            <p className="text-muted-foreground">Manage user roles and their access levels within Conecta Hub.</p>
+            <h1 className="text-3xl font-bold flex items-center"><UsersIcon className="mr-3 h-8 w-8 text-primary"/>Users, Roles & Permissions</h1>
+            <p className="text-muted-foreground">Manage user access and roles within your tenant.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline"><UserPlus className="mr-2 h-4 w-4" /> Invite User</Button>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground"><PlusCircle className="mr-2 h-4 w-4" /> Add Role</Button>
+          <Dialog open={isInviteUserOpen} onOpenChange={setIsInviteUserOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline"><UserPlus className="mr-2 h-4 w-4" /> Invite User</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invite New User to Tenant</DialogTitle>
+                <DialogDescription>Enter the email address and assign a role for the new user.</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleInviteUser} className="space-y-4 py-4">
+                <div>
+                  <Label htmlFor="inviteEmail">Email Address</Label>
+                  <Input id="inviteEmail" type="email" placeholder="user@example.com" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} required />
+                </div>
+                <div>
+                  <Label htmlFor="inviteRole">Assign Role</Label>
+                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                    <SelectTrigger id="inviteRole">
+                      <SelectValue placeholder="Select a role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map(role => (
+                        <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Send Invitation</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isAddRoleOpen} onOpenChange={setIsAddRoleOpen}>
+            <DialogTrigger asChild>
+             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground"><PlusCircle className="mr-2 h-4 w-4" /> Add Role</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add New Role</DialogTitle>
+                    <DialogDescription>Define a new role for users within your tenant.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddRole} className="space-y-4 py-4">
+                    <div>
+                        <Label htmlFor="newRoleName">Role Name</Label>
+                        <Input id="newRoleName" placeholder="e.g., Content Editor" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} required/>
+                    </div>
+                    <div>
+                        <Label htmlFor="newRoleDescription">Role Description (Optional)</Label>
+                        <Input id="newRoleDescription" placeholder="Briefly describe this role's purpose" value={newRoleDescription} onChange={e => setNewRoleDescription(e.target.value)}/>
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                        <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Create Role</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Roles List Card */}
         <Card className="lg:col-span-1 shadow-lg">
           <CardHeader className="border-b p-4">
             <CardTitle className="text-lg">Roles</CardTitle>
-            <CardDescription className="text-xs">Define access levels for users.</CardDescription>
+            <CardDescription className="text-xs">Roles available in your tenant.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[300px]">
                 <div className="p-2 space-y-1">
-                {mockRoles.map((role) => (
-                    <Button asChild variant="ghost" key={role.id} className="w-full h-auto p-3 text-left cursor-pointer">
+                {roles.map((role) => (
+                    <Button
+                      asChild
+                      variant={selectedRole?.id === role.id ? "secondary" : "ghost"}
+                      key={role.id}
+                      className="w-full h-auto p-3 text-left cursor-pointer"
+                      onClick={() => setSelectedRole(role)}
+                    >
                         <div className="flex items-center justify-between w-full">
                             <div className="flex-1">
                                 <span className="font-medium block">{role.name}</span>
                                 <span className="text-xs text-muted-foreground block truncate">{role.description}</span>
-                                <span className="text-xs text-muted-foreground">{role.userCount} users</span>
+                                {/* <span className="text-xs text-muted-foreground">{role.userCount || 0} users</span> */}
                             </div>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit Role</DropdownMenuItem>
-                                    <DropdownMenuItem><ShieldCheck className="mr-2 h-4 w-4" /> Edit Permissions</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Delete Role</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {setSelectedRole(role); /* TODO: Open edit role dialog */}}><Edit className="mr-2 h-4 w-4" /> Edit Role Details</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setSelectedRole(role)}><ShieldCheck className="mr-2 h-4 w-4" /> Edit Permissions</DropdownMenuItem>
+                                    {/* <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Delete Role</DropdownMenuItem> */}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
@@ -87,31 +245,27 @@ export default function RolesPage() {
                 </div>
             </ScrollArea>
           </CardContent>
-           <CardFooter className="p-2 border-t">
-            <Button variant="outline" className="w-full"><PlusCircle className="mr-2 h-4 w-4" /> Add New Role</Button>
-          </CardFooter>
         </Card>
 
-        {/* Permissions Editor Card (Example for a selected role) */}
         <Card className="lg:col-span-2 shadow-lg">
           <CardHeader className="border-b p-4">
-            <CardTitle className="text-lg">Permissions for "Administrator"</CardTitle>
+            <CardTitle className="text-lg">Permissions for "{selectedRole?.name || 'No Role Selected'}"</CardTitle>
             <CardDescription className="text-xs">Select permissions for this role.</CardDescription>
           </CardHeader>
           <CardContent className="p-4">
-            <ScrollArea className="h-[calc(300px+2rem)]"> {/* Adjust height to match roles card content area */}
-            {Object.entries(mockPermissions.reduce((acc, p) => {
+            <ScrollArea className="h-[calc(300px+2rem)]">
+            {selectedRole ? Object.entries(mockPermissions.reduce((acc, p) => {
                 acc[p.category] = [...(acc[p.category] || []), p];
                 return acc;
-            }, {} as Record<string, typeof mockPermissions>)).map(([category, permissions]) => (
+            }, {} as Record<string, typeof mockPermissions>)).map(([category, permissionsInCategory]) => (
                 <div key={category} className="mb-4">
                     <h3 className="font-semibold text-md mb-2">{category}</h3>
                     <div className="space-y-2">
-                    {permissions.map(permission => (
+                    {permissionsInCategory.map(permission => (
                         <div key={permission.id} className="flex items-start p-3 border rounded-md hover:bg-muted/50">
-                            <Checkbox id={permission.id} className="mr-3 mt-1" defaultChecked={category === "Settings" || category === "Conversations"} />
+                            <Checkbox id={`perm-${permission.id}`} className="mr-3 mt-1" defaultChecked={Math.random() > 0.5} /> {/* TODO: Load checked state based on role's actual permissions */}
                             <div className="grid gap-1.5 leading-none">
-                                <Label htmlFor={permission.id} className="font-medium cursor-pointer">
+                                <Label htmlFor={`perm-${permission.id}`} className="font-medium cursor-pointer">
                                 {permission.name}
                                 </Label>
                                 <p className="text-xs text-muted-foreground">
@@ -122,21 +276,22 @@ export default function RolesPage() {
                     ))}
                     </div>
                 </div>
-            ))}
+            )) : <p className="text-muted-foreground">Select a role to see its permissions.</p>}
             </ScrollArea>
           </CardContent>
-          <CardFooter className="p-4 border-t">
-            <Button className="ml-auto bg-primary hover:bg-primary/90 text-primary-foreground">Save Permissions</Button>
-          </CardFooter>
+          {selectedRole && (
+            <CardFooter className="p-4 border-t">
+                <Button className="ml-auto bg-primary hover:bg-primary/90 text-primary-foreground">Save Permissions for "{selectedRole.name}"</Button>
+            </CardFooter>
+          )}
         </Card>
       </div>
       
-      {/* Users Table Card */}
       <Card className="shadow-lg">
         <CardHeader className="border-b p-4 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-lg">Users</CardTitle>
-            <CardDescription className="text-xs">Manage user accounts and assign roles.</CardDescription>
+            <CardTitle className="text-lg">Users in Tenant</CardTitle>
+            <CardDescription className="text-xs">Manage users invited to this tenant and their roles.</CardDescription>
           </div>
           <div className="relative w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -156,15 +311,22 @@ export default function RolesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockUsers.map((user) => (
+              {users.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    No users found in this tenant. Invite users to get started.
+                  </TableCell>
+                </TableRow>
+              )}
+              {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
                     <Avatar className="h-9 w-9">
-                        <AvatarImage src={user.avatar} alt={user.name} data-ai-hint={user.dataAiHint} />
-                        <AvatarFallback>{user.name.split(" ").map(n=>n[0]).join("")}</AvatarFallback>
+                        <AvatarImage src={user.avatar || `https://placehold.co/40x40.png?text=${user.name[0] || 'U'}`} alt={user.name} data-ai-hint={user.dataAiHint || "avatar person"} />
+                        <AvatarFallback>{user.name.split(" ").map(n=>n[0]).join("") || user.email[0].toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
-                  <TableCell className="font-medium">{user.name}</TableCell>
+                  <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
                   <TableCell className="text-right">
@@ -173,9 +335,8 @@ export default function RolesPage() {
                         <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit User</DropdownMenuItem>
-                        <DropdownMenuItem><ShieldCheck className="mr-2 h-4 w-4" /> Change Role</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Delete User</DropdownMenuItem>
+                        <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Change Role</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Remove from Tenant</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

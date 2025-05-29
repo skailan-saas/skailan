@@ -79,15 +79,15 @@ export function AppHeader() {
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="#"> {/* Replace with actual profile page if available */}
+              <Link href="/settings/profile">
                 <UserCircle className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-                <Link href="/settings/roles"> {/* Or a general settings page */}
+                <Link href="/settings/roles"> 
                     <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
+                    <span>Tenant Settings</span>
                 </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
