@@ -1,40 +1,246 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
 
 generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL") // For connection pooling
-  directUrl = env("DIRECT_URL")   // For migrations
+model Tenant {
+  id                String   @id @default(cuid())
+  name              String
+  subdomain         String   @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  users             User[]
+  channels          Channel[]
+  flows             Flow[]
+  leads             Lead[]
+  conversations     Conversation[]
+  sdkConfiguration  SdkConfiguration?
 }
 
 model User {
-  id        String    @id @default(uuid())
-  email     String?   @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  tenantId  String?   // Foreign key to Tenant
-  tenant    Tenant?   @relation(fields: [tenantId], references: [id])
-
-  // If you are mapping this to Supabase's auth.users,
-  // you might not need email, createdAt, updatedAt here directly
-  // if you primarily rely on Supabase for auth user management.
-  // However, having a separate profiles table linked to auth.users is common.
-  // For simplicity here, we'll assume this User model is for your application's user profiles.
-
-  @@map("users") // Maps this model to the "users" table in the public schema
+  id                      String          @id @default(cuid()) // This ID is for your app's user profiles
+  supabaseAuthUserId      String?         @unique // To link with Supabase auth.users.id if needed later
+  email                   String          @unique
+  name                    String?
+  avatarUrl               String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  tenantId                String
+  tenant                  Tenant          @relation(fields: [tenantId], references: [id])
+  roleId                  String?
+  role                    Role?           @relation(fields: [roleId], references: [id])
+  assignedConversations   Conversation[]  @relation("AgentConversations")
+  assignedLeads           Lead[]          @relation("AgentLeads")
 }
 
-model Tenant {
-  id          String    @id @default(uuid())
-  name        String
-  subdomain   String    @unique
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  users       User[]    // A tenant can have multiple users
-
-  @@map("tenants") // Maps this model to the "tenants" table in the public schema
+model Role {
+  id          String            @id @default(cuid())
+  name        String            @unique // e.g., "ADMINISTRATOR", "AGENT_SUPERVISOR", "AGENT"
+  description String?
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 }
+
+model Permission {
+  id          String            @id @default(cuid())
+  action      String            // e.g., "manage", "read", "create", "delete"
+  subject     String            // e.g., "User", "Conversation", "Flow", "Settings"
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([action, subject])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime   @default(now())
+
+  @@id([roleId, permissionId])
+}
+
+enum ChannelType {
+  WHATSAPP
+  MESSENGER
+  INSTAGRAM
+  WEBCHAT
+  API
+  TELEGRAM // Added Telegram as another common channel
+}
+
+model Channel {
+  id            String          @id @default(cuid())
+  name          String          // User-friendly name, e.g., "Support WhatsApp Line"
+  type          ChannelType
+  credentials   Json?           // Store API keys, tokens, specific config per channel type
+  isEnabled     Boolean         @default(true)
+  tenantId      String
+  tenant        Tenant          @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING // Waiting for agent or customer
+  RESOLVED
+  CLOSED
+  BOT_HANDLING // When a flow is active
+}
+
+model Conversation {
+  id                String              @id @default(cuid())
+  tenantId          String
+  tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  channelId         String
+  channel           Channel             @relation(fields: [channelId], references: [id])
+  customerId        String?             // Platform-specific ID of the customer (e.g., phone number, user_id)
+  customerName      String?
+  customerAvatarUrl String?
+  assignedAgentId   String?
+  agent             User?               @relation("AgentConversations", fields: [assignedAgentId], references: [id])
+  status            ConversationStatus  @default(OPEN)
+  lastMessageAt     DateTime?           // Timestamp of the last message, useful for sorting
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  messages          Message[]
+  tags              String[]            @default([]) // For PostgreSQL, use Json for other DBs if needed
+  // Could add summary, priority, etc.
+}
+
+enum MessageSenderType {
+  CUSTOMER // End-user interacting with the business
+  AGENT    // Human agent from the business
+  BOT      // Automated flow/bot
+  SYSTEM   // System messages, e.g., "Conversation started"
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  LOCATION
+  CONTACT
+  STICKER
+  INTERACTIVE_BUTTONS
+  INTERACTIVE_LIST
+  PRODUCT_SINGLE
+  PRODUCT_LIST
+  TEMPLATE // For WhatsApp HMTs, etc.
+  UNSUPPORTED // Fallback for unknown message types
+}
+
+model Message {
+  id                 String            @id @default(cuid())
+  conversationId     String
+  conversation       Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderType         MessageSenderType
+  senderId           String?           // If CUSTOMER, their platform ID. If AGENT/BOT, the User.id.
+  content            String?           // Text content of the message
+  type               MessageType       @default(TEXT)
+  mediaUrl           String?           // URL for image, video, audio, file
+  mediaMimeType      String?
+  interactivePayload Json?             // For buttons, lists, product messages (structure depends on type)
+  templateName       String?           // If type is TEMPLATE
+  templateParams     Json?             // If type is TEMPLATE
+  timestamp          DateTime          @default(now()) // When the message was sent/received by Conecta Hub
+  platformMessageId  String?           @unique // ID of the message from the original platform (e.g., WhatsApp message ID)
+  deliveredAt        DateTime?
+  readAt             DateTime?
+  isDeleted          Boolean           @default(false) // Soft delete
+  metadata           Json?             // Any other platform-specific metadata
+}
+
+enum FlowStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Flow {
+  id            String     @id @default(cuid())
+  name          String
+  description   String?
+  configuration Json       // The JSON structure defining the flow nodes and transitions
+  status        FlowStatus @default(DRAFT)
+  tenantId      String
+  tenant        Tenant     @relation(fields: [tenantId], references: [id])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  // Could add versioning, trigger types, etc.
+}
+
+model Lead {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  name          String?
+  email         String?
+  phone         String?
+  status        String?  // e.g., "New", "Contacted", "Qualified", "Unqualified", "Converted"
+  source        String?  // e.g., "Web Chat", "WhatsApp", "Manual Entry"
+  score         Int?
+  assignedToId  String?
+  assignedTo    User?    @relation("AgentLeads", fields: [assignedToId], references: [id])
+  notes         String?  @db.Text // For longer notes
+  customFields  Json?    // For flexible custom data
+  lastContactedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([phone])
+}
+
+model SdkConfiguration {
+  id                      String    @id @default(cuid())
+  tenantId                String    @unique
+  tenant                  Tenant    @relation(fields: [tenantId], references: [id])
+  primaryColor            String?   @default("#29ABE2")
+  widgetPosition          String?   @default("bottom-right") // "bottom-left"
+  showGreeting            Boolean   @default(true)
+  welcomeMessage          String?   @default("Hi there! 👋 How can we help you today?")
+  defaultFlowId           String?   // ID of a Flow to launch by default
+  // defaultFlow          Flow?     @relation(fields: [defaultFlowId], references: [id]) // Optional: explicit relation if needed
+  proactiveChatEnabled    Boolean   @default(false)
+  proactiveDelaySeconds   Int?      @default(10)
+  customCss               String?   @db.Text
+  allowedDomains          String[]  @default([]) // Domains where the widget can be embedded
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+}
+
+// Example for how auth.users table from Supabase Auth could be referenced
+// if you choose to have a public profiles table that mirrors it.
+// model UserProfile {
+//   id         String @id @default(uuid()) // Must match auth.users.id
+//   email      String @unique
+//   name       String?
+//   avatar_url String?
+//   tenant_id  String? // Could be nullable if users can exist without a tenant initially
+//   tenant     Tenant? @relation(fields: [tenant_id], references: [id])
+//   created_at DateTime @default(now())
+//   updated_at DateTime @updatedAt
+// }
+
+// You would then set up a trigger in Supabase to sync data from auth.users to UserProfile.
+// For now, the User model above is intended to be the primary user table for your app's logic.
+// The supabaseAuthUserId field on User can be used to link to the auth.users table if needed.
+
+    

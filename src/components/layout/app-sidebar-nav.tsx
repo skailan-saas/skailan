@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -11,6 +12,7 @@ import {
   Code2,
   LifeBuoy,
   FileText,
+  Zap, // Added for Channel Connections
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -30,6 +32,7 @@ const mainNavItems = [
 
 const settingsNavItems = [
   { href: "/settings/roles", label: "Roles & Permissions", icon: Users },
+  { href: "/settings/channels", label: "Channel Connections", icon: Zap },
   { href: "/settings/sdk", label: "Website SDK", icon: Code2 },
   // Add more settings links here
 ];
@@ -82,3 +85,5 @@ export function AppSidebarNav() {
     </>
   );
 }
+
+    
