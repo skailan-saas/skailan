@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle } from "lucide-react";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import ReactFlow, {
   Controls,
   Background,
@@ -21,6 +21,8 @@ import ReactFlow, {
   type OnEdgesChange,
   type OnConnect,
   ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -28,6 +30,17 @@ import type { generateFlowFromPrompt as genFlowFnType } from "@/ai/flows";
 
 // Dynamically import the AI function only on the client-side after mount
 let generateFlowFn: typeof genFlowFnType | null = null;
+
+const initialNodes: Node[] = [
+  { id: '1', type: 'input', data: { label: 'Start Node' }, position: { x: 250, y: 5 } },
+  { id: '2', data: { label: 'Default Message' }, position: { x: 250, y: 100 } },
+  { id: '3', type: 'output', data: { label: 'End Node' }, position: { x: 250, y: 200 } },
+];
+
+const initialEdges: Edge[] = [
+  { id: 'e1-2', source: '1', target: '2', animated: true },
+  { id: 'e2-3', source: '2', target: '3' },
+];
 
 // Mock data for existing flows
 const mockFlows = [
@@ -48,35 +61,16 @@ const nodeTypesForPalette = [
   { type: "action", label: "Action", icon: ToyBrick, description: "Performs an action (e.g., API call)." },
 ];
 
-const initialNodes: Node[] = [
-  { id: '1', type: 'input', data: { label: 'Start Node' }, position: { x: 250, y: 5 } },
-  { id: '2', data: { label: 'Default Message' }, position: { x: 250, y: 100 } },
-  { id: '3', type: 'output', data: { label: 'End Node' }, position: { x: 250, y: 200 } },
-];
 
-const initialEdges: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2', animated: true },
-  { id: 'e2-3', source: '2', target: '3' },
-];
+interface FlowBuilderCanvasProps {
+  nodes: Node[];
+  edges: Edge[];
+  onNodesChange: OnNodesChange;
+  onEdgesChange: OnEdgesChange;
+  onConnect: OnConnect;
+}
 
-
-function FlowBuilderCanvas() {
-  const [nodes, setNodes] = useState<Node[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
-
-  const onNodesChange: OnNodesChange = useCallback(
-    (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
-    [setNodes]
-  );
-  const onEdgesChange: OnEdgesChange = useCallback(
-    (changes) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    [setEdges]
-  );
-  const onConnect: OnConnect = useCallback(
-    (connection) => setEdges((eds) => addEdge(connection, eds)),
-    [setEdges]
-  );
-
+function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect }: FlowBuilderCanvasProps) {
   return (
     <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg">
       <ReactFlow
@@ -94,11 +88,20 @@ function FlowBuilderCanvas() {
   );
 }
 
+let nodeIdCounter = initialNodes.length; 
 
 export default function FlowsPage() {
   const [flowPrompt, setFlowPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedConfig, setGeneratedConfig] = useState<string | null>(null);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  const onConnect: OnConnect = useCallback(
+    (connection) => setEdges((eds) => addEdge(connection, eds)),
+    [setEdges]
+  );
 
   useEffect(() => {
     import('@/ai/flows').then(module => {
@@ -115,6 +118,15 @@ export default function FlowsPage() {
       setGeneratedConfig(result.flowConfiguration);
       // TODO: Parse result.flowConfiguration and set it to react-flow nodes/edges
       // For now, just displaying the JSON string
+      // Example of how you might parse and set nodes (very basic):
+      // try {
+      //   const parsedFlow = JSON.parse(result.flowConfiguration);
+      //   if (parsedFlow.nodes) setNodes(parsedFlow.nodes);
+      //   if (parsedFlow.edges) setEdges(parsedFlow.edges);
+      // } catch (e) {
+      //   console.error("Failed to parse generated flow configuration", e);
+      //   setGeneratedConfig("Error: Could not parse generated flow. It might be invalid JSON.");
+      // }
     } catch (error) {
       console.error("Error generating flow:", error);
       setGeneratedConfig("Error generating flow. Please check console.");
@@ -125,6 +137,28 @@ export default function FlowsPage() {
 
   // Placeholder for selected flow to edit
   const [selectedFlow, setSelectedFlow] = useState(mockFlows[0]);
+  
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  const handleAddNode = (nodeTypeInfo: typeof nodeTypesForPalette[0]) => {
+    nodeIdCounter++;
+    const newNodeId = `node_${nodeIdCounter}`;
+    
+    // Calculate a slightly offset position for new nodes
+    // This is a very basic strategy, you might want something more sophisticated
+    const newPosition = {
+      x: (nodes.length % 5) * 150 + 50, // Stagger horizontally
+      y: Math.floor(nodes.length / 5) * 120 + 50, // Move down after 5 nodes
+    };
+
+    const newNode: Node = {
+      id: newNodeId,
+      type: 'default', // For now, all added nodes are 'default'. Custom nodes require more setup.
+      position: newPosition,
+      data: { label: `${nodeTypeInfo.label} (ID: ${newNodeId})` },
+    };
+    setNodes((nds) => nds.concat(newNode));
+  };
 
 
   return (
@@ -201,7 +235,13 @@ export default function FlowsPage() {
                     key={flow.id}
                     variant={selectedFlow?.id === flow.id ? "secondary" : "ghost"}
                     className="w-full h-auto justify-start p-3 text-left"
-                    onClick={() => setSelectedFlow(flow)}
+                    onClick={() => {
+                        setSelectedFlow(flow);
+                        // TODO: Load actual nodes/edges for this flow
+                        // For now, just resetting to initial nodes as an example
+                        // setNodes(initialNodes.map(n => ({...n, id: `${flow.id}-${n.id}`}))); 
+                        // setEdges(initialEdges.map(e => ({...e, id: `${flow.id}-${e.id}`})));
+                    }}
                     asChild
                   >
                     <div className="flex items-start gap-3 cursor-pointer">
@@ -226,7 +266,7 @@ export default function FlowsPage() {
         </Card>
 
         {/* Flow Canvas Area (Center) */}
-        <div className="bg-muted/50 flex-1 overflow-auto p-6 relative">
+        <div className="bg-muted/50 flex-1 overflow-auto p-6 relative" ref={reactFlowWrapper}>
           <div className="flex justify-between items-center mb-4">
             <div>
                 <h2 className="text-xl font-semibold">{selectedFlow?.name || "Untitled Flow"}</h2>
@@ -240,7 +280,13 @@ export default function FlowsPage() {
             </div>
           </div>
           <div className="w-full h-[calc(100%-80px)]">
-             <FlowBuilderCanvas />
+             <FlowBuilderCanvas 
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+             />
           </div>
         </div>
 
@@ -248,7 +294,7 @@ export default function FlowsPage() {
         <Card className="rounded-none border-0 border-l flex flex-col">
           <CardHeader className="p-3 border-b">
              <CardTitle className="text-lg">Node Types</CardTitle>
-             <CardDescription className="text-xs">Drag or click to add to canvas.</CardDescription>
+             <CardDescription className="text-xs">Click to add to canvas.</CardDescription>
           </CardHeader>
           <ScrollArea className="flex-1">
             <CardContent className="p-0">
@@ -258,7 +304,7 @@ export default function FlowsPage() {
                         key={nodeType.type}
                         variant="ghost"
                         className="w-full h-auto justify-start p-3 text-left"
-                        // TODO: Add logic to drag/add node to canvas
+                        onClick={() => handleAddNode(nodeType)}
                     >
                         <nodeType.icon className="h-5 w-5 mr-3 text-muted-foreground" />
                         <div>
@@ -270,12 +316,9 @@ export default function FlowsPage() {
               </div>
             </CardContent>
           </ScrollArea>
-           {/* Optional Footer for Node Palette if needed */}
         </Card>
       </div>
     </div>
     </ReactFlowProvider>
   );
 }
-
-    
