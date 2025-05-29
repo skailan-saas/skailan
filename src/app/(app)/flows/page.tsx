@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea"; // Added Textarea import
+import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle, X, Image as ImageIcon } from "lucide-react"; // Added ImageIcon
 import { useState, useCallback, useEffect, useRef } from "react";
 import ReactFlow, {
   Controls,
@@ -33,8 +34,8 @@ let generateFlowFn: typeof genFlowFnType | null = null;
 
 const initialNodesData: Node[] = [
   { id: '1', type: 'input', data: { label: 'Start Node' }, position: { x: 250, y: 5 } },
-  { id: '2', data: { label: 'Default Message' }, position: { x: 250, y: 100 } },
-  { id: '3', type: 'output', data: { label: 'End Node' }, position: { x: 250, y: 200 } },
+  { id: '2', type: 'text', data: { label: 'Welcome Message', messageText: 'Hello! Welcome to our service.' }, position: { x: 250, y: 100 } },
+  { id: '3', type: 'output', data: { label: 'End Node' }, position: { x: 250, y: 250 } }, // Adjusted y position
 ];
 
 const initialEdgesData: Edge[] = [
@@ -53,7 +54,7 @@ const mockFlows = [
 // Mock data for node types available in the sidebar
 const nodeTypesForPalette = [
   { type: "text", label: "Send Message", icon: MessageCircle, description: "Sends a simple text message." },
-  { type: "image", label: "Send Image", icon: FileText, description: "Sends an image." },
+  { type: "image", label: "Send Image", icon: ImageIcon, description: "Sends an image." }, // Changed icon
   { type: "buttons", label: "Buttons", icon: ChevronDown, description: "Sends a message with buttons." },
   { type: "carousel", label: "Carousel", icon: ChevronRight, description: "Sends a carousel of items." },
   { type: "userInput", label: "User Input", icon: Edit3, description: "Waits for user input." },
@@ -143,15 +144,21 @@ export default function FlowsPage() {
     const newNodeId = `node_${nodeIdCounter}`;
     
     const newPosition = {
-      x: (nodes.length % 5) * 150 + 50, // Basic staggering
-      y: Math.floor(nodes.length / 5) * 120 + 50, // Basic staggering
+      x: Math.random() * 400, // Basic random positioning
+      y: Math.random() * 400,
     };
+
+    let newNodeData: any = { label: `${nodeTypeInfo.label}` };
+    if (nodeTypeInfo.type === 'text') {
+      newNodeData.messageText = ''; // Initialize messageText for text nodes
+    }
+    // Add initial data for other types here if needed
 
     const newNode: Node = {
       id: newNodeId,
-      type: 'default', // For now, all nodes are 'default'. Custom nodes would change this.
+      type: nodeTypeInfo.type, // Use the specific type from the palette
       position: newPosition,
-      data: { label: `${nodeTypeInfo.label}` },
+      data: newNodeData,
     };
     setNodes((nds) => nds.concat(newNode));
     setSelectedNodeForEdit(null); // Close editor if open when adding a new node
@@ -170,7 +177,6 @@ export default function FlowsPage() {
           : node
       )
     );
-    // Also update selectedNodeForEdit to reflect changes immediately in the editor
     setSelectedNodeForEdit(prev => prev ? ({...prev, data: {...prev.data, ...newData }}) : null);
   };
 
@@ -217,7 +223,7 @@ export default function FlowsPage() {
                 {generatedConfig && (
                   <div className="space-y-2">
                     <Label htmlFor="flow-config">Generated Configuration (JSON):</Label>
-                    <textarea id="flow-config" readOnly value={generatedConfig} rows={10} className="w-full p-2 border rounded-md font-mono text-xs"/>
+                    <Textarea id="flow-config" readOnly value={generatedConfig} rows={10} className="w-full p-2 border rounded-md font-mono text-xs"/>
                   </div>
                 )}
               </div>
@@ -249,7 +255,7 @@ export default function FlowsPage() {
                     className="w-full h-auto justify-start p-3 text-left"
                     onClick={() => {
                         setSelectedFlow(flow);
-                        setSelectedNodeForEdit(null); // Clear node editor when changing flow
+                        setSelectedNodeForEdit(null); 
                     }}
                     asChild
                   >
@@ -287,7 +293,7 @@ export default function FlowsPage() {
                  <Button variant="destructive"><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
             </div>
           </div>
-          <div className="w-full h-[calc(100%-80px)]"> {/* Ensure canvas has explicit height */}
+          <div className="w-full h-[calc(100%-80px)]">
              <FlowBuilderCanvas 
                 nodes={nodes}
                 edges={edges}
@@ -303,7 +309,7 @@ export default function FlowsPage() {
           {selectedNodeForEdit ? (
             <>
               <CardHeader className="p-3 border-b flex-row justify-between items-center">
-                 <CardTitle className="text-lg">Edit Node</CardTitle>
+                 <CardTitle className="text-lg">Edit Node: {selectedNodeForEdit.data.label}</CardTitle>
                  <Button variant="ghost" size="icon" onClick={handleNodeEditorClose} className="h-7 w-7">
                     <X className="h-4 w-4" />
                  </Button>
@@ -323,11 +329,29 @@ export default function FlowsPage() {
                         className="mt-1 h-8"
                     />
                   </div>
-                  {/* Placeholder for type-specific fields */}
-                  <div className="pt-2">
-                    <p className="text-xs text-muted-foreground">Type: {selectedNodeForEdit.type || 'default'}</p>
-                    <p className="text-xs text-muted-foreground mt-2">More editing options for this node type will appear here.</p>
-                  </div>
+                  
+                  {selectedNodeForEdit.type === 'text' && (
+                    <div>
+                      <Label htmlFor="nodeMessageText" className="text-xs">Message Text</Label>
+                      <Textarea
+                        id="nodeMessageText"
+                        value={selectedNodeForEdit.data.messageText || ""}
+                        onChange={(e) => handleNodeDataChange({ messageText: e.target.value })}
+                        placeholder="Enter message to send..."
+                        className="mt-1"
+                        rows={4}
+                      />
+                    </div>
+                  )}
+
+                  {selectedNodeForEdit.type !== 'text' && (
+                    <div className="pt-2">
+                        <p className="text-xs text-muted-foreground">Type: {selectedNodeForEdit.type || 'default'}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Editing options for '{selectedNodeForEdit.type}' nodes will appear here.
+                        </p>
+                    </div>
+                  )}
                 </CardContent>
               </ScrollArea>
               <CardFooter className="p-3 border-t">
@@ -343,17 +367,17 @@ export default function FlowsPage() {
               <ScrollArea className="flex-1">
                 <CardContent className="p-0">
                   <div className="p-2 space-y-1">
-                     {nodeTypesForPalette.map((nodeType) => (
+                     {nodeTypesForPalette.map((nodeTypeInfo) => (
                         <Button
-                            key={nodeType.type}
+                            key={nodeTypeInfo.type}
                             variant="ghost"
                             className="w-full h-auto justify-start p-3 text-left"
-                            onClick={() => handleAddNode(nodeType)}
+                            onClick={() => handleAddNode(nodeTypeInfo)}
                         >
-                            <nodeType.icon className="h-5 w-5 mr-3 text-muted-foreground" />
+                            <nodeTypeInfo.icon className="h-5 w-5 mr-3 text-muted-foreground" />
                             <div>
-                            <h4 className="font-medium text-sm">{nodeType.label}</h4>
-                            <p className="text-xs text-muted-foreground">{nodeType.description}</p>
+                            <h4 className="font-medium text-sm">{nodeTypeInfo.label}</h4>
+                            <p className="text-xs text-muted-foreground">{nodeTypeInfo.description}</p>
                             </div>
                         </Button>
                     ))}
@@ -368,3 +392,4 @@ export default function FlowsPage() {
     </ReactFlowProvider>
   );
 }
+
