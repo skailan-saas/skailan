@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Keep Label for dialog
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle, X } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import ReactFlow, {
   Controls,
@@ -31,13 +31,13 @@ import type { generateFlowFromPrompt as genFlowFnType } from "@/ai/flows";
 // Dynamically import the AI function only on the client-side after mount
 let generateFlowFn: typeof genFlowFnType | null = null;
 
-const initialNodes: Node[] = [
+const initialNodesData: Node[] = [
   { id: '1', type: 'input', data: { label: 'Start Node' }, position: { x: 250, y: 5 } },
   { id: '2', data: { label: 'Default Message' }, position: { x: 250, y: 100 } },
   { id: '3', type: 'output', data: { label: 'End Node' }, position: { x: 250, y: 200 } },
 ];
 
-const initialEdges: Edge[] = [
+const initialEdgesData: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', animated: true },
   { id: 'e2-3', source: '2', target: '3' },
 ];
@@ -68,17 +68,19 @@ interface FlowBuilderCanvasProps {
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
+  onNodeClick?: (event: React.MouseEvent, node: Node) => void;
 }
 
-function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect }: FlowBuilderCanvasProps) {
+function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect, onNodeClick }: FlowBuilderCanvasProps) {
   return (
-    <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg">
+    <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg bg-background">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeClick={onNodeClick}
         fitView
       >
         <Controls />
@@ -88,20 +90,27 @@ function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConne
   );
 }
 
-let nodeIdCounter = initialNodes.length; 
+let nodeIdCounter = initialNodesData.length; 
 
 export default function FlowsPage() {
   const [flowPrompt, setFlowPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedConfig, setGeneratedConfig] = useState<string | null>(null);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodesData);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdgesData);
+  const [selectedNodeForEdit, setSelectedNodeForEdit] = useState<Node | null>(null);
+
 
   const onConnect: OnConnect = useCallback(
     (connection) => setEdges((eds) => addEdge(connection, eds)),
     [setEdges]
   );
+
+  const onNodeClickHandler = useCallback((event: React.MouseEvent, node: Node) => {
+    setSelectedNodeForEdit(node);
+  }, [setSelectedNodeForEdit]);
+
 
   useEffect(() => {
     import('@/ai/flows').then(module => {
@@ -117,16 +126,6 @@ export default function FlowsPage() {
       const result = await generateFlowFn({ flowDescription: flowPrompt });
       setGeneratedConfig(result.flowConfiguration);
       // TODO: Parse result.flowConfiguration and set it to react-flow nodes/edges
-      // For now, just displaying the JSON string
-      // Example of how you might parse and set nodes (very basic):
-      // try {
-      //   const parsedFlow = JSON.parse(result.flowConfiguration);
-      //   if (parsedFlow.nodes) setNodes(parsedFlow.nodes);
-      //   if (parsedFlow.edges) setEdges(parsedFlow.edges);
-      // } catch (e) {
-      //   console.error("Failed to parse generated flow configuration", e);
-      //   setGeneratedConfig("Error: Could not parse generated flow. It might be invalid JSON.");
-      // }
     } catch (error) {
       console.error("Error generating flow:", error);
       setGeneratedConfig("Error generating flow. Please check console.");
@@ -135,7 +134,6 @@ export default function FlowsPage() {
     }
   };
 
-  // Placeholder for selected flow to edit
   const [selectedFlow, setSelectedFlow] = useState(mockFlows[0]);
   
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -144,20 +142,36 @@ export default function FlowsPage() {
     nodeIdCounter++;
     const newNodeId = `node_${nodeIdCounter}`;
     
-    // Calculate a slightly offset position for new nodes
-    // This is a very basic strategy, you might want something more sophisticated
     const newPosition = {
-      x: (nodes.length % 5) * 150 + 50, // Stagger horizontally
-      y: Math.floor(nodes.length / 5) * 120 + 50, // Move down after 5 nodes
+      x: (nodes.length % 5) * 150 + 50,
+      y: Math.floor(nodes.length / 5) * 120 + 50,
     };
 
     const newNode: Node = {
       id: newNodeId,
-      type: 'default', // For now, all added nodes are 'default'. Custom nodes require more setup.
+      type: 'default', 
       position: newPosition,
-      data: { label: `${nodeTypeInfo.label} (ID: ${newNodeId})` },
+      data: { label: `${nodeTypeInfo.label}` }, // Removed (ID: ${newNodeId}) for cleaner label
     };
     setNodes((nds) => nds.concat(newNode));
+    setSelectedNodeForEdit(null); // Close editor if open when adding a new node
+  };
+
+  const handleNodeEditorClose = () => {
+    setSelectedNodeForEdit(null);
+  };
+  
+  const handleNodeDataChange = (newData: any) => {
+    if (!selectedNodeForEdit) return;
+    setNodes((nds) =>
+      nds.map((node) =>
+        node.id === selectedNodeForEdit.id
+          ? { ...node, data: { ...node.data, ...newData } }
+          : node
+      )
+    );
+    // Also update selectedNodeForEdit to reflect changes immediately in the editor
+    setSelectedNodeForEdit(prev => prev ? ({...prev, data: {...prev.data, ...newData }}) : null);
   };
 
 
@@ -220,9 +234,7 @@ export default function FlowsPage() {
         </div>
       </header>
 
-      {/* Main content area with sidebar and canvas */}
       <div className="flex-1 grid grid-cols-[300px_1fr_300px] overflow-hidden">
-        {/* Flows List / Templates Sidebar (Left) */}
         <Card className="rounded-none border-0 border-r flex flex-col">
           <CardHeader className="p-3 border-b">
             <Input placeholder="Search flows..." />
@@ -237,10 +249,7 @@ export default function FlowsPage() {
                     className="w-full h-auto justify-start p-3 text-left"
                     onClick={() => {
                         setSelectedFlow(flow);
-                        // TODO: Load actual nodes/edges for this flow
-                        // For now, just resetting to initial nodes as an example
-                        // setNodes(initialNodes.map(n => ({...n, id: `${flow.id}-${n.id}`}))); 
-                        // setEdges(initialEdges.map(e => ({...e, id: `${flow.id}-${e.id}`})));
+                        setSelectedNodeForEdit(null); // Clear node editor when changing flow
                     }}
                     asChild
                   >
@@ -265,7 +274,6 @@ export default function FlowsPage() {
           </CardFooter>
         </Card>
 
-        {/* Flow Canvas Area (Center) */}
         <div className="bg-muted/50 flex-1 overflow-auto p-6 relative" ref={reactFlowWrapper}>
           <div className="flex justify-between items-center mb-4">
             <div>
@@ -286,39 +294,78 @@ export default function FlowsPage() {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                onNodeClick={onNodeClickHandler}
              />
           </div>
         </div>
 
-        {/* Node Types Palette (Right) */}
         <Card className="rounded-none border-0 border-l flex flex-col">
-          <CardHeader className="p-3 border-b">
-             <CardTitle className="text-lg">Node Types</CardTitle>
-             <CardDescription className="text-xs">Click to add to canvas.</CardDescription>
-          </CardHeader>
-          <ScrollArea className="flex-1">
-            <CardContent className="p-0">
-              <div className="p-2 space-y-1">
-                 {nodeTypesForPalette.map((nodeType) => (
-                    <Button
-                        key={nodeType.type}
-                        variant="ghost"
-                        className="w-full h-auto justify-start p-3 text-left"
-                        onClick={() => handleAddNode(nodeType)}
-                    >
-                        <nodeType.icon className="h-5 w-5 mr-3 text-muted-foreground" />
-                        <div>
-                        <h4 className="font-medium text-sm">{nodeType.label}</h4>
-                        <p className="text-xs text-muted-foreground">{nodeType.description}</p>
-                        </div>
-                    </Button>
-                ))}
-              </div>
-            </CardContent>
-          </ScrollArea>
+          {selectedNodeForEdit ? (
+            <>
+              <CardHeader className="p-3 border-b flex-row justify-between items-center">
+                 <CardTitle className="text-lg">Edit Node</CardTitle>
+                 <Button variant="ghost" size="icon" onClick={handleNodeEditorClose} className="h-7 w-7">
+                    <X className="h-4 w-4" />
+                 </Button>
+              </CardHeader>
+              <ScrollArea className="flex-1">
+                <CardContent className="p-3 space-y-3">
+                  <div>
+                    <Label htmlFor="nodeId" className="text-xs text-muted-foreground">Node ID</Label>
+                    <Input id="nodeId" readOnly value={selectedNodeForEdit.id} className="mt-1 h-8 bg-muted/50"/>
+                  </div>
+                  <div>
+                    <Label htmlFor="nodeLabel" className="text-xs">Label</Label>
+                    <Input 
+                        id="nodeLabel" 
+                        value={selectedNodeForEdit.data.label || ""} 
+                        onChange={(e) => handleNodeDataChange({ label: e.target.value })}
+                        className="mt-1 h-8"
+                    />
+                  </div>
+                  {/* Placeholder for type-specific fields */}
+                  <div className="pt-2">
+                    <p className="text-xs text-muted-foreground">Type: {selectedNodeForEdit.type || 'default'}</p>
+                    <p className="text-xs text-muted-foreground mt-2">More editing options for this node type will appear here.</p>
+                  </div>
+                </CardContent>
+              </ScrollArea>
+              <CardFooter className="p-3 border-t">
+                <Button onClick={handleNodeEditorClose} className="w-full">Done Editing</Button>
+              </CardFooter>
+            </>
+          ) : (
+            <>
+              <CardHeader className="p-3 border-b">
+                 <CardTitle className="text-lg">Node Types</CardTitle>
+                 <CardDescription className="text-xs">Click to add to canvas.</CardDescription>
+              </CardHeader>
+              <ScrollArea className="flex-1">
+                <CardContent className="p-0">
+                  <div className="p-2 space-y-1">
+                     {nodeTypesForPalette.map((nodeType) => (
+                        <Button
+                            key={nodeType.type}
+                            variant="ghost"
+                            className="w-full h-auto justify-start p-3 text-left"
+                            onClick={() => handleAddNode(nodeType)}
+                        >
+                            <nodeType.icon className="h-5 w-5 mr-3 text-muted-foreground" />
+                            <div>
+                            <h4 className="font-medium text-sm">{nodeType.label}</h4>
+                            <p className="text-xs text-muted-foreground">{nodeType.description}</p>
+                            </div>
+                        </Button>
+                    ))}
+                  </div>
+                </CardContent>
+              </ScrollArea>
+            </>
+          )}
         </Card>
       </div>
     </div>
     </ReactFlowProvider>
   );
 }
+
