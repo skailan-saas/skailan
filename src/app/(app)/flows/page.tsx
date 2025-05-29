@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Keep Label for dialog
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle, X } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -143,15 +143,15 @@ export default function FlowsPage() {
     const newNodeId = `node_${nodeIdCounter}`;
     
     const newPosition = {
-      x: (nodes.length % 5) * 150 + 50,
-      y: Math.floor(nodes.length / 5) * 120 + 50,
+      x: (nodes.length % 5) * 150 + 50, // Basic staggering
+      y: Math.floor(nodes.length / 5) * 120 + 50, // Basic staggering
     };
 
     const newNode: Node = {
       id: newNodeId,
-      type: 'default', 
+      type: 'default', // For now, all nodes are 'default'. Custom nodes would change this.
       position: newPosition,
-      data: { label: `${nodeTypeInfo.label}` }, // Removed (ID: ${newNodeId}) for cleaner label
+      data: { label: `${nodeTypeInfo.label}` },
     };
     setNodes((nds) => nds.concat(newNode));
     setSelectedNodeForEdit(null); // Close editor if open when adding a new node
@@ -287,7 +287,7 @@ export default function FlowsPage() {
                  <Button variant="destructive"><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
             </div>
           </div>
-          <div className="w-full h-[calc(100%-80px)]">
+          <div className="w-full h-[calc(100%-80px)]"> {/* Ensure canvas has explicit height */}
              <FlowBuilderCanvas 
                 nodes={nodes}
                 edges={edges}
@@ -368,4 +368,3 @@ export default function FlowsPage() {
     </ReactFlowProvider>
   );
 }
-
