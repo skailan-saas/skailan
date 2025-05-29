@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Bell, LogOut, Search, Settings, UserCircle } from "lucide-react";
@@ -12,13 +13,33 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { AppSidebarNav } from "./app-sidebar-nav"; 
-import { Logo } from "@/components/icons/logo";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { supabase } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 export function AppHeader() {
-  const { toggleSidebar } = useSidebar();
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast({
+        title: "Logout Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Logged Out",
+        description: "You have been successfully logged out.",
+      });
+      router.push("/");
+      router.refresh(); // Ensures server components re-evaluate auth state
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
@@ -57,16 +78,20 @@ export function AppHeader() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <UserCircle className="mr-2 h-4 w-4" />
-              <span>Profile</span>
+            <DropdownMenuItem asChild>
+              <Link href="#"> {/* Replace with actual profile page if available */}
+                <UserCircle className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Settings</span>
+            <DropdownMenuItem asChild>
+                <Link href="/settings/roles"> {/* Or a general settings page */}
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               <span>Logout</span>
             </DropdownMenuItem>
