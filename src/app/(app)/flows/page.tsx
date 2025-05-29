@@ -1,9 +1,12 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Beaver, Bot, ChevronDown, ChevronRight, Edit3, GripVertical, MessageCircle, PlusCircle, Settings2, Share2, Trash2, Upload, Download, FileText } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Edit3, MessageCircle, PlusCircle, Share2, Upload, Download, FileText, ToyBrick, HelpCircle, GitMerge } from "lucide-react";
+import { Label } from "@/components/ui/label"; 
+import { Textarea } from "@/components/ui/textarea"; 
 
 // Mock data for existing flows
 const mockFlows = [
@@ -16,8 +19,8 @@ const mockFlows = [
 const nodeTypes = [
   { name: "Start", icon: ChevronRight, color: "bg-green-500/20 text-green-700 dark:text-green-400" },
   { name: "Send Message", icon: MessageCircle, color: "bg-blue-500/20 text-blue-700 dark:text-blue-400" },
-  { name: "Ask Question", icon: HelpCircleIcon, color: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400" },
-  { name: "Condition (If/Else)", icon: GitMergeIcon, color: "bg-purple-500/20 text-purple-700 dark:text-purple-400" },
+  { name: "Ask Question", icon: HelpCircle, color: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400" },
+  { name: "Condition (If/Else)", icon: GitMerge, color: "bg-purple-500/20 text-purple-700 dark:text-purple-400" },
   { name: "AI Action", icon: Bot, color: "bg-indigo-500/20 text-indigo-700 dark:text-indigo-400" },
   { name: "Set Variable", icon: Edit3, color: "bg-gray-500/20 text-gray-700 dark:text-gray-400" },
   { name: "Webhook", icon: Share2, color: "bg-teal-500/20 text-teal-700 dark:text-teal-400" },
@@ -70,7 +73,7 @@ export default function FlowsPage() {
            <div className="absolute top-4 left-4 z-10">
             <span className="text-lg font-semibold">Editing: Welcome Flow</span>
           </div>
-          <Beaver className="h-32 w-32 text-muted-foreground/50 mb-4" />
+          <ToyBrick className="h-32 w-32 text-muted-foreground/50 mb-4" />
           <h2 className="text-3xl font-semibold text-muted-foreground">Flow Canvas</h2>
           <p className="text-muted-foreground mt-2">Drag nodes from the palette to build your flow.</p>
           <p className="text-sm text-muted-foreground mt-1">(Visual editor coming soon!)</p>
@@ -120,7 +123,3 @@ export default function FlowsPage() {
     </div>
   );
 }
-
-// Placeholder icons if not in lucide
-const HelpCircleIcon = ({className}: {className?:string}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
-const GitMergeIcon = ({className}: {className?:string}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M6 21V9a9 9 0 0 0 9 9"></path></svg>;
