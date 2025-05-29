@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
 import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import ReactFlow, {
@@ -21,7 +20,7 @@ import ReactFlow, {
   type OnNodesChange,
   type OnEdgesChange,
   type OnConnect,
-  ReactFlowProvider, // Import ReactFlowProvider
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -129,7 +128,7 @@ export default function FlowsPage() {
 
 
   return (
-    <ReactFlowProvider> {/* Required by react-flow hooks if used outside ReactFlow component context */}
+    <ReactFlowProvider>
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-muted/30">
       <header className="flex items-center justify-between p-4 border-b bg-background shadow-sm">
         <div>
@@ -145,7 +144,7 @@ export default function FlowsPage() {
               <DialogHeader>
                 <DialogTitle>Import Flow Configuration</DialogTitle>
               </DialogHeader>
-              <Textarea placeholder="Paste your flow JSON here..." rows={10} />
+              <textarea placeholder="Paste your flow JSON here..." rows={10} className="w-full p-2 border rounded-md" />
               <DialogFooter>
                 <Button type="submit">Import</Button>
               </DialogFooter>
@@ -170,7 +169,7 @@ export default function FlowsPage() {
                 {generatedConfig && (
                   <div className="space-y-2">
                     <Label htmlFor="flow-config">Generated Configuration (JSON):</Label>
-                    <Textarea id="flow-config" readOnly value={generatedConfig} rows={10} className="font-mono text-xs"/>
+                    <textarea id="flow-config" readOnly value={generatedConfig} rows={10} className="w-full p-2 border rounded-md font-mono text-xs"/>
                   </div>
                 )}
               </div>
@@ -188,8 +187,8 @@ export default function FlowsPage() {
       </header>
 
       {/* Main content area with sidebar and canvas */}
-      <div className="flex-1 grid grid-cols-[300px_1fr] overflow-hidden">
-        {/* Flows List / Templates Sidebar */}
+      <div className="flex-1 grid grid-cols-[300px_1fr_300px] overflow-hidden">
+        {/* Flows List / Templates Sidebar (Left) */}
         <Card className="rounded-none border-0 border-r flex flex-col">
           <CardHeader className="p-3 border-b">
             <Input placeholder="Search flows..." />
@@ -203,9 +202,9 @@ export default function FlowsPage() {
                     variant={selectedFlow?.id === flow.id ? "secondary" : "ghost"}
                     className="w-full h-auto justify-start p-3 text-left"
                     onClick={() => setSelectedFlow(flow)}
-                    asChild // Use asChild to avoid button-inside-button if Card itself is clickable
+                    asChild
                   >
-                    <div className="flex items-start gap-3 cursor-pointer"> {/* Make div clickable */}
+                    <div className="flex items-start gap-3 cursor-pointer">
                       <flow.icon className="h-5 w-5 mt-1 text-primary flex-shrink-0" />
                       <div className="flex-1 overflow-hidden">
                         <h3 className="font-medium truncate">{flow.name}</h3>
@@ -219,8 +218,41 @@ export default function FlowsPage() {
                   </Button>
                 ))}
               </div>
-                 <div className="p-2 mt-2 border-t">
-                <h3 className="font-semibold text-sm p-1 mb-1">Node Types</h3>
+            </CardContent>
+          </ScrollArea>
+          <CardFooter className="p-2 border-t">
+            <Button variant="outline" className="w-full text-sm"><FileText className="mr-2 h-4 w-4" /> Browse Templates</Button>
+          </CardFooter>
+        </Card>
+
+        {/* Flow Canvas Area (Center) */}
+        <div className="bg-muted/50 flex-1 overflow-auto p-6 relative">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+                <h2 className="text-xl font-semibold">{selectedFlow?.name || "Untitled Flow"}</h2>
+                <p className="text-sm text-muted-foreground">Status: {selectedFlow?.status || "Draft"} - Last Saved: {selectedFlow?.lastModified || "Not saved"}</p>
+            </div>
+            <div className="flex gap-2">
+                 <Button variant="outline"><Download className="mr-2 h-4 w-4"/> Export</Button>
+                 <Button variant="outline"><Share2 className="mr-2 h-4 w-4"/> Share</Button>
+                 <Button className="bg-primary hover:bg-primary/90 text-primary-foreground"><PlusCircle className="mr-2 h-4 w-4"/> Save & Publish</Button>
+                 <Button variant="destructive"><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
+            </div>
+          </div>
+          <div className="w-full h-[calc(100%-80px)]">
+             <FlowBuilderCanvas />
+          </div>
+        </div>
+
+        {/* Node Types Palette (Right) */}
+        <Card className="rounded-none border-0 border-l flex flex-col">
+          <CardHeader className="p-3 border-b">
+             <CardTitle className="text-lg">Node Types</CardTitle>
+             <CardDescription className="text-xs">Drag or click to add to canvas.</CardDescription>
+          </CardHeader>
+          <ScrollArea className="flex-1">
+            <CardContent className="p-0">
+              <div className="p-2 space-y-1">
                  {nodeTypesForPalette.map((nodeType) => (
                     <Button
                         key={nodeType.type}
@@ -238,31 +270,12 @@ export default function FlowsPage() {
               </div>
             </CardContent>
           </ScrollArea>
-          <CardFooter className="p-2 border-t">
-            <Button variant="outline" className="w-full text-sm"><FileText className="mr-2 h-4 w-4" /> Browse Templates</Button>
-          </CardFooter>
+           {/* Optional Footer for Node Palette if needed */}
         </Card>
-
-        {/* Flow Canvas Area */}
-        <div className="bg-muted/50 flex-1 overflow-auto p-6 relative">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-                <h2 className="text-xl font-semibold">{selectedFlow?.name || "Untitled Flow"}</h2>
-                <p className="text-sm text-muted-foreground">Status: {selectedFlow?.status || "Draft"} - Last Saved: {selectedFlow?.lastModified || "Not saved"}</p>
-            </div>
-            <div className="flex gap-2">
-                 <Button variant="outline"><Download className="mr-2 h-4 w-4"/> Export</Button>
-                 <Button variant="outline"><Share2 className="mr-2 h-4 w-4"/> Share</Button>
-                 <Button className="bg-primary hover:bg-primary/90 text-primary-foreground"><PlusCircle className="mr-2 h-4 w-4"/> Save & Publish</Button>
-                 <Button variant="destructive"><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
-            </div>
-          </div>
-          <div className="w-full h-[calc(100%-80px)]"> {/* Adjusted height for header */}
-             <FlowBuilderCanvas />
-          </div>
-        </div>
       </div>
     </div>
     </ReactFlowProvider>
   );
 }
+
+    
