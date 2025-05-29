@@ -13,7 +13,7 @@ import {
   LifeBuoy,
   FileText,
   Zap, 
-  UserCircle, // Added for Profile
+  UserCircle,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -36,7 +36,6 @@ const settingsNavItems = [
   { href: "/settings/roles", label: "Users & Roles", icon: Users },
   { href: "/settings/channels", label: "Channel Connections", icon: Zap },
   { href: "/settings/sdk", label: "Website SDK", icon: Code2 },
-  // Add more settings links here
 ];
 
 const helpNavItems = [
@@ -48,13 +47,14 @@ const helpNavItems = [
 export function AppSidebarNav() {
   const pathname = usePathname();
   const { state: sidebarState } = useSidebar();
+  const isCollapsed = sidebarState === "collapsed";
 
-  const renderNavItems = (items: typeof mainNavItems) => // Use mainNavItems as a representative type
+  const renderNavItems = (items: typeof mainNavItems) =>
     items.map((item) => (
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
           asChild
-          isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/settings/profile" && item.href !== "/dashboard" && item.href !== "/flows" && item.href !== "/analytics") || (pathname === "/settings" && item.href === "/settings/profile")} // More specific active check
+          isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/settings/profile" && item.href !== "/dashboard" && item.href !== "/flows" && item.href !== "/analytics") || (pathname === "/settings" && item.href === "/settings/profile")}
           tooltip={item.label}
           className={cn(
             (pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/settings/profile" && item.href !== "/dashboard" && item.href !== "/flows" && item.href !== "/analytics") || (pathname === "/settings" && item.href === "/settings/profile") )&& "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
@@ -62,7 +62,7 @@ export function AppSidebarNav() {
         >
           <Link href={item.href}>
             <item.icon />
-            <span>{item.label}</span>
+            {!isCollapsed && <span>{item.label}</span>}
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
