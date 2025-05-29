@@ -69,7 +69,7 @@ interface FlowBuilderCanvasProps {
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
   onNodeClick?: (event: React.MouseEvent, node: Node) => void;
-  nodeTypes?: NodeTypes;
+  nodeTypes?: NodeTypes; // Allow passing nodeTypes for custom nodes in the future
 }
 
 function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect, onNodeClick, nodeTypes }: FlowBuilderCanvasProps) {
@@ -82,7 +82,7 @@ function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConne
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
-        nodeTypes={nodeTypes}
+        nodeTypes={nodeTypes} // Pass through nodeTypes
         fitView
       >
         <Controls />
@@ -93,7 +93,7 @@ function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConne
 }
 
 let nodeIdCounter = initialNodesData.length;
-let buttonIdCounter = 0;
+let buttonIdCounter = 0; // For unique button IDs in the "buttons" node editor
 
 export default function FlowsPage() {
   const [flowPrompt, setFlowPrompt] = useState("");
@@ -130,6 +130,9 @@ export default function FlowsPage() {
       const result = await generateFlowFn({ flowDescription: flowPrompt });
       setGeneratedConfig(result.flowConfiguration);
       // TODO: Parse result.flowConfiguration and set it to react-flow nodes/edges
+      // For now, just logging it.
+      console.log("Generated Flow Config:", result.flowConfiguration);
+      // Example: parseAndSetFlow(result.flowConfiguration);
     } catch (error) {
       console.error("Error generating flow:", error);
       setGeneratedConfig("Error generating flow. Please check console.");
@@ -141,7 +144,9 @@ export default function FlowsPage() {
   const handleAddNode = (nodePaletteItem: typeof nodeTypesForPalette[0]) => {
     nodeIdCounter++;
     const newNodeId = `node_${nodeIdCounter}`;
-    const newPosition = { x: Math.random() * 200 + 50, y: Math.random() * 200 + 50 };
+    // Simple positioning logic, can be improved
+    const newPosition = { x: (nodes.length % 5) * 150 + 50, y: Math.floor(nodes.length / 5) * 120 + 50 };
+    
     let newNodeData: any = { label: nodePaletteItem.label };
 
     switch (nodePaletteItem.type) {
@@ -157,6 +162,7 @@ export default function FlowsPage() {
         newNodeData.buttons = [{ id: `btn-${buttonIdCounter++}`, label: 'Button 1', payload: 'payload_1' }];
         break;
       case 'carousel':
+        // Placeholder for complex carousel structure
         newNodeData.carouselConfigText = '/* Define carousel items here (e.g., JSON) */';
         break;
       case 'userInput':
@@ -165,25 +171,26 @@ export default function FlowsPage() {
         break;
       case 'condition':
         newNodeData.variable = '';
-        newNodeData.operator = 'equals';
+        newNodeData.operator = 'equals'; // default operator
         newNodeData.value = '';
         break;
       case 'action':
-        newNodeData.actionType = 'api_call';
+        newNodeData.actionType = 'api_call'; // default action type
         newNodeData.actionParams = '';
         break;
       default:
+        // For custom types or fallback
         break;
     }
 
     const newNode: Node = {
       id: newNodeId,
-      type: nodePaletteItem.type,
+      type: nodePaletteItem.type, // Use the type from the palette
       position: newPosition,
       data: newNodeData,
     };
     setNodes((nds) => nds.concat(newNode));
-    setSelectedNodeForEdit(null);
+    setSelectedNodeForEdit(null); // Close editor when adding a new node
   };
 
   const handleNodeEditorClose = () => {
@@ -192,6 +199,7 @@ export default function FlowsPage() {
   
   const handleNodeDataChange = (newData: any) => {
     if (!selectedNodeForEdit) return;
+    // Create a new data object by merging existing data with new data
     const updatedNodeData = { ...selectedNodeForEdit.data, ...newData };
     setNodes((nds) =>
       nds.map((node) =>
@@ -200,9 +208,11 @@ export default function FlowsPage() {
           : node
       )
     );
+    // Also update the selectedNodeForEdit state to reflect changes in the editor
     setSelectedNodeForEdit(prev => prev ? ({...prev, data: updatedNodeData }) : null);
   };
 
+  // Specific handlers for the "buttons" node type
   const handleButtonChange = (buttonIndex: number, field: 'label' | 'payload', value: string) => {
     if (!selectedNodeForEdit || selectedNodeForEdit.type !== 'buttons' || !selectedNodeForEdit.data.buttons) return;
     const newButtons = [...selectedNodeForEdit.data.buttons];
@@ -221,6 +231,14 @@ export default function FlowsPage() {
     if (!selectedNodeForEdit || selectedNodeForEdit.type !== 'buttons' || !selectedNodeForEdit.data.buttons) return;
     const newButtons = selectedNodeForEdit.data.buttons.filter(btn => btn.id !== buttonIdToRemove);
     handleNodeDataChange({ buttons: newButtons });
+  };
+
+  const handleDeleteNode = () => {
+    if (!selectedNodeForEdit) return;
+    const nodeIdToDelete = selectedNodeForEdit.id;
+    setNodes((nds) => nds.filter((node) => node.id !== nodeIdToDelete));
+    setEdges((eds) => eds.filter((edge) => edge.source !== nodeIdToDelete && edge.target !== nodeIdToDelete));
+    setSelectedNodeForEdit(null); // Close editor after deletion
   };
 
 
@@ -283,7 +301,8 @@ export default function FlowsPage() {
         </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-[300px_1fr_350px] overflow-hidden"> {/* Adjusted for 350px right panel */}
+      <div className="flex-1 grid grid-cols-[300px_1fr_350px] overflow-hidden"> {/* Main layout: Flows List | Canvas | Palette/Editor */}
+        {/* Flows List Panel */}
         <Card className="rounded-none border-0 border-r flex flex-col">
           <CardHeader className="p-3 border-b">
             <Input placeholder="Search flows..." />
@@ -298,9 +317,11 @@ export default function FlowsPage() {
                     className="w-full h-auto justify-start p-3 text-left"
                     onClick={() => {
                         setSelectedFlow(flow);
+                        // TODO: Load nodes/edges for this flow
+                        // For now, just clearing selected node for edit
                         setSelectedNodeForEdit(null); 
                     }}
-                    asChild
+                    asChild // To allow div inside for better layout control with button styling
                   >
                     <div className="flex items-start gap-3 cursor-pointer">
                       <flow.icon className="h-5 w-5 mt-1 text-primary flex-shrink-0" />
@@ -323,6 +344,7 @@ export default function FlowsPage() {
           </CardFooter>
         </Card>
 
+        {/* Flow Builder Canvas Panel */}
         <div className="bg-muted/50 flex-1 overflow-auto p-6 relative" ref={reactFlowWrapper}>
           <div className="flex justify-between items-center mb-4">
             <div>
@@ -336,7 +358,7 @@ export default function FlowsPage() {
                  <Button variant="destructive"><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
             </div>
           </div>
-          <div className="w-full h-[calc(100%-80px)]">
+          <div className="w-full h-[calc(100%-80px)]"> {/* Adjust height to leave space for header */}
              <FlowBuilderCanvas 
                 nodes={nodes}
                 edges={edges}
@@ -344,15 +366,17 @@ export default function FlowsPage() {
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onNodeClick={onNodeClickHandler}
+                // nodeTypes={customNodeTypes} // If you define custom node components
              />
           </div>
         </div>
 
+        {/* Right Panel: Node Palette or Node Editor */}
         <Card className="rounded-none border-0 border-l flex flex-col">
           {selectedNodeForEdit ? (
             <>
               <CardHeader className="p-3 border-b flex-row justify-between items-center">
-                 <CardTitle className="text-lg">Edit: {selectedNodeForEdit.data.label}</CardTitle>
+                 <CardTitle className="text-lg">Edit: {selectedNodeForEdit.data.label || 'Node'}</CardTitle>
                  <Button variant="ghost" size="icon" onClick={handleNodeEditorClose} className="h-7 w-7">
                     <X className="h-4 w-4" />
                  </Button>
@@ -590,20 +614,25 @@ export default function FlowsPage() {
                     </div>
                   )}
 
-                  {/* Fallback for unhandled node types */}
-                  {![ 'text', 'image', 'buttons', 'userInput', 'condition', 'action', 'carousel'].includes(selectedNodeForEdit.type || 'default') && (
+                  {/* Fallback for unhandled node types or standard input/output nodes */}
+                  {![ 'text', 'image', 'buttons', 'userInput', 'condition', 'action', 'carousel'].includes(selectedNodeForEdit.type || 'default') && 
+                   (selectedNodeForEdit.type === 'input' || selectedNodeForEdit.type === 'output' || selectedNodeForEdit.type === 'default' || !selectedNodeForEdit.type) && (
                      <div className="pt-2">
                         <p className="text-xs text-muted-foreground">Type: {selectedNodeForEdit.type || 'default'}</p>
                         <p className="text-xs text-muted-foreground mt-2">
-                            Specific editing options for '{selectedNodeForEdit.type}' nodes are not yet implemented.
+                            Standard input/output/default nodes have basic label editing.
+                            Specific editing options for custom type '{selectedNodeForEdit.type}' are not yet implemented if not listed above.
                         </p>
                     </div>
                   )}
 
                 </CardContent>
               </ScrollArea>
-              <CardFooter className="p-3 border-t">
+              <CardFooter className="p-3 border-t flex flex-col gap-2">
                 <Button onClick={handleNodeEditorClose} className="w-full">Done Editing</Button>
+                <Button variant="destructive" onClick={handleDeleteNode} className="w-full">
+                    <Trash2 className="mr-2 h-4 w-4"/> Delete Node
+                </Button>
               </CardFooter>
             </>
           ) : (
