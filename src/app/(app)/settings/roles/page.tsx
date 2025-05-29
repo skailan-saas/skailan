@@ -64,22 +64,24 @@ export default function RolesPage() {
             <ScrollArea className="h-[300px]">
                 <div className="p-2 space-y-1">
                 {mockRoles.map((role) => (
-                    <Button variant="ghost" key={role.id} className="w-full h-auto justify-between p-3 text-left">
-                        <div className="flex-1">
-                            <span className="font-medium block">{role.name}</span>
-                            <span className="text-xs text-muted-foreground block truncate">{role.description}</span>
-                            <span className="text-xs text-muted-foreground">{role.userCount} users</span>
+                    <Button asChild variant="ghost" key={role.id} className="w-full h-auto p-3 text-left cursor-pointer">
+                        <div className="flex items-center justify-between w-full">
+                            <div className="flex-1">
+                                <span className="font-medium block">{role.name}</span>
+                                <span className="text-xs text-muted-foreground block truncate">{role.description}</span>
+                                <span className="text-xs text-muted-foreground">{role.userCount} users</span>
+                            </div>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit Role</DropdownMenuItem>
+                                    <DropdownMenuItem><ShieldCheck className="mr-2 h-4 w-4" /> Edit Permissions</DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Delete Role</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit Role</DropdownMenuItem>
-                                <DropdownMenuItem><ShieldCheck className="mr-2 h-4 w-4" /> Edit Permissions</DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Delete Role</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
                     </Button>
                 ))}
                 </div>
@@ -168,7 +170,7 @@ export default function RolesPage() {
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit User</DropdownMenuItem>
