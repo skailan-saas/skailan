@@ -9,11 +9,26 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle } from "lucide-react";
-import { useState } from "react";
-import type { generateFlowFromPrompt } from "@/ai/flows"; // Import type
+import { useState, useCallback, useEffect } from "react";
+import ReactFlow, {
+  Controls,
+  Background,
+  applyNodeChanges,
+  applyEdgeChanges,
+  addEdge,
+  type Node,
+  type Edge,
+  type OnNodesChange,
+  type OnEdgesChange,
+  type OnConnect,
+  ReactFlowProvider, // Import ReactFlowProvider
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+
+import type { generateFlowFromPrompt as genFlowFnType } from "@/ai/flows";
 
 // Dynamically import the AI function only on the client-side after mount
-let generateFlowFn: typeof generateFlowFromPrompt | null = null;
+let generateFlowFn: typeof genFlowFnType | null = null;
 
 // Mock data for existing flows
 const mockFlows = [
@@ -23,8 +38,8 @@ const mockFlows = [
   { id: "4", name: "Feedback Collection", description: "Gathers user feedback post-interaction.", lastModified: "2024-07-20", status: "Archived", icon: GitMerge },
 ];
 
-// Mock data for node types
-const nodeTypes = [
+// Mock data for node types available in the sidebar
+const nodeTypesForPalette = [
   { type: "text", label: "Send Message", icon: MessageCircle, description: "Sends a simple text message." },
   { type: "image", label: "Send Image", icon: FileText, description: "Sends an image." },
   { type: "buttons", label: "Buttons", icon: ChevronDown, description: "Sends a message with buttons." },
@@ -34,17 +49,63 @@ const nodeTypes = [
   { type: "action", label: "Action", icon: ToyBrick, description: "Performs an action (e.g., API call)." },
 ];
 
+const initialNodes: Node[] = [
+  { id: '1', type: 'input', data: { label: 'Start Node' }, position: { x: 250, y: 5 } },
+  { id: '2', data: { label: 'Default Message' }, position: { x: 250, y: 100 } },
+  { id: '3', type: 'output', data: { label: 'End Node' }, position: { x: 250, y: 200 } },
+];
+
+const initialEdges: Edge[] = [
+  { id: 'e1-2', source: '1', target: '2', animated: true },
+  { id: 'e2-3', source: '2', target: '3' },
+];
+
+
+function FlowBuilderCanvas() {
+  const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  const [edges, setEdges] = useState<Edge[]>(initialEdges);
+
+  const onNodesChange: OnNodesChange = useCallback(
+    (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    [setNodes]
+  );
+  const onEdgesChange: OnEdgesChange = useCallback(
+    (changes) => setEdges((eds) => applyEdgeChanges(changes, eds)),
+    [setEdges]
+  );
+  const onConnect: OnConnect = useCallback(
+    (connection) => setEdges((eds) => addEdge(connection, eds)),
+    [setEdges]
+  );
+
+  return (
+    <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        fitView
+      >
+        <Controls />
+        <Background />
+      </ReactFlow>
+    </div>
+  );
+}
+
+
 export default function FlowsPage() {
   const [flowPrompt, setFlowPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedConfig, setGeneratedConfig] = useState<string | null>(null);
 
-  // Effect to load the AI function
-  useState(() => {
+  useEffect(() => {
     import('@/ai/flows').then(module => {
       generateFlowFn = module.generateFlowFromPrompt;
     }).catch(err => console.error("Failed to load AI module", err));
-  });
+  }, []);
 
   const handleGenerateFlow = async () => {    
     if (!flowPrompt.trim() || !generateFlowFn) return;
@@ -53,17 +114,22 @@ export default function FlowsPage() {
     try {
       const result = await generateFlowFn({ flowDescription: flowPrompt });
       setGeneratedConfig(result.flowConfiguration);
+      // TODO: Parse result.flowConfiguration and set it to react-flow nodes/edges
+      // For now, just displaying the JSON string
     } catch (error) {
       console.error("Error generating flow:", error);
-      // TODO: Show toast notification
       setGeneratedConfig("Error generating flow. Please check console.");
     } finally {
       setIsGenerating(false);
     }
   };
 
+  // Placeholder for selected flow to edit
+  const [selectedFlow, setSelectedFlow] = useState(mockFlows[0]);
+
 
   return (
+    <ReactFlowProvider> {/* Required by react-flow hooks if used outside ReactFlow component context */}
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-muted/30">
       <header className="flex items-center justify-between p-4 border-b bg-background shadow-sm">
         <div>
@@ -103,7 +169,7 @@ export default function FlowsPage() {
                 />
                 {generatedConfig && (
                   <div className="space-y-2">
-                    <Label htmlFor="flow-config">Generated Configuration:</Label>
+                    <Label htmlFor="flow-config">Generated Configuration (JSON):</Label>
                     <Textarea id="flow-config" readOnly value={generatedConfig} rows={10} className="font-mono text-xs"/>
                   </div>
                 )}
@@ -132,13 +198,14 @@ export default function FlowsPage() {
             <CardContent className="p-0">
               <div className="p-2 space-y-1">
                 {mockFlows.map((flow) => (
-                   <Button
+                  <Button
                     key={flow.id}
-                    variant="ghost"
-                    className="w-full h-auto justify-start p-3 text-left flex items-start gap-3"
-                    asChild 
+                    variant={selectedFlow?.id === flow.id ? "secondary" : "ghost"}
+                    className="w-full h-auto justify-start p-3 text-left"
+                    onClick={() => setSelectedFlow(flow)}
+                    asChild // Use asChild to avoid button-inside-button if Card itself is clickable
                   >
-                    <div>
+                    <div className="flex items-start gap-3 cursor-pointer"> {/* Make div clickable */}
                       <flow.icon className="h-5 w-5 mt-1 text-primary flex-shrink-0" />
                       <div className="flex-1 overflow-hidden">
                         <h3 className="font-medium truncate">{flow.name}</h3>
@@ -152,6 +219,23 @@ export default function FlowsPage() {
                   </Button>
                 ))}
               </div>
+                 <div className="p-2 mt-2 border-t">
+                <h3 className="font-semibold text-sm p-1 mb-1">Node Types</h3>
+                 {nodeTypesForPalette.map((nodeType) => (
+                    <Button
+                        key={nodeType.type}
+                        variant="ghost"
+                        className="w-full h-auto justify-start p-3 text-left"
+                        // TODO: Add logic to drag/add node to canvas
+                    >
+                        <nodeType.icon className="h-5 w-5 mr-3 text-muted-foreground" />
+                        <div>
+                        <h4 className="font-medium text-sm">{nodeType.label}</h4>
+                        <p className="text-xs text-muted-foreground">{nodeType.description}</p>
+                        </div>
+                    </Button>
+                ))}
+              </div>
             </CardContent>
           </ScrollArea>
           <CardFooter className="p-2 border-t">
@@ -163,8 +247,8 @@ export default function FlowsPage() {
         <div className="bg-muted/50 flex-1 overflow-auto p-6 relative">
           <div className="flex justify-between items-center mb-4">
             <div>
-                <h2 className="text-xl font-semibold">Welcome Flow</h2>
-                <p className="text-sm text-muted-foreground">Status: Published - Last Saved: 2 mins ago</p>
+                <h2 className="text-xl font-semibold">{selectedFlow?.name || "Untitled Flow"}</h2>
+                <p className="text-sm text-muted-foreground">Status: {selectedFlow?.status || "Draft"} - Last Saved: {selectedFlow?.lastModified || "Not saved"}</p>
             </div>
             <div className="flex gap-2">
                  <Button variant="outline"><Download className="mr-2 h-4 w-4"/> Export</Button>
@@ -173,18 +257,12 @@ export default function FlowsPage() {
                  <Button variant="destructive"><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
             </div>
           </div>
-          {/* Placeholder for the actual canvas */}
-          <div className="w-full h-[calc(100%-60px)] border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <ToyBrick className="h-16 w-16 mx-auto mb-2" />
-              <p className="text-lg font-semibold">Flow Canvas Area</p>
-              <p>Drag and drop nodes from the panel to build your flow.</p>
-            </div>
+          <div className="w-full h-[calc(100%-80px)]"> {/* Adjusted height for header */}
+             <FlowBuilderCanvas />
           </div>
         </div>
       </div>
     </div>
+    </ReactFlowProvider>
   );
 }
-
-    
