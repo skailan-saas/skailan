@@ -4,6 +4,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle, X, Image as ImageIcon, Plus, Settings } from "lucide-react";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type FC } from "react";
 import ReactFlow, {
   Controls,
   Background,
@@ -31,8 +32,26 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 
 import type { generateFlowFromPrompt as genFlowFnType } from "@/ai/flows";
+import { useToast } from "@/hooks/use-toast";
+
 
 let generateFlowFn: typeof genFlowFnType | null = null;
+
+interface FlowListItem {
+  id: string;
+  name: string;
+  description: string;
+  lastModified: string;
+  status: "Published" | "Draft" | "Archived";
+  icon: FC<React.SVGProps<SVGSVGElement>>; // Lucide icon component type
+}
+
+const initialMockFlows: FlowListItem[] = [
+  { id: "1", name: "Welcome Flow", description: "Greets new users and offers initial options.", lastModified: "2024-07-28", status: "Published", icon: Bot },
+  { id: "2", name: "Sales Inquiry", description: "Handles product questions and lead generation.", lastModified: "2024-07-25", status: "Draft", icon: ToyBrick },
+  { id: "3", name: "Support Request", description: "Guides users through troubleshooting steps.", lastModified: "2024-07-22", status: "Published", icon: HelpCircle },
+  { id: "4", name: "Feedback Collection", description: "Gathers user feedback post-interaction.", lastModified: "2024-07-20", status: "Archived", icon: GitMerge },
+];
 
 const initialNodesData: Node[] = [
   { id: '1', type: 'input', data: { label: 'Start Node' }, position: { x: 250, y: 5 } },
@@ -43,13 +62,6 @@ const initialNodesData: Node[] = [
 const initialEdgesData: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', animated: true },
   { id: 'e2-3', source: '2', target: '3' },
-];
-
-const mockFlows = [
-  { id: "1", name: "Welcome Flow", description: "Greets new users and offers initial options.", lastModified: "2024-07-28", status: "Published", icon: Bot },
-  { id: "2", name: "Sales Inquiry", description: "Handles product questions and lead generation.", lastModified: "2024-07-25", status: "Draft", icon: ToyBrick },
-  { id: "3", name: "Support Request", description: "Guides users through troubleshooting steps.", lastModified: "2024-07-22", status: "Published", icon: HelpCircle },
-  { id: "4", name: "Feedback Collection", description: "Gathers user feedback post-interaction.", lastModified: "2024-07-20", status: "Archived", icon: GitMerge },
 ];
 
 const nodeTypesForPalette = [
@@ -69,7 +81,7 @@ interface FlowBuilderCanvasProps {
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
   onNodeClick?: (event: React.MouseEvent, node: Node) => void;
-  nodeTypes?: NodeTypes; // Allow passing nodeTypes for custom nodes in the future
+  nodeTypes?: NodeTypes;
 }
 
 function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect, onNodeClick, nodeTypes }: FlowBuilderCanvasProps) {
@@ -82,7 +94,7 @@ function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConne
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
-        nodeTypes={nodeTypes} // Pass through nodeTypes
+        nodeTypes={nodeTypes}
         fitView
       >
         <Controls />
@@ -93,9 +105,10 @@ function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConne
 }
 
 let nodeIdCounter = initialNodesData.length;
-let buttonIdCounter = 0; // For unique button IDs in the "buttons" node editor
+let buttonIdCounter = 0;
 
 export default function FlowsPage() {
+  const { toast } = useToast();
   const [flowPrompt, setFlowPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedConfig, setGeneratedConfig] = useState<string | null>(null);
@@ -103,7 +116,16 @@ export default function FlowsPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodesData);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdgesData);
   const [selectedNodeForEdit, setSelectedNodeForEdit] = useState<Node | null>(null);
-  const [selectedFlow, setSelectedFlow] = useState(mockFlows[0]);
+  
+  const [mockFlows, setMockFlows] = useState<FlowListItem[]>(initialMockFlows);
+  const [selectedFlow, setSelectedFlow] = useState<FlowListItem | null>(mockFlows[0] || null);
+
+  const [isEditFlowDialogOpen, setIsEditFlowDialogOpen] = useState(false);
+  const [flowToEdit, setFlowToEdit] = useState<FlowListItem | null>(null);
+  const [editFlowName, setEditFlowName] = useState("");
+  const [editFlowDescription, setEditFlowDescription] = useState("");
+
+  const [isDeleteFlowConfirmOpen, setIsDeleteFlowConfirmOpen] = useState(false);
   
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
@@ -112,6 +134,13 @@ export default function FlowsPage() {
       generateFlowFn = module.generateFlowFromPrompt;
     }).catch(err => console.error("Failed to load AI module", err));
   }, []);
+
+  useEffect(() => {
+    if (flowToEdit) {
+      setEditFlowName(flowToEdit.name);
+      setEditFlowDescription(flowToEdit.description);
+    }
+  }, [flowToEdit]);
 
   const onConnect: OnConnect = useCallback(
     (connection) => setEdges((eds) => addEdge(connection, eds)),
@@ -129,13 +158,12 @@ export default function FlowsPage() {
     try {
       const result = await generateFlowFn({ flowDescription: flowPrompt });
       setGeneratedConfig(result.flowConfiguration);
-      // TODO: Parse result.flowConfiguration and set it to react-flow nodes/edges
-      // For now, just logging it.
       console.log("Generated Flow Config:", result.flowConfiguration);
-      // Example: parseAndSetFlow(result.flowConfiguration);
+      toast({ title: "Flow Configuration Generated", description: "JSON config is ready. Implement parsing to load it into the canvas." });
     } catch (error) {
       console.error("Error generating flow:", error);
       setGeneratedConfig("Error generating flow. Please check console.");
+      toast({ title: "Error Generating Flow", description: "Could not generate flow configuration.", variant: "destructive" });
     } finally {
       setIsGenerating(false);
     }
@@ -144,7 +172,6 @@ export default function FlowsPage() {
   const handleAddNode = (nodePaletteItem: typeof nodeTypesForPalette[0]) => {
     nodeIdCounter++;
     const newNodeId = `node_${nodeIdCounter}`;
-    // Simple positioning logic, can be improved
     const newPosition = { x: (nodes.length % 5) * 150 + 50, y: Math.floor(nodes.length / 5) * 120 + 50 };
     
     let newNodeData: any = { label: nodePaletteItem.label };
@@ -162,7 +189,6 @@ export default function FlowsPage() {
         newNodeData.buttons = [{ id: `btn-${buttonIdCounter++}`, label: 'Button 1', payload: 'payload_1' }];
         break;
       case 'carousel':
-        // Placeholder for complex carousel structure
         newNodeData.carouselConfigText = '/* Define carousel items here (e.g., JSON) */';
         break;
       case 'userInput':
@@ -171,26 +197,25 @@ export default function FlowsPage() {
         break;
       case 'condition':
         newNodeData.variable = '';
-        newNodeData.operator = 'equals'; // default operator
+        newNodeData.operator = 'equals';
         newNodeData.value = '';
         break;
       case 'action':
-        newNodeData.actionType = 'api_call'; // default action type
+        newNodeData.actionType = 'api_call';
         newNodeData.actionParams = '';
         break;
       default:
-        // For custom types or fallback
         break;
     }
 
     const newNode: Node = {
       id: newNodeId,
-      type: nodePaletteItem.type, // Use the type from the palette
+      type: nodePaletteItem.type,
       position: newPosition,
       data: newNodeData,
     };
     setNodes((nds) => nds.concat(newNode));
-    setSelectedNodeForEdit(null); // Close editor when adding a new node
+    setSelectedNodeForEdit(null);
   };
 
   const handleNodeEditorClose = () => {
@@ -199,7 +224,6 @@ export default function FlowsPage() {
   
   const handleNodeDataChange = (newData: any) => {
     if (!selectedNodeForEdit) return;
-    // Create a new data object by merging existing data with new data
     const updatedNodeData = { ...selectedNodeForEdit.data, ...newData };
     setNodes((nds) =>
       nds.map((node) =>
@@ -208,11 +232,9 @@ export default function FlowsPage() {
           : node
       )
     );
-    // Also update the selectedNodeForEdit state to reflect changes in the editor
     setSelectedNodeForEdit(prev => prev ? ({...prev, data: updatedNodeData }) : null);
   };
 
-  // Specific handlers for the "buttons" node type
   const handleButtonChange = (buttonIndex: number, field: 'label' | 'payload', value: string) => {
     if (!selectedNodeForEdit || selectedNodeForEdit.type !== 'buttons' || !selectedNodeForEdit.data.buttons) return;
     const newButtons = [...selectedNodeForEdit.data.buttons];
@@ -238,7 +260,41 @@ export default function FlowsPage() {
     const nodeIdToDelete = selectedNodeForEdit.id;
     setNodes((nds) => nds.filter((node) => node.id !== nodeIdToDelete));
     setEdges((eds) => eds.filter((edge) => edge.source !== nodeIdToDelete && edge.target !== nodeIdToDelete));
-    setSelectedNodeForEdit(null); // Close editor after deletion
+    setSelectedNodeForEdit(null);
+    toast({ title: "Node Deleted", description: `Node ${nodeIdToDelete} and its connections have been removed.`});
+  };
+
+  const handleOpenEditFlowDialog = (flow: FlowListItem) => {
+    setFlowToEdit(flow);
+    setIsEditFlowDialogOpen(true);
+  };
+
+  const handleSaveFlowDetails = () => {
+    if (!flowToEdit) return;
+    const updatedFlows = mockFlows.map(f => 
+      f.id === flowToEdit.id ? { ...f, name: editFlowName, description: editFlowDescription, lastModified: new Date().toISOString().split('T')[0] } : f
+    );
+    setMockFlows(updatedFlows);
+    if (selectedFlow && selectedFlow.id === flowToEdit.id) {
+      setSelectedFlow(updatedFlows.find(f => f.id === flowToEdit.id) || null);
+    }
+    setIsEditFlowDialogOpen(false);
+    setFlowToEdit(null);
+    toast({ title: "Flow Details Updated", description: `Details for "${editFlowName}" saved.`});
+  };
+
+  const handleConfirmDeleteFlow = () => {
+    if (!selectedFlow) return;
+    const flowNameToDelete = selectedFlow.name;
+    setMockFlows(prevFlows => prevFlows.filter(f => f.id !== selectedFlow.id));
+    
+    setSelectedFlow(null);
+    setNodes(initialNodesData); // Reset canvas or load next flow
+    setEdges(initialEdgesData);
+    setSelectedNodeForEdit(null);
+
+    setIsDeleteFlowConfirmOpen(false);
+    toast({ title: "Flow Deleted", description: `Flow "${flowNameToDelete}" has been deleted.`});
   };
 
 
@@ -301,8 +357,7 @@ export default function FlowsPage() {
         </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-[300px_1fr_350px] overflow-hidden"> {/* Main layout: Flows List | Canvas | Palette/Editor */}
-        {/* Flows List Panel */}
+      <div className="flex-1 grid grid-cols-[300px_1fr_350px] overflow-hidden">
         <Card className="rounded-none border-0 border-r flex flex-col">
           <CardHeader className="p-3 border-b">
             <Input placeholder="Search flows..." />
@@ -317,20 +372,21 @@ export default function FlowsPage() {
                     className="w-full h-auto justify-start p-3 text-left"
                     onClick={() => {
                         setSelectedFlow(flow);
-                        // TODO: Load nodes/edges for this flow
-                        // For now, just clearing selected node for edit
+                        // TODO: Load nodes/edges for this flow. For now, resetting to initial.
+                        setNodes(initialNodesData); 
+                        setEdges(initialEdgesData);
                         setSelectedNodeForEdit(null); 
                     }}
-                    asChild // To allow div inside for better layout control with button styling
+                    asChild
                   >
-                    <div className="flex items-start gap-3 cursor-pointer">
+                    <div className="flex items-start gap-3 cursor-pointer w-full">
                       <flow.icon className="h-5 w-5 mt-1 text-primary flex-shrink-0" />
                       <div className="flex-1 overflow-hidden">
                         <h3 className="font-medium truncate">{flow.name}</h3>
                         <p className="text-xs text-muted-foreground truncate">{flow.description}</p>
-                        <p className="text-xs text-muted-foreground">Last modified: {flow.lastModified} - <span className={flow.status === 'Published' ? 'text-green-600' : 'text-yellow-600'}>{flow.status}</span></p>
+                        <p className="text-xs text-muted-foreground">Last modified: {flow.lastModified} - <span className={flow.status === 'Published' ? 'text-green-600' : flow.status === 'Draft' ? 'text-yellow-600' : 'text-muted-foreground'}>{flow.status}</span></p>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 self-center" onClick={(e) => {e.stopPropagation(); console.log("Edit flow metadata", flow.id)}}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 self-center" onClick={(e) => {e.stopPropagation(); handleOpenEditFlowDialog(flow);}}>
                         <Edit3 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -344,21 +400,20 @@ export default function FlowsPage() {
           </CardFooter>
         </Card>
 
-        {/* Flow Builder Canvas Panel */}
         <div className="bg-muted/50 flex-1 overflow-auto p-6 relative" ref={reactFlowWrapper}>
           <div className="flex justify-between items-center mb-4">
             <div>
-                <h2 className="text-xl font-semibold">{selectedFlow?.name || "Untitled Flow"}</h2>
-                <p className="text-sm text-muted-foreground">Status: {selectedFlow?.status || "Draft"} - Last Saved: {selectedFlow?.lastModified || "Not saved"}</p>
+                <h2 className="text-xl font-semibold">{selectedFlow?.name || "Select a Flow"}</h2>
+                {selectedFlow && <p className="text-sm text-muted-foreground">Status: {selectedFlow.status} - Last Saved: {selectedFlow.lastModified}</p>}
             </div>
             <div className="flex gap-2">
-                 <Button variant="outline"><Download className="mr-2 h-4 w-4"/> Export</Button>
-                 <Button variant="outline"><Share2 className="mr-2 h-4 w-4"/> Share</Button>
-                 <Button className="bg-primary hover:bg-primary/90 text-primary-foreground"><PlusCircle className="mr-2 h-4 w-4"/> Save & Publish</Button>
-                 <Button variant="destructive"><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
+                 <Button variant="outline" disabled={!selectedFlow}><Download className="mr-2 h-4 w-4"/> Export</Button>
+                 <Button variant="outline" disabled={!selectedFlow}><Share2 className="mr-2 h-4 w-4"/> Share</Button>
+                 <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={!selectedFlow}><PlusCircle className="mr-2 h-4 w-4"/> Save & Publish</Button>
+                 <Button variant="destructive" onClick={() => setIsDeleteFlowConfirmOpen(true)} disabled={!selectedFlow}><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
             </div>
           </div>
-          <div className="w-full h-[calc(100%-80px)]"> {/* Adjust height to leave space for header */}
+          <div className="w-full h-[calc(100%-80px)]">
              <FlowBuilderCanvas 
                 nodes={nodes}
                 edges={edges}
@@ -366,12 +421,10 @@ export default function FlowsPage() {
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onNodeClick={onNodeClickHandler}
-                // nodeTypes={customNodeTypes} // If you define custom node components
              />
           </div>
         </div>
 
-        {/* Right Panel: Node Palette or Node Editor */}
         <Card className="rounded-none border-0 border-l flex flex-col">
           {selectedNodeForEdit ? (
             <>
@@ -398,7 +451,6 @@ export default function FlowsPage() {
                   </div>
                   <Separator />
                   
-                  {/* Text Node Editor */}
                   {selectedNodeForEdit.type === 'text' && (
                     <div>
                       <Label htmlFor="nodeMessageText">Message Text</Label>
@@ -413,7 +465,6 @@ export default function FlowsPage() {
                     </div>
                   )}
 
-                  {/* Image Node Editor */}
                   {selectedNodeForEdit.type === 'image' && (
                     <div className="space-y-3">
                       <div>
@@ -439,7 +490,6 @@ export default function FlowsPage() {
                     </div>
                   )}
 
-                  {/* Buttons Node Editor */}
                   {selectedNodeForEdit.type === 'buttons' && (
                     <div className="space-y-3">
                       <div>
@@ -454,7 +504,7 @@ export default function FlowsPage() {
                         />
                       </div>
                       <Label>Buttons</Label>
-                      {selectedNodeForEdit.data.buttons?.map((button, index) => (
+                      {selectedNodeForEdit.data.buttons?.map((button: { id: string; label: string; payload: string; }, index: number) => (
                         <Card key={button.id} className="p-2 space-y-1 bg-muted/50">
                           <div className="flex justify-between items-center">
                              <p className="text-xs font-medium">Button {index + 1}</p>
@@ -490,7 +540,6 @@ export default function FlowsPage() {
                     </div>
                   )}
                   
-                  {/* User Input Node Editor */}
                   {selectedNodeForEdit.type === 'userInput' && (
                     <div className="space-y-3">
                       <div>
@@ -518,7 +567,6 @@ export default function FlowsPage() {
                     </div>
                   )}
 
-                  {/* Condition Node Editor */}
                   {selectedNodeForEdit.type === 'condition' && (
                     <div className="space-y-3">
                        <div>
@@ -564,7 +612,6 @@ export default function FlowsPage() {
                     </div>
                   )}
 
-                  {/* Action Node Editor */}
                   {selectedNodeForEdit.type === 'action' && (
                     <div className="space-y-3">
                        <div>
@@ -598,7 +645,6 @@ export default function FlowsPage() {
                     </div>
                   )}
 
-                  {/* Carousel Node Editor (Placeholder) */}
                   {selectedNodeForEdit.type === 'carousel' && (
                     <div>
                       <Label htmlFor="nodeCarouselConfig">Carousel Configuration</Label>
@@ -614,7 +660,6 @@ export default function FlowsPage() {
                     </div>
                   )}
 
-                  {/* Fallback for unhandled node types or standard input/output nodes */}
                   {![ 'text', 'image', 'buttons', 'userInput', 'condition', 'action', 'carousel'].includes(selectedNodeForEdit.type || 'default') && 
                    (selectedNodeForEdit.type === 'input' || selectedNodeForEdit.type === 'output' || selectedNodeForEdit.type === 'default' || !selectedNodeForEdit.type) && (
                      <div className="pt-2">
@@ -665,7 +710,53 @@ export default function FlowsPage() {
           )}
         </Card>
       </div>
+
+      {/* Edit Flow Details Dialog */}
+      <Dialog open={isEditFlowDialogOpen} onOpenChange={setIsEditFlowDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Flow Details: {flowToEdit?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="editFlowName">Flow Name</Label>
+              <Input id="editFlowName" value={editFlowName} onChange={(e) => setEditFlowName(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="editFlowDescription">Description</Label>
+              <Textarea id="editFlowDescription" value={editFlowDescription} onChange={(e) => setEditFlowDescription(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditFlowDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveFlowDetails}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Flow Confirmation Dialog */}
+      <AlertDialog open={isDeleteFlowConfirmOpen} onOpenChange={setIsDeleteFlowConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this flow?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the flow
+              "{selectedFlow?.name}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteFlow} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              Delete Flow
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
     </ReactFlowProvider>
   );
 }
+
+
+    
