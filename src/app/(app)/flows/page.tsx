@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle, X, ImageIcon, Plus, Settings } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle, X, ImageIcon, Plus, Settings, Sparkles } from "lucide-react";
 import { useState, useCallback, useEffect, useRef, type FC } from "react";
 import ReactFlow, {
   Controls,
