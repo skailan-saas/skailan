@@ -51,14 +51,29 @@ export default function FlowsPage() {
           <ScrollArea className="flex-1">
             <CardContent className="p-2 space-y-1">
               {mockFlows.map(flow => (
-                <Button variant="ghost" key={flow.id} className="w-full h-auto justify-start p-2 text-left flex items-start">
-                  <FileText className="h-5 w-5 mr-3 mt-1 text-primary flex-shrink-0" />
-                  <div className="flex-1">
-                    <span className="font-medium block">{flow.name}</span>
-                    <span className="text-xs text-muted-foreground block truncate">{flow.description}</span>
-                    <span className="text-xs text-muted-foreground block">Modified: {flow.lastModified}</span>
+                <Button
+                  asChild 
+                  variant="ghost"
+                  key={flow.id}
+                  className="w-full h-auto justify-start p-2 text-left flex items-start cursor-pointer"
+                >
+                  <div> 
+                    <FileText className="h-5 w-5 mr-3 mt-1 text-primary flex-shrink-0" />
+                    <div className="flex-1 overflow-hidden">
+                      <span className="font-medium block">{flow.name}</span>
+                      <span className="text-xs text-muted-foreground block truncate">{flow.description}</span>
+                      <span className="text-xs text-muted-foreground block">Modified: {flow.lastModified}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 ml-auto flex-shrink-0"
+                      onClick={(e) => { e.stopPropagation(); /* Handle edit click */ }}
+                      aria-label={`Edit flow ${flow.name}`}
+                    >
+                      <Edit3 className="h-4 w-4"/>
+                    </Button>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto"><Edit3 className="h-4 w-4"/></Button>
                 </Button>
               ))}
             </CardContent>
@@ -104,7 +119,7 @@ export default function FlowsPage() {
           <CardHeader className="p-3 border-b">
             <CardTitle className="text-lg">Properties</CardTitle>
             <CardDescription className="text-xs">Configure selected node</CardDescription>
-          </CardHeader>
+          </Header>
            <ScrollArea className="flex-1">
             <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">Select a node on the canvas to see its properties.</p>
