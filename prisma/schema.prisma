@@ -7,57 +7,34 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  // Ensure the connection URL uses '?pgbouncer=true' for Supabase connection pooling in production
-  url       = env("DATABASE_URL")
-  // directUrl is used by Prisma Migrate for schema changes
-  directUrl = env("DIRECT_URL")
+  url       = env("DATABASE_URL") // For connection pooling
+  directUrl = env("DIRECT_URL")   // For migrations
 }
 
-// Corresponds to the 'auth.users' table managed by Supabase Authentication.
-// Prisma can interact with this table if the 'postgres' role (or your app's DB role) has appropriate permissions.
-// Alternatively, you can create a public 'profiles' table that mirrors/extends user data
-// and is synced with 'auth.users' (e.g., using Supabase database functions/triggers).
 model User {
-  id              String    @id @db.Uuid // Supabase auth.users.id is UUID
-  email           String?   @unique // From auth.users.email
-  emailConfirmedAt DateTime? @map("email_confirmed_at") // From auth.users.email_confirmed_at
-  phone           String?   @unique // From auth.users.phone
-  // Add any custom profile fields you want to manage in a public 'profiles' table
-  // For example:
-  // fullName        String?   @map("full_name")
-  // avatarUrl       String?   @map("avatar_url")
-  // tenantId        String?   // If associating users directly to a tenant
-  // tenant          Tenant?   @relation(fields: [tenantId], references: [id])
+  id        String    @id @default(uuid())
+  email     String?   @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  tenantId  String?   // Foreign key to Tenant
+  tenant    Tenant?   @relation(fields: [tenantId], references: [id])
 
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  // If you are mapping this to Supabase's auth.users,
+  // you might not need email, createdAt, updatedAt here directly
+  // if you primarily rely on Supabase for auth user management.
+  // However, having a separate profiles table linked to auth.users is common.
+  // For simplicity here, we'll assume this User model is for your application's user profiles.
 
-  @@map("users") // This maps the model to the 'users' table in the 'public' schema.
-                 // Adjust if you are directly mapping to 'auth.users' (requires schema qualification like @@schema("auth"))
-                 // or a different profiles table. For simplicity, we assume a 'public.users' table for profiles.
+  @@map("users") // Maps this model to the "users" table in the public schema
 }
 
+model Tenant {
+  id          String    @id @default(uuid())
+  name        String
+  subdomain   String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  users       User[]    // A tenant can have multiple users
 
-// Example Tenant model if you create a 'tenants' table
-// model Tenant {
-//   id        String   @id @default(cuid())
-//   name      String
-//   subdomain String?  @unique
-//   createdAt DateTime @default(now()) @map("created_at")
-//   updatedAt DateTime @updatedAt @map("updated_at")
-//   // users     User[] // Relation back to users, depends on your multi-tenancy model
-// }
-
-// Note: To interact with Supabase's built-in 'auth.users' table,
-// your Prisma schema might need to specify the schema:
-// model User {
-//   id    String @id @db.Uuid
-//   email String?
-//   // ... other fields from auth.users
-//
-//   @@map("users")
-//   @@schema("auth")
-// }
-// However, it's often recommended to create a 'public.profiles' table for app-specific user data
-// that references 'auth.users.id' and use database functions/triggers for syncing.
-// The User model above assumes a 'public.users' table for profile data.
+  @@map("tenants") // Maps this model to the "tenants" table in the public schema
+}
