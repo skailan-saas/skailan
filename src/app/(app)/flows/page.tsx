@@ -1,12 +1,14 @@
 
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Bot, ChevronDown, ChevronRight, Edit3, MessageCircle, PlusCircle, Share2, Upload, Download, FileText, ToyBrick, HelpCircle, GitMerge } from "lucide-react";
-import { Label } from "@/components/ui/label"; 
-import { Textarea } from "@/components/ui/textarea"; 
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 // Mock data for existing flows
 const mockFlows = [
@@ -57,7 +59,7 @@ export default function FlowsPage() {
                   key={flow.id}
                   className="w-full h-auto justify-start p-2 text-left flex items-start cursor-pointer"
                 >
-                  <div> 
+                  <div> {/* This div becomes the button due to asChild */}
                     <FileText className="h-5 w-5 mr-3 mt-1 text-primary flex-shrink-0" />
                     <div className="flex-1 overflow-hidden">
                       <span className="font-medium block">{flow.name}</span>
@@ -104,7 +106,7 @@ export default function FlowsPage() {
           <CardHeader className="p-3 border-b">
             <CardTitle className="text-lg">Node Palette</CardTitle>
             <CardDescription className="text-xs">Drag nodes to the canvas</CardDescription>
-          </CardHeader>
+          </Header>
           <ScrollArea className="flex-1">
             <CardContent className="p-2 grid grid-cols-2 gap-2">
               {nodeTypes.map(node => (
