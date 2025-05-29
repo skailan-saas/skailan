@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -176,6 +177,11 @@ const Sidebar = React.forwardRef<
     ref
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const [mounted, setMounted] = React.useState(false)
+
+    React.useEffect(() => {
+      setMounted(true)
+    }, [])
 
     if (collapsible === "none") {
       return (
@@ -192,7 +198,7 @@ const Sidebar = React.forwardRef<
       )
     }
 
-    if (isMobile) {
+    if (mounted && isMobile) {
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
@@ -211,11 +217,18 @@ const Sidebar = React.forwardRef<
         </Sheet>
       )
     }
-
+    
+    // Fallback to desktop rendering for SSR and initial client render before `mounted` is true,
+    // or if not mobile after mount.
     return (
       <div
         ref={ref}
-        className="group peer hidden md:block text-sidebar-foreground"
+        className={cn(
+            "group peer text-sidebar-foreground",
+            // Only show desktop sidebar structure if not effectively mobile OR if not yet mounted (to match SSR)
+            // The "hidden md:block" handles visibility via Tailwind for desktop structure
+            (!mounted || !isMobile) ? "hidden md:block" : "hidden" 
+        )}
         data-state={state}
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
