@@ -2,7 +2,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -12,10 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Briefcase, Users, GripVertical, MoreHorizontal, Percent, CalendarDays, Eye, Edit, Trash2 } from "lucide-react";
+import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, GripVertical, Eye, Edit, Trash2 } from "lucide-react";
 import { useState, type FC, type FormEvent, useEffect } from "react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { cn } from "@/lib/utils";
 
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
 type ProjectStatus = typeof PROJECT_STATUSES[number];
@@ -34,34 +36,25 @@ interface Project {
 
 const initialProjectsData: Project[] = [
   {
-    id: "proj-1",
-    name: "Lanzamiento App Móvil",
-    description: "Desarrollo y lanzamiento de la app móvil.",
-    status: "ACTIVO",
-    clientName: "Interno",
-    team: [
-        { name: "Elena V.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", avatarFallback: "EV" },
-        { name: "Marco C.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "asian man", avatarFallback: "MC" }
-    ],
-    progress: 65,
-    deadline: "2024-10-31",
+    id: "proj-1", name: "Lanzamiento App Móvil", description: "Desarrollo y lanzamiento de la app móvil.", status: "ACTIVO",
+    clientName: "Interno", team: [ { name: "Elena V.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", avatarFallback: "EV" }, { name: "Marco C.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "asian man", avatarFallback: "MC" } ],
+    progress: 65, deadline: "2024-10-31",
   },
   {
-    id: "proj-2",
-    name: "Integración CRM",
-    status: "PLANIFICACION",
-    clientName: "Cliente Alfa",
-    progress: 10,
-    deadline: "2024-11-15",
+    id: "proj-2", name: "Integración CRM", status: "PLANIFICACION", clientName: "Cliente Alfa", progress: 10, deadline: "2024-11-15",
+  },
+  {
+    id: "proj-3", name: "Campaña Marketing Q4", description: "Planificación y ejecución de la campaña de marketing para el último trimestre.", status: "ACTIVO",
+    clientName: "Marketing Dept.", team: [ { name: "Sofia L.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "latina woman", avatarFallback: "SL" } ],
+    progress: 30, deadline: "2024-12-15",
+  },
+  {
+    id: "proj-4", name: "Rediseño Web Corporativa", status: "COMPLETADO", clientName: "CEO Office", progress: 100, deadline: "2024-06-30",
   },
 ];
 
 const statusToColumnTitle: Record<ProjectStatus, string> = {
-  PLANIFICACION: "Planificación",
-  ACTIVO: "Activo",
-  COMPLETADO: "Completado",
-  EN_ESPERA: "En Espera",
-  CANCELADO: "Cancelado",
+  PLANIFICACION: "Planificación", ACTIVO: "Activo", COMPLETADO: "Completado", EN_ESPERA: "En Espera", CANCELADO: "Cancelado",
 };
 
 interface ProjectCardProps {
@@ -71,8 +64,25 @@ interface ProjectCardProps {
 }
 
 const ProjectCard: FC<ProjectCardProps> = ({ project, onEdit, onDelete }) => {
+  const { attributes, listeners, setNodeRef: setDraggableRef, transform, isDragging } = useDraggable({
+    id: project.id,
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : {};
+
   return (
-    <Card className="mb-3 shadow-md hover:shadow-lg transition-shadow bg-card">
+    <Card
+      ref={setDraggableRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={cn(
+        "mb-3 shadow-md hover:shadow-lg transition-shadow bg-card cursor-grab",
+        isDragging && "opacity-60 z-50 shadow-2xl"
+      )}
+    >
       <CardHeader className="p-3 pb-2">
         <div className="flex justify-between items-start">
           <CardTitle className="text-sm font-semibold leading-tight">{project.name}</CardTitle>
@@ -117,7 +127,7 @@ const ProjectCard: FC<ProjectCardProps> = ({ project, onEdit, onDelete }) => {
         )}
       </CardContent>
        <CardFooter className="p-3 pt-2 border-t flex justify-end">
-         <Button variant="ghost" size="icon" className="h-6 w-6 cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100">
+         <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100">
             <GripVertical className="h-4 w-4" />
             <span className="sr-only">Arrastrar proyecto</span>
          </Button>
@@ -133,7 +143,6 @@ export default function CrmProjectsPage() {
   const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
-  // Form state for adding
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [newProjectStatus, setNewProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
@@ -142,7 +151,6 @@ export default function CrmProjectsPage() {
   const [newProjectProgress, setNewProjectProgress] = useState<number | string>(0);
   const [newProjectDeadline, setNewProjectDeadline] = useState("");
   
-  // Form state for editing
   const [editFormProjectName, setEditFormProjectName] = useState("");
   const [editFormProjectDescription, setEditFormProjectDescription] = useState("");
   const [editFormProjectStatus, setEditFormProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
@@ -150,6 +158,11 @@ export default function CrmProjectsPage() {
   const [editFormProjectTeam, setEditFormProjectTeam] = useState("");
   const [editFormProjectProgress, setEditFormProjectProgress] = useState<number | string>(0);
   const [editFormProjectDeadline, setEditFormProjectDeadline] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor)
+  );
 
   const resetAddProjectForm = () => {
     setNewProjectName(""); setNewProjectDescription(""); setNewProjectStatus("PLANIFICACION");
@@ -172,19 +185,15 @@ export default function CrmProjectsPage() {
     };
     setProjects(prevProjects => [...prevProjects, newProjectToAdd]);
     toast({ title: "Project Added", description: `Project "${newProjectToAdd.name}" added.` });
-    resetAddProjectForm();
-    setIsAddProjectDialogOpen(false);
+    resetAddProjectForm(); setIsAddProjectDialogOpen(false);
   };
 
   const openEditProjectDialog = (project: Project) => {
     setEditingProject(project);
-    setEditFormProjectName(project.name);
-    setEditFormProjectDescription(project.description || "");
-    setEditFormProjectStatus(project.status);
-    setEditFormProjectClientName(project.clientName || "");
+    setEditFormProjectName(project.name); setEditFormProjectDescription(project.description || "");
+    setEditFormProjectStatus(project.status); setEditFormProjectClientName(project.clientName || "");
     setEditFormProjectTeam(project.team?.map(m => m.name).join(", ") || "");
-    setEditFormProjectProgress(project.progress || 0);
-    setEditFormProjectDeadline(project.deadline || "");
+    setEditFormProjectProgress(project.progress || 0); setEditFormProjectDeadline(project.deadline || "");
     setIsEditProjectDialogOpen(true);
   };
   
@@ -205,8 +214,7 @@ export default function CrmProjectsPage() {
     };
     setProjects(prevProjects => prevProjects.map(p => p.id === editingProject.id ? updatedProject : p));
     toast({ title: "Project Updated", description: `Project "${updatedProject.name}" updated.` });
-    setIsEditProjectDialogOpen(false);
-    setEditingProject(null);
+    setIsEditProjectDialogOpen(false); setEditingProject(null);
   };
 
   const handleDeleteProject = (projectId: string) => {
@@ -214,163 +222,197 @@ export default function CrmProjectsPage() {
     toast({ title: "Project Deleted (Demo)", description: "Project has been removed." });
   };
 
+  const handleProjectDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over) return;
+
+    const projectId = active.id as string;
+    const targetStatus = over.id as ProjectStatus;
+
+    const activeProject = projects.find(project => project.id === projectId);
+
+    if (activeProject && activeProject.status !== targetStatus) {
+      setProjects((prevProjects) =>
+        prevProjects.map((project) =>
+          project.id === projectId ? { ...project, status: targetStatus } : project
+        )
+      );
+      toast({
+        title: "Project Status Updated",
+        description: `Project "${activeProject.name}" moved to ${statusToColumnTitle[targetStatus]}.`,
+      });
+    }
+  };
+
   return (
-    <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center"><Briefcase className="mr-3 h-8 w-8 text-primary"/>Projects Management</h1>
-          <p className="text-muted-foreground">Supervisa tus proyectos.</p>
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleProjectDragEnd}>
+      <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center"><Briefcase className="mr-3 h-8 w-8 text-primary"/>Projects Management</h1>
+            <p className="text-muted-foreground">Supervisa tus proyectos.</p>
+          </div>
+          <Dialog open={isAddProjectDialogOpen} onOpenChange={setIsAddProjectDialogOpen}>
+              <DialogTrigger asChild>
+                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                      <PlusCircle className="mr-2 h-4 w-4" /> Add New Project
+                  </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[625px]">
+                  <DialogHeader>
+                      <DialogTitle>Add New Project</DialogTitle>
+                      <DialogDescription>Enter project details.</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleAddProjectSubmit}>
+                      <ScrollArea className="max-h-[60vh] p-1">
+                          <div className="grid gap-4 py-4 pr-4">
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label htmlFor="newProjectName" className="text-right col-span-1">Name</Label>
+                                  <Input id="newProjectName" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="e.g., Q4 Campaign" className="col-span-3" required />
+                              </div>
+                              <div className="grid grid-cols-4 items-start gap-4">
+                                  <Label htmlFor="newProjectDescription" className="text-right col-span-1 pt-2">Description</Label>
+                                  <Textarea id="newProjectDescription" value={newProjectDescription} onChange={(e) => setNewProjectDescription(e.target.value)} placeholder="Describe project scope" className="col-span-3" rows={3}/>
+                              </div>
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label htmlFor="newProjectStatus" className="text-right col-span-1">Status</Label>
+                                  <Select value={newProjectStatus} onValueChange={(value: ProjectStatus) => setNewProjectStatus(value)}>
+                                      <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
+                                      <SelectContent>{PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent>
+                                  </Select>
+                              </div>
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label htmlFor="newProjectClientName" className="text-right col-span-1">Client</Label>
+                                  <Input id="newProjectClientName" value={newProjectClientName} onChange={(e) => setNewProjectClientName(e.target.value)} placeholder="e.g., Client Inc." className="col-span-3" />
+                              </div>
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label htmlFor="newProjectTeam" className="text-right col-span-1">Team</Label>
+                                  <Input id="newProjectTeam" value={newProjectTeam} onChange={(e) => setNewProjectTeam(e.target.value)} placeholder="e.g., John, Jane" className="col-span-3" />
+                                  <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p>
+                              </div>
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label htmlFor="newProjectProgress" className="text-right col-span-1">Progress (%)</Label>
+                                  <Input id="newProjectProgress" type="number" value={newProjectProgress} onChange={(e) => setNewProjectProgress(e.target.value)} placeholder="0-100" className="col-span-3" min="0" max="100"/>
+                              </div>
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label htmlFor="newProjectDeadline" className="text-right col-span-1">Deadline</Label>
+                                  <div className="col-span-3 relative">
+                                      <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                      <Input id="newProjectDeadline" type="date" value={newProjectDeadline} onChange={(e) => setNewProjectDeadline(e.target.value)} className="pl-10" />
+                                  </div>
+                              </div>
+                          </div>
+                      </ScrollArea>
+                      <DialogFooter className="pt-4 border-t">
+                          <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddProjectForm}>Cancel</Button></DialogClose>
+                          <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Project</Button>
+                      </DialogFooter>
+                  </form>
+              </DialogContent>
+          </Dialog>
         </div>
-        <Dialog open={isAddProjectDialogOpen} onOpenChange={setIsAddProjectDialogOpen}>
-            <DialogTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Project
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[625px]">
-                <DialogHeader>
-                    <DialogTitle>Add New Project</DialogTitle>
-                    <DialogDescription>Enter project details.</DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleAddProjectSubmit}>
-                    <ScrollArea className="max-h-[60vh] p-1">
-                        <div className="grid gap-4 py-4 pr-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="newProjectName" className="text-right col-span-1">Name</Label>
-                                <Input id="newProjectName" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="e.g., Q4 Campaign" className="col-span-3" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-start gap-4">
-                                <Label htmlFor="newProjectDescription" className="text-right col-span-1 pt-2">Description</Label>
-                                <Textarea id="newProjectDescription" value={newProjectDescription} onChange={(e) => setNewProjectDescription(e.target.value)} placeholder="Describe project scope" className="col-span-3" rows={3}/>
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="newProjectStatus" className="text-right col-span-1">Status</Label>
-                                <Select value={newProjectStatus} onValueChange={(value: ProjectStatus) => setNewProjectStatus(value)}>
-                                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
-                                    <SelectContent>{PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent>
-                                </Select>
-                            </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="newProjectClientName" className="text-right col-span-1">Client</Label>
-                                <Input id="newProjectClientName" value={newProjectClientName} onChange={(e) => setNewProjectClientName(e.target.value)} placeholder="e.g., Client Inc." className="col-span-3" />
-                            </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="newProjectTeam" className="text-right col-span-1">Team</Label>
-                                <Input id="newProjectTeam" value={newProjectTeam} onChange={(e) => setNewProjectTeam(e.target.value)} placeholder="e.g., John, Jane" className="col-span-3" />
-                                <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p>
-                            </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="newProjectProgress" className="text-right col-span-1">Progress (%)</Label>
-                                <Input id="newProjectProgress" type="number" value={newProjectProgress} onChange={(e) => setNewProjectProgress(e.target.value)} placeholder="0-100" className="col-span-3" min="0" max="100"/>
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="newProjectDeadline" className="text-right col-span-1">Deadline</Label>
-                                <div className="col-span-3 relative">
-                                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input id="newProjectDeadline" type="date" value={newProjectDeadline} onChange={(e) => setNewProjectDeadline(e.target.value)} className="pl-10" />
-                                </div>
-                            </div>
-                        </div>
-                    </ScrollArea>
-                    <DialogFooter className="pt-4 border-t">
-                        <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddProjectForm}>Cancel</Button></DialogClose>
-                        <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Project</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-      </div>
-      
-      {/* Edit Project Dialog */}
-      <Dialog open={isEditProjectDialogOpen} onOpenChange={setIsEditProjectDialogOpen}>
-        <DialogContent className="sm:max-w-[625px]">
-          <DialogHeader>
-            <DialogTitle>Edit Project: {editingProject?.name}</DialogTitle>
-            <DialogDescription>Update project details.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditProjectSubmit}>
-            <ScrollArea className="max-h-[60vh] p-1">
-              <div className="grid gap-4 py-4 pr-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormProjectName" className="text-right col-span-1">Name</Label>
-                    <Input id="editFormProjectName" value={editFormProjectName} onChange={(e) => setEditFormProjectName(e.target.value)} className="col-span-3" required />
+        
+        {/* Edit Project Dialog */}
+        <Dialog open={isEditProjectDialogOpen} onOpenChange={setIsEditProjectDialogOpen}>
+          <DialogContent className="sm:max-w-[625px]">
+            <DialogHeader>
+              <DialogTitle>Edit Project: {editingProject?.name}</DialogTitle>
+              <DialogDescription>Update project details.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditProjectSubmit}>
+              <ScrollArea className="max-h-[60vh] p-1">
+                <div className="grid gap-4 py-4 pr-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="editFormProjectName" className="text-right col-span-1">Name</Label>
+                      <Input id="editFormProjectName" value={editFormProjectName} onChange={(e) => setEditFormProjectName(e.target.value)} className="col-span-3" required />
+                  </div>
+                  <div className="grid grid-cols-4 items-start gap-4">
+                      <Label htmlFor="editFormProjectDescription" className="text-right col-span-1 pt-2">Description</Label>
+                      <Textarea id="editFormProjectDescription" value={editFormProjectDescription} onChange={(e) => setEditFormProjectDescription(e.target.value)} className="col-span-3" rows={3}/>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="editFormProjectStatus" className="text-right col-span-1">Status</Label>
+                      <Select value={editFormProjectStatus} onValueChange={(value: ProjectStatus) => setEditFormProjectStatus(value)}>
+                          <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+                          <SelectContent>{PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent>
+                      </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="editFormProjectClientName" className="text-right col-span-1">Client</Label>
+                      <Input id="editFormProjectClientName" value={editFormProjectClientName} onChange={(e) => setEditFormProjectClientName(e.target.value)} className="col-span-3" />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="editFormProjectTeam" className="text-right col-span-1">Team</Label>
+                      <Input id="editFormProjectTeam" value={editFormProjectTeam} onChange={(e) => setEditFormProjectTeam(e.target.value)} className="col-span-3" />
+                      <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="editFormProjectProgress" className="text-right col-span-1">Progress (%)</Label>
+                      <Input id="editFormProjectProgress" type="number" value={editFormProjectProgress} onChange={(e) => setEditFormProjectProgress(e.target.value)} className="col-span-3" min="0" max="100"/>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="editFormProjectDeadline" className="text-right col-span-1">Deadline</Label>
+                      <div className="col-span-3 relative">
+                          <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input id="editFormProjectDeadline" type="date" value={editFormProjectDeadline} onChange={(e) => setEditFormProjectDeadline(e.target.value)} className="pl-10" />
+                      </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-4 items-start gap-4">
-                    <Label htmlFor="editFormProjectDescription" className="text-right col-span-1 pt-2">Description</Label>
-                    <Textarea id="editFormProjectDescription" value={editFormProjectDescription} onChange={(e) => setEditFormProjectDescription(e.target.value)} className="col-span-3" rows={3}/>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormProjectStatus" className="text-right col-span-1">Status</Label>
-                    <Select value={editFormProjectStatus} onValueChange={(value: ProjectStatus) => setEditFormProjectStatus(value)}>
-                        <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
-                        <SelectContent>{PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent>
-                    </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormProjectClientName" className="text-right col-span-1">Client</Label>
-                    <Input id="editFormProjectClientName" value={editFormProjectClientName} onChange={(e) => setEditFormProjectClientName(e.target.value)} className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormProjectTeam" className="text-right col-span-1">Team</Label>
-                    <Input id="editFormProjectTeam" value={editFormProjectTeam} onChange={(e) => setEditFormProjectTeam(e.target.value)} className="col-span-3" />
-                     <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormProjectProgress" className="text-right col-span-1">Progress (%)</Label>
-                    <Input id="editFormProjectProgress" type="number" value={editFormProjectProgress} onChange={(e) => setEditFormProjectProgress(e.target.value)} className="col-span-3" min="0" max="100"/>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormProjectDeadline" className="text-right col-span-1">Deadline</Label>
-                    <div className="col-span-3 relative">
-                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input id="editFormProjectDeadline" type="date" value={editFormProjectDeadline} onChange={(e) => setEditFormProjectDeadline(e.target.value)} className="pl-10" />
-                    </div>
-                </div>
-              </div>
-            </ScrollArea>
-            <DialogFooter className="pt-4 border-t">
-              <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditProjectDialogOpen(false)}>Cancel</Button></DialogClose>
-              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-       <p className="text-sm text-muted-foreground">
-        Nota: La funcionalidad de arrastrar y soltar (Drag & Drop) se implementará en un paso futuro.
-      </p>
-
-      <div className="flex-1 overflow-x-auto pb-4">
-        <div className="flex gap-4 min-w-max h-full">
-          {PROJECT_STATUSES.map((statusKey) => (
-            <Card key={statusKey} className="w-[320px] flex-shrink-0 flex flex-col bg-muted/40 shadow-md">
-              <CardHeader className="p-4 border-b">
-                <CardTitle className="text-md font-semibold flex justify-between items-center">
-                  {statusToColumnTitle[statusKey]}
-                   <Badge variant="secondary" className="text-xs">
-                    {projects.filter(p => p.status === statusKey).length}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <ScrollArea className="flex-1">
-                <CardContent className="p-3">
-                   {projects.filter(p => p.status === statusKey).length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-4">No hay proyectos en este estado.</p>
-                  )}
-                  {projects
-                    .filter(p => p.status === statusKey)
-                    .map(project => (
-                      <ProjectCard key={project.id} project={project} onEdit={openEditProjectDialog} onDelete={handleDeleteProject} />
-                    ))}
-                </CardContent>
               </ScrollArea>
-            </Card>
-          ))}
+              <DialogFooter className="pt-4 border-t">
+                <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditProjectDialogOpen(false)}>Cancel</Button></DialogClose>
+                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <p className="text-sm text-muted-foreground flex-shrink-0">
+          Arrastra los proyectos entre columnas para cambiar su estado.
+        </p>
+
+        <div className="flex-1 overflow-x-auto pb-4">
+          <div className="flex gap-4 min-w-max h-full">
+            {PROJECT_STATUSES.map((statusKey) => {
+              const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: statusKey });
+              return (
+                <Card
+                  key={statusKey}
+                  ref={setDroppableRef}
+                  className={cn(
+                    "w-[320px] flex-shrink-0 flex flex-col bg-muted/40 shadow-md transition-colors duration-200",
+                    isOver && "bg-primary/10 border-primary"
+                  )}
+                >
+                  <CardHeader className="p-4 border-b">
+                    <CardTitle className="text-md font-semibold flex justify-between items-center">
+                      {statusToColumnTitle[statusKey]}
+                      <Badge variant="secondary" className="text-xs">
+                        {projects.filter(p => p.status === statusKey).length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <ScrollArea className="flex-1">
+                    <CardContent className="p-3">
+                      {projects.filter(p => p.status === statusKey).length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-4">No hay proyectos en este estado.</p>
+                      )}
+                      {projects
+                        .filter(p => p.status === statusKey)
+                        .map(project => (
+                          <ProjectCard key={project.id} project={project} onEdit={openEditProjectDialog} onDelete={handleDeleteProject} />
+                        ))}
+                    </CardContent>
+                  </ScrollArea>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
+    </DndContext>
   );
 }
-    
 
     
