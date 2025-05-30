@@ -10,7 +10,7 @@ export default function CrmLeadsPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center"><Users className="mr-3 h-8 w-8 text-primary"/>Leads Management</h1>
           <p className="text-muted-foreground">
-            View, track, and manage all your customer leads.
+            View, track, and manage all your customer leads. This is the main Leads page.
           </p>
         </div>
         <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -22,14 +22,18 @@ export default function CrmLeadsPage() {
         <CardHeader>
           <CardTitle>Leads List</CardTitle>
           <CardDescription>
-            A table displaying all leads will be shown here. Functionality to filter, sort, and view lead details will be implemented.
+            A comprehensive table displaying all leads will be shown here. 
+            Functionality to filter, sort, view lead details, and perform actions will be implemented.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-10">
-            Lead management table and tools will be implemented here.
-          </p>
-          {/* Placeholder for table or list of leads */}
+          <div className="text-center py-20">
+            <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-xl font-semibold text-foreground">Lead Data Coming Soon</h3>
+            <p className="text-muted-foreground">
+              The lead management table and associated tools are under construction.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
