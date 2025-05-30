@@ -35,4 +35,3 @@ export default function CrmLeadsPage() {
     </div>
   );
 }
-
