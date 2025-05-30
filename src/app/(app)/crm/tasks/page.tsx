@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, GripVertical, Tag, Eye, Edit, Trash2 } from "lucide-react";
-import { useState, type FC, type FormEvent, useEffect } from "react";
+import { useState, type FC, type FormEvent, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
@@ -92,7 +92,12 @@ interface TaskCardProps {
   onDelete: (taskId: string) => void;
 }
 
-const TaskCard: FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
+const TaskCard: FC<TaskCardProps> = React.memo(({ task, onEdit, onDelete }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const { attributes, listeners, setNodeRef: setDraggableRef, transform, isDragging } = useDraggable({
     id: task.id,
   });
@@ -101,16 +106,22 @@ const TaskCard: FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
   } : {};
 
+  const draggableProps = mounted ? {
+    ...listeners,
+    ...attributes,
+    role: "button",
+    tabIndex: 0,
+  } : {};
+
   return (
     <Card
       ref={setDraggableRef}
       style={style}
-      {...listeners}
-      {...attributes}
       className={cn(
         "mb-3 shadow-md hover:shadow-lg transition-shadow bg-card cursor-grab",
-        isDragging && "opacity-60" // Simplified dragging style
+        isDragging && "opacity-60"
       )}
+      {...draggableProps}
     >
       <CardHeader className="p-3 pb-2">
         <div className="flex justify-between items-start">
@@ -139,8 +150,8 @@ const TaskCard: FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
           </div>
         )}
         {task.priority && (
-            <Badge 
-                variant={task.priority === 'Alta' ? 'destructive' : task.priority === 'Media' ? 'secondary' : 'outline'} 
+            <Badge
+                variant={task.priority === 'Alta' ? 'destructive' : task.priority === 'Media' ? 'secondary' : 'outline'}
                 className="text-xs mb-2"
             >
                 Prioridad: {task.priority}
@@ -169,7 +180,8 @@ const TaskCard: FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
       </CardFooter>
     </Card>
   );
-};
+});
+TaskCard.displayName = 'TaskCard';
 
 
 export default function CrmTasksPage() {
@@ -198,16 +210,16 @@ export default function CrmTasksPage() {
   const [editFormTaskTags, setEditFormTaskTags] = useState("");
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Added activation constraint
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor)
   );
 
-  const resetAddTaskForm = () => {
+  const resetAddTaskForm = useCallback(() => {
     setNewTaskTitle(""); setNewTaskDescription(""); setNewTaskStatus("PENDIENTE");
     setNewTaskDueDate(""); setNewTaskPriority("Media"); setNewTaskAssigneeName(""); setNewTaskTags("");
-  };
+  }, []);
 
-  const handleAddTaskSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleAddTaskSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) {
         toast({ title: "Task Title Required", description: "Please enter a title.", variant: "destructive" });
@@ -223,18 +235,18 @@ export default function CrmTasksPage() {
     toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added.` });
     resetAddTaskForm();
     setIsAddTaskDialogOpen(false);
-  };
+  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast]);
 
-  const openEditTaskDialog = (task: Task) => {
+  const openEditTaskDialog = useCallback((task: Task) => {
     setEditingTask(task);
     setEditFormTaskTitle(task.title); setEditFormTaskDescription(task.description || "");
     setEditFormTaskStatus(task.status); setEditFormTaskDueDate(task.dueDate || "");
     setEditFormTaskPriority(task.priority || "Media"); setEditFormTaskAssigneeName(task.assignee?.name || "");
     setEditFormTaskTags(task.tags?.join(", ") || "");
     setIsEditTaskDialogOpen(true);
-  };
+  }, []);
 
-  const handleEditTaskSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleEditTaskSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingTask || !editFormTaskTitle.trim()) {
       toast({ title: "Task Title Required", description: "Please enter a title.", variant: "destructive" });
@@ -249,45 +261,43 @@ export default function CrmTasksPage() {
     setTasks(prevTasks => prevTasks.map(t => t.id === editingTask.id ? updatedTask : t));
     toast({ title: "Task Updated", description: `Task "${updatedTask.title}" updated.` });
     setIsEditTaskDialogOpen(false); setEditingTask(null);
-  };
+  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast]);
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleDeleteTask = useCallback((taskId: string) => {
     setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
     toast({ title: "Task Deleted (Demo)", description: "Task removed." });
-  };
+  }, [toast]);
 
-  const handleTaskDragEnd = (event: DragEndEvent) => {
+  const handleTaskDragEnd = useCallback((event: DragEndEvent) => {
+    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event)));
     const { active, over } = event;
-    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event))); // Log entire event
     console.log("Active ID:", active.id);
     console.log("Over ID:", over ? over.id : null);
 
-    if (over && active.id !== over.id) { 
-      const taskId = active.id as string;
-      const targetStatus = over.id as TaskStatus;
-
-      console.log(`Attempting to move task ${taskId} to status ${targetStatus}`);
-
-      setTasks((prevTasks) => {
-        const taskToMove = prevTasks.find(t => t.id === taskId);
-        if (taskToMove && taskToMove.status !== targetStatus) {
-          console.log(`Task ${taskId} current status: ${taskToMove.status}, target status: ${targetStatus}. Updating state.`);
-          const updatedTasks = prevTasks.map((task) =>
-            task.id === taskId ? { ...task, status: targetStatus } : task
-          );
-          toast({ 
-            title: "Task Status Updated",
-            description: `Task "${taskToMove.title}" moved to ${statusToColumnTitle[targetStatus]}.`,
-          });
-          return updatedTasks;
-        }
-        console.log(`Task ${taskId} not moved. Current status: ${taskToMove?.status}, target status: ${targetStatus}.`);
-        return prevTasks; 
-      });
-    } else {
-      console.log("Drag ended but no valid 'over' target or task was dropped in the same column.");
+    if (!over) {
+      console.log("Drag ended but no valid 'over' target.");
+      return;
     }
-  };
+
+    const taskId = active.id as string;
+    const targetStatus = over.id as TaskStatus; // Column ID is the statusKey
+
+    setTasks((prevTasks) => {
+      const taskToMove = prevTasks.find(t => t.id === taskId);
+      if (taskToMove && taskToMove.status !== targetStatus) {
+        console.log(`Task ${taskId} current status: ${taskToMove.status}, target status: ${targetStatus}. Updating state.`);
+        toast({
+          title: "Task Status Updated",
+          description: `Task "${taskToMove.title}" moved to ${statusToColumnTitle[targetStatus]}.`,
+        });
+        return prevTasks.map((task) =>
+          task.id === taskId ? { ...task, status: targetStatus } : task
+        );
+      }
+      console.log(`Task ${taskId} not moved. Current status: ${taskToMove?.status}, target status: ${targetStatus}.`);
+      return prevTasks;
+    });
+  }, [toast]);
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleTaskDragEnd}>
@@ -417,7 +427,7 @@ export default function CrmTasksPage() {
             </form>
           </DialogContent>
         </Dialog>
-        
+
         <p className="text-sm text-muted-foreground flex-shrink-0">
           Arrastra las tareas entre columnas para cambiar su estado.
         </p>
@@ -427,35 +437,33 @@ export default function CrmTasksPage() {
             {TASK_STATUSES.map((statusKey) => {
               const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: statusKey });
               return (
-                <Card
+                <div
                   key={statusKey}
                   ref={setDroppableRef}
                   className={cn(
-                    "w-[300px] flex-shrink-0 flex flex-col bg-muted/40 shadow-md transition-colors duration-200",
-                    isOver && "bg-primary/10 border-primary"
+                    "w-[300px] flex-shrink-0 flex flex-col bg-muted/40 shadow-md rounded-lg p-0 transition-colors duration-200 min-h-[400px]", // Ensure it's a flex column and has padding 0 initially
+                    isOver && "bg-primary/10 border-2 border-primary"
                   )}
                 >
-                  <CardHeader className="p-4 border-b">
-                    <CardTitle className="text-md font-semibold flex justify-between items-center">
+                  <div className="p-4 border-b sticky top-0 bg-muted/40 rounded-t-lg z-10"> {/* Header for column title */}
+                    <h3 className="text-md font-semibold flex justify-between items-center">
                       {statusToColumnTitle[statusKey]}
                       <Badge variant="secondary" className="text-xs">
                         {tasks.filter(task => task.status === statusKey).length}
                       </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <ScrollArea className="flex-1">
-                    <CardContent className="p-3">
-                      {tasks.filter(task => task.status === statusKey).length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>
-                      )}
-                      {tasks
-                        .filter(task => task.status === statusKey)
-                        .map(task => (
-                          <TaskCard key={task.id} task={task} onEdit={openEditTaskDialog} onDelete={handleDeleteTask} />
-                        ))}
-                    </CardContent>
-                  </ScrollArea>
-                </Card>
+                    </h3>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-3 space-y-3"> {/* Scrollable content area */}
+                    {tasks.filter(task => task.status === statusKey).length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>
+                    )}
+                    {tasks
+                      .filter(task => task.status === statusKey)
+                      .map(task => (
+                        <TaskCard key={task.id} task={task} onEdit={openEditTaskDialog} onDelete={handleDeleteTask} />
+                      ))}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -464,5 +472,3 @@ export default function CrmTasksPage() {
     </DndContext>
   );
 }
-
-    
