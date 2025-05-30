@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,7 +18,7 @@ import { useState, type FormEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 // Based on Prisma ProductType enum
-const PRODUCT_TYPES = ["PRODUCT", "SERVICE"] as const;
+const PRODUCT_TYPES = ["PRODUCTO", "SERVICIO"] as const;
 type ProductType = typeof PRODUCT_TYPES[number];
 
 interface Product {
@@ -36,7 +36,7 @@ const initialProducts: Product[] = [
   {
     id: "prod-1",
     name: "Premium Website Development",
-    type: "SERVICE",
+    type: "SERVICIO",
     description: "Full-stack website development including design, development, and deployment.",
     price: 5000,
     category: "Web Services",
@@ -45,7 +45,7 @@ const initialProducts: Product[] = [
   {
     id: "prod-2",
     name: "Wireless Noise-Cancelling Headphones",
-    type: "PRODUCT",
+    type: "PRODUCTO",
     description: "High-fidelity sound with active noise cancellation and 20-hour battery life.",
     price: 199.99,
     sku: "HDPHN-NC20-BLK",
@@ -55,7 +55,7 @@ const initialProducts: Product[] = [
   {
     id: "prod-3",
     name: "Monthly SEO Optimization Plan",
-    type: "SERVICE",
+    type: "SERVICIO",
     description: "Ongoing SEO services to improve search engine rankings and organic traffic.",
     price: 750,
     category: "Marketing Services",
@@ -64,7 +64,7 @@ const initialProducts: Product[] = [
   {
     id: "prod-4",
     name: "Ergonomic Office Chair",
-    type: "PRODUCT",
+    type: "PRODUCTO",
     description: "Comfortable and adjustable chair for long working hours.",
     price: 349.50,
     sku: "CHR-ERG-001-GRY",
@@ -74,7 +74,7 @@ const initialProducts: Product[] = [
   {
     id: "prod-5",
     name: "Chatbot Integration Service",
-    type: "SERVICE",
+    type: "SERVICIO",
     description: "Integrate an AI-powered chatbot into your website or platform.",
     price: 1200,
     category: "AI Solutions",
@@ -89,7 +89,7 @@ export default function CrmProductsPage() {
 
   // Form state for adding a new product/service
   const [newProductName, setNewProductName] = useState("");
-  const [newProductType, setNewProductType] = useState<ProductType>("PRODUCT");
+  const [newProductType, setNewProductType] = useState<ProductType>("PRODUCTO");
   const [newProductDescription, setNewProductDescription] = useState("");
   const [newProductPrice, setNewProductPrice] = useState<number | string>("");
   const [newProductSku, setNewProductSku] = useState("");
@@ -98,7 +98,7 @@ export default function CrmProductsPage() {
 
   const resetAddProductForm = () => {
     setNewProductName("");
-    setNewProductType("PRODUCT");
+    setNewProductType("PRODUCTO");
     setNewProductDescription("");
     setNewProductPrice("");
     setNewProductSku("");
@@ -119,7 +119,7 @@ export default function CrmProductsPage() {
       type: newProductType,
       description: newProductDescription || undefined,
       price: priceAsNumber,
-      sku: newProductType === "PRODUCT" ? newProductSku || undefined : undefined,
+      sku: newProductType === "PRODUCTO" ? newProductSku || undefined : undefined,
       category: newProductCategory || undefined,
       isActive: newProductIsActive,
     };
@@ -178,7 +178,7 @@ export default function CrmProductsPage() {
                     <Label htmlFor="productPrice" className="text-right col-span-1">Price ($)</Label>
                     <Input id="productPrice" type="number" value={newProductPrice} onChange={(e) => setNewProductPrice(e.target.value)} placeholder="e.g., 99.99" className="col-span-3" required step="0.01" min="0"/>
                   </div>
-                  {newProductType === "PRODUCT" && (
+                  {newProductType === "PRODUCTO" && (
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="productSku" className="text-right col-span-1">SKU</Label>
                       <Input id="productSku" value={newProductSku} onChange={(e) => setNewProductSku(e.target.value)} placeholder="e.g., PROD-001" className="col-span-3" />
@@ -240,8 +240,8 @@ export default function CrmProductsPage() {
                       <div className="text-xs text-muted-foreground hidden sm:block truncate max-w-xs">{product.description}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={product.type === 'PRODUCT' ? "secondary" : "outline"}>
-                        {product.type === 'PRODUCT' ? 'Product' : 'Service'}
+                      <Badge variant={product.type === 'PRODUCTO' ? "secondary" : "outline"}>
+                        {product.type === 'PRODUCTO' ? 'Product' : 'Service'}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">{product.category || "N/A"}</TableCell>
