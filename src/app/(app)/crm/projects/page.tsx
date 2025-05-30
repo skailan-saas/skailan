@@ -3,7 +3,7 @@
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; // Keep Card for ProjectCard
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, GripVertical, Eye, Edit, Trash2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent, type Announcements } from "@dnd-kit/core";
+import { DndContext, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
@@ -56,13 +56,6 @@ const projectStatusToColumnTitle: Record<ProjectStatus, string> = {
   PLANIFICACION: "Planificación", ACTIVO: "Activo", COMPLETADO: "Completado", EN_ESPERA: "En Espera", CANCELADO: "Cancelado",
 };
 
-const customAnnouncements: Announcements = {
-  onDragStart({ active }) { return `Picked up draggable item ${active.id}.`; },
-  onDragOver({ active, over }) { return over ? `Draggable item ${active.id} was moved over droppable area ${over.id}.` : `Draggable item ${active.id} is no longer over a droppable area.`; },
-  onDragEnd({ active, over }) { return over ? `Draggable item ${active.id} was dropped over droppable area ${over.id}` : `Draggable item ${active.id} was dropped.`; },
-  onDragCancel({ active }) { return `Dragging was cancelled. Draggable item ${active.id} was dropped.`; },
-};
-
 interface ProjectCardProps {
   project: Project;
   onEdit: (project: Project) => void;
@@ -70,11 +63,15 @@ interface ProjectCardProps {
 }
 
 const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, onEdit, onDelete }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: project.id });
-  const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, touchAction: 'none' } : { touchAction: 'none' };
+  const { attributes, listeners, setNodeRef: setDraggableRef, transform, isDragging } = useDraggable({ id: project.id });
+  const style: React.CSSProperties = transform ? { 
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    touchAction: 'none',
+    zIndex: isDragging ? 100 : undefined,
+  } : { touchAction: 'none' };
   
   return (
-    <Card ref={setNodeRef} style={style} {...listeners} {...attributes} className={cn("rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow cursor-grab", isDragging && "opacity-60")}>
+    <Card ref={setDraggableRef} style={style} {...listeners} {...attributes} className={cn("rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow cursor-grab", isDragging && "opacity-60")}>
       <CardHeader className="p-3 pb-2">
         <div className="flex justify-between items-start">
           <CardTitle className="text-sm font-semibold leading-tight">{project.name}</CardTitle>
@@ -114,14 +111,23 @@ interface ProjectKanbanBoardProps {
   onDeleteProject: (projectId: string) => void;
 }
 
-const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projects, statuses, handleProjectDragEnd, onEditProject, onDeleteProject }) => {
+const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = React.memo(({ projects, statuses, handleProjectDragEnd, onEditProject, onDeleteProject }) => {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 10,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 150,
+        tolerance: 5,
+      },
+    }),
     useSensor(KeyboardSensor)
   );
-  
   return (
-     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleProjectDragEnd} announcements={customAnnouncements}>
+     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd} >
         <div className="flex-1 overflow-x-auto pb-4">
           <div className="flex gap-4 min-w-max h-full">
             {statuses.map((statusKey) => {
@@ -132,7 +138,7 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projects, statuses, h
                     key={statusKey} 
                     ref={setDroppableRef} 
                     className={cn(
-                        "w-[320px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg transition-colors duration-200 min-h-[400px] p-0", 
+                        "w-[320px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg transition-colors duration-200 min-h-[400px]", 
                         isOver && "bg-primary/10 border-2 border-primary"
                     )}
                 >
@@ -140,7 +146,7 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projects, statuses, h
                     <h3 className="text-md font-semibold">{projectStatusToColumnTitle[statusKey]}</h3>
                     <Badge variant="secondary" className="text-xs">{columnProjects.length}</Badge>
                   </div>
-                  <div className="flex-1 p-3 pr-1 space-y-3 overflow-y-auto">
+                  <div className="flex-1 p-3 pr-1 space-y-3 overflow-y-auto min-h-0"> 
                     {columnProjects.length === 0 && (<p className="text-xs text-muted-foreground text-center py-4">No hay proyectos en este estado.</p>)}
                     {columnProjects.map(project => (<ProjectCard key={project.id} project={project} onEdit={onEditProject} onDelete={onDeleteProject} />))}
                   </div>
@@ -151,7 +157,9 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projects, statuses, h
         </div>
       </DndContext>
   );
-};
+});
+ProjectKanbanBoard.displayName = 'ProjectKanbanBoard';
+
 
 export default function CrmProjectsPage() {
   const { toast } = useToast();
@@ -253,7 +261,7 @@ export default function CrmProjectsPage() {
     } else {
       console.log(`Project ${projectId} not moved. Current status: ${projectToMove?.status}, target status: ${targetStatus}.`);
     }
-  }, [projects, toast]); // setProjects was missing from dependency array
+  }, [projects, toast, setProjects]); 
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">

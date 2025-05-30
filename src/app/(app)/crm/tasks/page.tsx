@@ -3,7 +3,7 @@
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; // Keep Card for TaskCard
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, GripVertical, Tag, Eye, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent, type Announcements } from "@dnd-kit/core";
+import { DndContext, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 // Module-level constants
@@ -86,13 +86,6 @@ const statusToColumnTitle: Record<TaskStatus, string> = {
   ARCHIVADA: "Archivada",
 };
 
-const customAnnouncements: Announcements = {
-  onDragStart({ active }) { return `Picked up draggable item ${active.id}.`; },
-  onDragOver({ active, over }) { return over ? `Draggable item ${active.id} was moved over droppable area ${over.id}.` : `Draggable item ${active.id} is no longer over a droppable area.`; },
-  onDragEnd({ active, over }) { return over ? `Draggable item ${active.id} was dropped over droppable area ${over.id}` : `Draggable item ${active.id} was dropped.`; },
-  onDragCancel({ active }) { return `Dragging was cancelled. Draggable item ${active.id} was dropped.`; },
-};
-
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
@@ -100,11 +93,15 @@ interface TaskCardProps {
 }
 
 const TaskCard: FC<TaskCardProps> = React.memo(({ task, onEdit, onDelete }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
-  const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, touchAction: 'none' } : { touchAction: 'none' };
+  const { attributes, listeners, setNodeRef: setDraggableRef, transform, isDragging } = useDraggable({ id: task.id });
+  const style: React.CSSProperties = transform ? { 
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    touchAction: 'none',
+    zIndex: isDragging ? 100 : undefined,
+  } : { touchAction: 'none' };
 
   return (
-    <Card ref={setNodeRef} style={style} {...listeners} {...attributes} className={cn("rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow cursor-grab", isDragging && "opacity-60")}>
+    <Card ref={setDraggableRef} style={style} {...listeners} {...attributes} className={cn("rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow cursor-grab", isDragging && "opacity-60")}>
       <CardHeader className="p-3 pb-2">
         <div className="flex justify-between items-start">
           <CardTitle className="text-sm font-semibold leading-tight">{task.title}</CardTitle>
@@ -140,14 +137,24 @@ interface TaskKanbanBoardProps {
   onDeleteTask: (taskId: string) => void;
 }
 
-const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasks, statuses, handleTaskDragEnd, onEditTask, onDeleteTask }) => {
+const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasks, statuses, handleTaskDragEnd, onEditTask, onDeleteTask }) => {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 10, 
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 150, 
+        tolerance: 5, 
+      },
+    }),
     useSensor(KeyboardSensor)
   );
-
+  
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleTaskDragEnd} announcements={customAnnouncements}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTaskDragEnd}>
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max h-full">
           {statuses.map((statusKey) => {
@@ -158,7 +165,7 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasks, statuses, handleTask
                 key={statusKey} 
                 ref={setDroppableRef} 
                 className={cn(
-                  "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg transition-colors duration-200 min-h-[400px] p-0", // p-0 on the main droppable div
+                  "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg transition-colors duration-200 min-h-[400px]", 
                   isOver && "bg-primary/10 border-2 border-primary"
                 )}
               >
@@ -166,8 +173,7 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasks, statuses, handleTask
                   <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
                   <Badge variant="secondary" className="text-xs">{columnTasks.length}</Badge>
                 </div>
-                {/* This inner div handles the scroll and padding for tasks */}
-                <div className="flex-1 p-3 pr-1 space-y-3 overflow-y-auto"> 
+                <div className="flex-1 p-3 pr-1 space-y-3 overflow-y-auto min-h-0"> 
                   {columnTasks.length === 0 && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
                   {columnTasks.map(task => (<TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} />))}
                 </div>
@@ -178,7 +184,9 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasks, statuses, handleTask
       </div>
     </DndContext>
   );
-};
+});
+TaskKanbanBoard.displayName = 'TaskKanbanBoard';
+
 
 export default function CrmTasksPage() {
   const { toast } = useToast();
@@ -220,7 +228,7 @@ export default function CrmTasksPage() {
       assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${newTaskAssigneeName[0]}`, dataAiHint: "avatar person", avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
       tags: newTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
-    setTasks(prevTasks => [...prevTasks, newTaskToAdd]);
+    setTasks(prevTasks => [newTaskToAdd, ...prevTasks]);
     toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added.` });
     resetAddTaskForm(); setIsAddTaskDialogOpen(false);
   }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast]);
@@ -277,7 +285,7 @@ export default function CrmTasksPage() {
     } else {
        console.log(`Task ${taskId} not moved. Current status: ${taskToMove?.status}, target status: ${targetStatus}.`);
     }
-  }, [tasks, toast]); // setTasks was missing from dependency array, added it for correctness though not the root cause here.
+  }, [tasks, toast, setTasks]);
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
