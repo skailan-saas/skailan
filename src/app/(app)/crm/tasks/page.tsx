@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
@@ -6,16 +7,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, Tag, Eye, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-// import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd"; // Paused DND
+import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area"; // Added import for ScrollArea
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const TASK_STATUSES = ["PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"] as const;
 type TaskStatus = typeof TASK_STATUSES[number];
@@ -55,52 +57,60 @@ const statusToColumnTitle: Record<TaskStatus, string> = {
 
 interface TaskCardProps {
   task: Task;
-  // index: number; // Not needed if not using react-beautiful-dnd
+  index: number; 
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
 }
 
-const TaskCard: FC<TaskCardProps> = React.memo(({ task, onEdit, onDelete }) => {
+const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete }) => {
   return (
-    <Card
-      className={cn(
-        "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow"
-        // Removed DND specific styling for now
+    <Draggable key={task.id} draggableId={String(task.id)} index={index}>
+      {(provided, snapshot) => (
+         <Card
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          style={{ ...provided.draggableProps.style }}
+          className={cn(
+            "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
+            snapshot.isDragging && "shadow-xl opacity-80"
+          )}
+        >
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="text-sm font-semibold leading-tight">{task.title}</h4>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(task)}><Eye className="mr-2 h-4 w-4" /> View/Edit Task</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{task.description}</p>}
+          {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
+          {task.priority && (<Badge variant={task.priority === 'Alta' ? 'destructive' : task.priority === 'Media' ? 'secondary' : 'outline'} className="text-xs mb-2">Prioridad: {task.priority}</Badge>)}
+          {task.tags && task.tags.length > 0 && (<div className="flex flex-wrap gap-1 mb-2">{task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>)}
+          {task.assignee && (
+            <div className="flex items-center gap-2 pt-2 border-t mt-2">
+                <Avatar className="h-6 w-6"><AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{task.assignee.avatarFallback}</AvatarFallback></Avatar>
+                <span className="text-xs text-muted-foreground">{task.assignee.name}</span>
+            </div>
+          )}
+        </Card>
       )}
-    >
-      <div className="flex justify-between items-start mb-2">
-        <h4 className="text-sm font-semibold leading-tight">{task.title}</h4>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(task)}><Eye className="mr-2 h-4 w-4" /> View/Edit Task</DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{task.description}</p>}
-      {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
-      {task.priority && (<Badge variant={task.priority === 'Alta' ? 'destructive' : task.priority === 'Media' ? 'secondary' : 'outline'} className="text-xs mb-2">Prioridad: {task.priority}</Badge>)}
-      {task.tags && task.tags.length > 0 && (<div className="flex flex-wrap gap-1 mb-2">{task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>)}
-      {task.assignee && (
-        <div className="flex items-center gap-2 pt-2 border-t mt-2">
-            <Avatar className="h-6 w-6"><AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{task.assignee.avatarFallback}</AvatarFallback></Avatar>
-            <span className="text-xs text-muted-foreground">{task.assignee.name}</span>
-        </div>
-      )}
-    </Card>
+    </Draggable>
   );
 });
 TaskCard.displayName = 'TaskCard';
 
 interface TaskKanbanBoardProps {
   tasksByStatus: TasksByStatus;
-  // onDragEnd: (result: DropResult) => void; // Paused DND
+  onDragEnd: (result: DropResult) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
 }
 
-const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onEditTask, onDeleteTask }) => {
+const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onDragEnd, onEditTask, onDeleteTask }) => {
   const [isClient, setIsClient] = useState(false);
   useEffect(() => { setIsClient(true); }, []);
 
@@ -109,54 +119,38 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onEditTask, 
   }
 
   return (
-    // <DragDropContext onDragEnd={onDragEnd}> // Paused DND
-    <div className="flex-1 overflow-x-auto pb-4">
-      <div className="flex gap-4 min-w-max h-full">
-        {TASK_STATUSES.map((statusKey) => (
-          // <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}> // Paused DND
-          //  {(provided, snapshot) => ( // Paused DND
-          <div
-            key={statusKey} // Added key for direct div mapping
-            // ref={provided.innerRef} // Paused DND
-            // {...provided.droppableProps} // Paused DND
-            className={cn(
-                "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]"
-                // snapshot.isDraggingOver && "bg-primary/10 border-primary" // Paused DND styling
-            )}
-          >
-            <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
-              <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
-              <Badge variant="secondary" className="text-xs">{(tasksByStatus[statusKey] || []).length}</Badge>
-            </div>
-            <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto">
-              {(tasksByStatus[statusKey] || []).map((task, index) => (
-                // <Draggable key={task.id} draggableId={String(task.id)} index={index}> // Paused DND
-                //  {(providedDraggable, snapshotDraggable) => ( // Paused DND
-                <TaskCard
-                  key={task.id} // Key for React list rendering
-                  // ref={providedDraggable.innerRef} // Paused DND
-                  // {...providedDraggable.draggableProps} // Paused DND
-                  // {...providedDraggable.dragHandleProps} // Paused DND
-                  // style={{ ...providedDraggable.draggableProps.style }} // Paused DND
-                  // className={snapshotDraggable.isDragging ? "opacity-80 shadow-xl" : ""} // Paused DND
-                  task={task}
-                  // index={index} // Not needed if not using react-beautiful-dnd
-                  onEdit={onEditTask}
-                  onDelete={onDeleteTask}
-                />
-                //  )} // Paused DND
-                // </Draggable> // Paused DND
-              ))}
-              {/* {provided.placeholder} // Paused DND */}
-              {(!tasksByStatus[statusKey] || tasksByStatus[statusKey].length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
-            </div>
-          </div>
-          //  )} // Paused DND
-          // </Droppable> // Paused DND
-        ))}
+    <DragDropContext onDragEnd={onDragEnd}>
+      <div className="flex-1 overflow-x-auto pb-4">
+        <div className="flex gap-4 min-w-max h-full">
+          {TASK_STATUSES.map((statusKey) => (
+            <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
+              {(provided, snapshot) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className={cn(
+                      "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]",
+                      snapshot.isDraggingOver && "bg-primary/10 border-primary"
+                  )}
+                >
+                  <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
+                    <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
+                    <Badge variant="secondary" className="text-xs">{(tasksByStatus[statusKey] || []).length}</Badge>
+                  </div>
+                  <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto">
+                    {(tasksByStatus[statusKey] || []).map((task, index) => (
+                      <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onDelete={onDeleteTask} />
+                    ))}
+                    {provided.placeholder}
+                    {(!tasksByStatus[statusKey] || tasksByStatus[statusKey].length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
+                  </div>
+                </div>
+              )}
+            </Droppable>
+          ))}
+        </div>
       </div>
-    </div>
-    // </DragDropContext> // Paused DND
+    </DragDropContext>
   );
 };
 TaskKanbanBoard.displayName = 'TaskKanbanBoard';
@@ -177,6 +171,9 @@ export default function CrmTasksPage() {
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [taskToDeleteId, setTaskToDeleteId] = useState<string | null>(null);
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
@@ -215,7 +212,7 @@ export default function CrmTasksPage() {
     });
     toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added to ${statusToColumnTitle[newTaskStatus]}.` });
     resetAddTaskForm(); setIsAddTaskDialogOpen(false);
-  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast, setTasksByStatus]);
+  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast]);
 
   const openEditTaskDialog = useCallback((task: Task) => {
     setEditingTask(task);
@@ -238,81 +235,84 @@ export default function CrmTasksPage() {
     };
 
     setTasksByStatus(prev => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prev));
+      const newTasksByStatus = JSON.parse(JSON.stringify(prev)) as TasksByStatus;
       const oldStatus = editingTask.status;
       const newStatus = updatedTask.status;
 
-      // Remove from old status list
       newTasksByStatus[oldStatus] = (newTasksByStatus[oldStatus] || []).filter((t: Task) => t.id !== editingTask.id);
       
-      // Add to new status list (or update in place if status didn't change)
       newTasksByStatus[newStatus] = [...(newTasksByStatus[newStatus] || []), updatedTask];
       
-      // Optional: Sort tasks in the new column by some criteria if needed, e.g., by ID or title for consistency
-      // newTasksByStatus[newStatus].sort((a, b) => a.id.localeCompare(b.id)); 
-      
+      newTasksByStatus[newStatus].sort((a: Task, b: Task) => (initialTasksData.findIndex(t => t.id === a.id) - initialTasksData.findIndex(t => t.id === b.id)));
+
       return newTasksByStatus;
     });
 
     toast({ title: "Task Updated", description: `Task "${updatedTask.title}" updated.` });
     setIsEditTaskDialogOpen(false); setEditingTask(null);
-  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast, setTasksByStatus]);
+  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast]);
 
-  const handleDeleteTask = useCallback((taskId: string) => {
-    let taskToDelete: Task | undefined;
+  const triggerDeleteConfirmation = useCallback((taskId: string) => {
+    setTaskToDeleteId(taskId);
+    setIsDeleteConfirmOpen(true);
+  }, []);
+
+  const confirmDeleteTask = useCallback(() => {
+    if (!taskToDeleteId) return;
+    let taskNameToDelete = "Task";
     setTasksByStatus(prev => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prev));
+      const newTasksByStatus = JSON.parse(JSON.stringify(prev)) as TasksByStatus;
       for (const status of TASK_STATUSES) {
         const list = newTasksByStatus[status] || [];
-        const taskIndex = list.findIndex((t: Task) => t.id === taskId);
+        const taskIndex = list.findIndex((t: Task) => t.id === taskToDeleteId);
         if (taskIndex > -1) {
-          taskToDelete = list[taskIndex];
-          newTasksByStatus[status] = list.filter((p: Task) => p.id !== taskId);
+          taskNameToDelete = list[taskIndex].title;
+          newTasksByStatus[status] = list.filter((p: Task) => p.id !== taskToDeleteId);
           break;
         }
       }
       return newTasksByStatus;
     });
-     if (taskToDelete) {
-      toast({ title: "Task Deleted (Demo)", description: `Task "${taskToDelete.title}" removed.` });
-    }
-  }, [toast, setTasksByStatus]);
+    toast({ title: "Task Deleted", description: `Task "${taskNameToDelete}" removed.` });
+    setIsDeleteConfirmOpen(false);
+    setTaskToDeleteId(null);
+  }, [taskToDeleteId, toast]);
 
-  /* // Paused DND
+  
   const onDragEndTasks = useCallback((result: DropResult) => {
     const { source, destination, draggableId } = result;
-
     if (!destination) return;
 
     const sourceStatus = source.droppableId as TaskStatus;
     const destStatus = destination.droppableId as TaskStatus;
 
-    setTasksByStatus(prev => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prev)) as TasksByStatus;
-      const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
-      const destTasks = sourceStatus === destStatus ? sourceTasks : Array.from(newTasksByStatus[destStatus] || []);
+    setTasksByStatus(prevTasksByStatus => {
+        const newTasksByStatus = JSON.parse(JSON.stringify(prevTasksByStatus)) as TasksByStatus;
+        const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
+        const destTasks = sourceStatus === destStatus ? sourceTasks : Array.from(newTasksByStatus[destStatus] || []);
 
-      const taskIndexInSource = sourceTasks.findIndex(task => String(task.id) === draggableId);
-      if (taskIndexInSource === -1) {
-        return prev; // Should not happen
-      }
+        const taskIndexInSource = sourceTasks.findIndex(task => String(task.id) === draggableId);
+        if (taskIndexInSource === -1) {
+            console.warn(`Could not find moved task ${draggableId} in source list ${sourceStatus}.`);
+            return prevTasksByStatus;
+        }
+        const [movedTask] = sourceTasks.splice(taskIndexInSource, 1);
 
-      const [movedTask] = sourceTasks.splice(taskIndexInSource, 1);
-
-      if (sourceStatus === destStatus) {
-        destTasks.splice(destination.index, 0, movedTask);
-        newTasksByStatus[sourceStatus] = destTasks;
-      } else {
-        const movedTaskCopy = { ...movedTask, status: destStatus };
-        destTasks.splice(destination.index, 0, movedTaskCopy);
-        newTasksByStatus[sourceStatus] = sourceTasks;
-        newTasksByStatus[destStatus] = destTasks;
-      }
-      toast({ title: "Task Status Updated", description: `Task "${movedTask.title}" moved to ${statusToColumnTitle[destStatus]}.`});
-      return newTasksByStatus;
+        if (sourceStatus === destStatus) { // Moved within the same column
+            destTasks.splice(destination.index, 0, movedTask);
+            newTasksByStatus[sourceStatus] = destTasks;
+            toast({ title: "Task Reordered", description: `Task "${movedTask.title}" reordered in ${statusToColumnTitle[sourceStatus]}.` });
+        } else { // Moved to a different column
+            const movedTaskCopy = { ...movedTask, status: destStatus };
+            destTasks.splice(destination.index, 0, movedTaskCopy);
+            newTasksByStatus[sourceStatus] = sourceTasks;
+            newTasksByStatus[destStatus] = destTasks;
+            toast({ title: "Task Status Updated", description: `Task "${movedTask.title}" moved to ${statusToColumnTitle[destStatus]}.` });
+        }
+        return newTasksByStatus;
     });
-  }, [toast, setTasksByStatus]);
-  */
+  }, [toast]);
+  
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -362,13 +362,32 @@ export default function CrmTasksPage() {
           </form>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this task?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete task 
+              "{Object.values(tasksByStatus).flat().find(t => t.id === taskToDeleteId)?.title || 'this task'}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setTaskToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteTask} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              Delete Task
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <TaskKanbanBoard
           tasksByStatus={tasksByStatus}
-          // onDragEnd={onDragEndTasks} // Paused DND
+          onDragEnd={onDragEndTasks}
           onEditTask={openEditTaskDialog}
-          onDeleteTask={handleDeleteTask}
+          onDeleteTask={triggerDeleteConfirmation}
       />
     </div>
   );
 }
+

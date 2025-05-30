@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
@@ -6,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,8 +17,8 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from '@/components/ui/scroll-area'; // Ensure ScrollArea is imported
-import { Card, CardContent } from "@/components/ui/card"; // Added Card for ProjectCard restoration
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card, CardContent } from "@/components/ui/card";
 
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
 type ProjectStatus = typeof PROJECT_STATUSES[number];
@@ -171,6 +173,9 @@ export default function CrmProjectsPage() {
   const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
   const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [projectToDeleteId, setProjectToDeleteId] = useState<string | null>(null);
 
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
@@ -235,13 +240,13 @@ export default function CrmProjectsPage() {
     };
 
     setProjectsByStatus(prev => {
-      const newProjectsByStatus = JSON.parse(JSON.stringify(prev)); 
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prev)) as ProjectsByStatus; 
       const oldStatus = editingProject.status;
       const newStatus = updatedProject.status;
 
       newProjectsByStatus[oldStatus] = (newProjectsByStatus[oldStatus] || []).filter((p: Project) => p.id !== editingProject.id);
       newProjectsByStatus[newStatus] = [...(newProjectsByStatus[newStatus] || []), updatedProject];
-      newProjectsByStatus[newStatus].sort((a,b) => a.id.localeCompare(b.id));
+      newProjectsByStatus[newStatus].sort((a: Project, b: Project) => (initialProjectsData.findIndex(p => p.id === a.id) - initialProjectsData.findIndex(p => p.id === b.id)));
       return newProjectsByStatus;
     });
 
@@ -249,32 +254,36 @@ export default function CrmProjectsPage() {
     setIsEditProjectDialogOpen(false); setEditingProject(null);
   }, [editingProject, editFormProjectName, editFormProjectDescription, editFormProjectStatus, editFormProjectClientName, editFormProjectTeam, editFormProjectProgress, editFormProjectDeadline, toast]);
 
-  const handleDeleteProject = useCallback((projectId: string) => {
-    let projectToDelete: Project | undefined;
+  const triggerDeleteConfirmation = useCallback((id: string) => {
+    setProjectToDeleteId(id);
+    setIsDeleteConfirmOpen(true);
+  }, []);
+
+  const confirmDeleteProject = useCallback(() => {
+    if (!projectToDeleteId) return;
+    let projectNameToDelete = "Project";
     setProjectsByStatus(prev => {
-      const newProjectsByStatus = JSON.parse(JSON.stringify(prev));
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prev)) as ProjectsByStatus;
       for (const status of PROJECT_STATUSES) {
         const list = newProjectsByStatus[status] || [];
-        const projectIndex = list.findIndex((p: Project) => p.id === projectId);
+        const projectIndex = list.findIndex((p: Project) => p.id === projectToDeleteId);
         if (projectIndex > -1) {
-          projectToDelete = list[projectIndex];
-          newProjectsByStatus[status] = list.filter((p:Project) => p.id !== projectId);
+          projectNameToDelete = list[projectIndex].name;
+          newProjectsByStatus[status] = list.filter((p:Project) => p.id !== projectToDeleteId);
           break;
         }
       }
       return newProjectsByStatus;
     });
-     if (projectToDelete) {
-      toast({ title: "Project Deleted (Demo)", description: `Project "${projectToDelete.name}" removed.` });
-    }
-  }, [toast]);
+    toast({ title: "Project Deleted", description: `Project "${projectNameToDelete}" removed.` });
+    setIsDeleteConfirmOpen(false);
+    setProjectToDeleteId(null);
+  }, [projectToDeleteId, toast]);
 
   const onDragEndProjects = useCallback((result: DropResult) => {
     const { source, destination, draggableId } = result;
-    console.log("DragEnd Projects:", JSON.parse(JSON.stringify(result)));
 
     if (!destination) {
-      console.log("No destination, drag cancelled or invalid.");
       return;
     }
 
@@ -282,7 +291,7 @@ export default function CrmProjectsPage() {
     const destStatus = destination.droppableId as ProjectStatus;
 
     setProjectsByStatus(prevProjectsByStatus => {
-      const newProjectsByStatus = JSON.parse(JSON.stringify(prevProjectsByStatus));
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prevProjectsByStatus)) as ProjectsByStatus;
       const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
       const destProjects = sourceStatus === destStatus ? sourceProjects : Array.from(newProjectsByStatus[destStatus] || []);
 
@@ -291,22 +300,22 @@ export default function CrmProjectsPage() {
           console.warn(`Could not find moved project with id ${draggableId} in source list ${sourceStatus}.`);
           return prevProjectsByStatus;
       }
-      const [movedProject] = sourceProjects.splice(projectIndexInSource, 1);
+      const [movedProjectOriginal] = sourceProjects.splice(projectIndexInSource, 1);
       
       if (sourceStatus === destStatus) {
-          destProjects.splice(destination.index, 0, movedProject);
+          destProjects.splice(destination.index, 0, movedProjectOriginal);
           newProjectsByStatus[sourceStatus] = destProjects;
-          toast({ title: "Project Reordered", description: `Project "${movedProject.name}" reordered in ${projectStatusToColumnTitle[sourceStatus]}.` });
+          toast({ title: "Project Reordered", description: `Project "${movedProjectOriginal.name}" reordered in ${projectStatusToColumnTitle[sourceStatus]}.` });
       } else {
-          const movedProjectCopy = { ...movedProject, status: destStatus };
+          const movedProjectCopy = { ...movedProjectOriginal, status: destStatus };
           destProjects.splice(destination.index, 0, movedProjectCopy);
           newProjectsByStatus[sourceStatus] = sourceProjects;
           newProjectsByStatus[destStatus] = destProjects;
-          toast({ title: "Project Status Updated", description: `Project "${movedProject.name}" moved to ${projectStatusToColumnTitle[destStatus]}.` });
+          toast({ title: "Project Status Updated", description: `Project "${movedProjectOriginal.name}" moved to ${projectStatusToColumnTitle[destStatus]}.` });
       }
       return newProjectsByStatus;
     });
-  }, [toast, setProjectsByStatus]);
+  }, [toast]);
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -357,12 +366,31 @@ export default function CrmProjectsPage() {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete project 
+              "{Object.values(projectsByStatus).flat().find(p => p.id === projectToDeleteId)?.name || 'this project'}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setProjectToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteProject} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              Delete Project
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <ProjectKanbanBoard
           projectsByStatus={projectsByStatus}
           onDragEnd={onDragEndProjects}
           onEditProject={openEditProjectDialog}
-          onDeleteProject={handleDeleteProject}
+          onDeleteProject={triggerDeleteConfirmation}
       />
     </div>
   );
 }
+

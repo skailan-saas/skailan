@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer } from "lucide-react";
@@ -115,6 +117,10 @@ export default function CrmQuotesPage() {
 
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [quoteToPreview, setQuoteToPreview] = useState<Quote | null>(null);
+  
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [quoteToDeleteId, setQuoteToDeleteId] = useState<string | null>(null);
+
 
   const calculatedTotalAmount = useMemo(() => {
     return currentLineItems.reduce((sum, item) => sum + item.total, 0);
@@ -223,10 +229,20 @@ export default function CrmQuotesPage() {
     setIsAddOrEditQuoteDialogOpen(true);
   };
 
-  const handleDeleteQuote = (quoteId: string) => {
-    setQuotes(prevQuotes => prevQuotes.filter(quote => quote.id !== quoteId));
-    toast({ title: "Quote Deleted (Demo)", description: "Quote has been removed." });
+  const triggerDeleteConfirmation = (id: string) => {
+    setQuoteToDeleteId(id);
+    setIsDeleteConfirmOpen(true);
   };
+
+  const confirmDeleteQuote = () => {
+    if (!quoteToDeleteId) return;
+    const quoteName = quotes.find(q => q.id === quoteToDeleteId)?.quoteNumber || "Quote";
+    setQuotes(prevQuotes => prevQuotes.filter(quote => quote.id !== quoteToDeleteId));
+    toast({ title: "Quote Deleted", description: `${quoteName} has been removed.` });
+    setIsDeleteConfirmOpen(false);
+    setQuoteToDeleteId(null);
+  };
+
 
   const openPreviewDialog = (quote: Quote) => {
     setQuoteToPreview(quote);
@@ -244,7 +260,7 @@ export default function CrmQuotesPage() {
         setCurrentStatus(editingQuote.status);
         setCurrentLineItems([...editingQuote.lineItems]); 
     } else if (!isAddOrEditQuoteDialogOpen) {
-        // resetDialogForm(); // Resetting here causes issues when opening edit dialog
+        // resetDialogForm(); 
     }
   }, [isAddOrEditQuoteDialogOpen, editingQuote]);
 
@@ -440,7 +456,7 @@ export default function CrmQuotesPage() {
                           <DropdownMenuItem onClick={() => openPreviewDialog(quote)}><Eye className="mr-2 h-4 w-4" /> View/Preview Quote</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem>
                           <DropdownMenuItem><Send className="mr-2 h-4 w-4" /> Send Quote</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteQuote(quote.id)}>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => triggerDeleteConfirmation(quote.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Quote
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -484,9 +500,29 @@ export default function CrmQuotesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this quote?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete quote 
+              "{quotes.find(q => q.id === quoteToDeleteId)?.quoteNumber || 'this quote'}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setQuoteToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteQuote} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              Delete Quote
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="text-xs text-muted-foreground text-center flex-shrink-0 py-2">
         Showing {quotes.length} of {quotes.length} quotes. Pagination controls will be added here.
       </div>
     </div>
   );
 }
+
