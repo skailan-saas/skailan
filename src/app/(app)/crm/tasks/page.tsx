@@ -1,10 +1,9 @@
 
 "use client";
 
-import React from 'react'; // Ensure React is imported
+import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, GripVertical, Tag, Eye, Edit, Trash2 } from "lucide-react";
-import { useState, type FC, type FormEvent, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent, type Announcements } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
@@ -94,36 +92,30 @@ interface TaskCardProps {
 }
 
 const TaskCard: FC<TaskCardProps> = React.memo(({ task, onEdit, onDelete }) => {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const { attributes, listeners, setNodeRef: setDraggableRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
   });
 
   const style = transform ? {
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-    zIndex: isDragging ? 50 : 'auto', // Ensure dragging item is on top
-  } : {};
-
-  const draggableProps = mounted ? {
-    ...listeners,
-    ...attributes,
-    role: "button",
-    tabIndex: 0,
-  } : {};
+    zIndex: isDragging ? 50 : undefined,
+    touchAction: 'none', // Recommended for better touch interaction
+  } : {
+    touchAction: 'none',
+  };
 
   return (
     <Card
-      ref={setDraggableRef}
+      ref={setNodeRef}
       style={style}
+      {...listeners}
+      {...attributes}
+      // role="button" // attributes from useDraggable typically include role="button"
+      // tabIndex={0}  // and tabIndex
       className={cn(
         "mb-3 shadow-md hover:shadow-lg transition-shadow bg-card cursor-grab",
-        isDragging && "opacity-60" 
+        isDragging && "opacity-60"
       )}
-      {...draggableProps}
     >
       <CardHeader className="p-3 pb-2">
         <div className="flex justify-between items-start">
@@ -213,7 +205,6 @@ export default function CrmTasksPage() {
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  // Form state for adding new task
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>("PENDIENTE");
@@ -222,7 +213,6 @@ export default function CrmTasksPage() {
   const [newTaskAssigneeName, setNewTaskAssigneeName] = useState("");
   const [newTaskTags, setNewTaskTags] = useState("");
 
-  // Form state for editing task
   const [editFormTaskTitle, setEditFormTaskTitle] = useState("");
   const [editFormTaskDescription, setEditFormTaskDescription] = useState("");
   const [editFormTaskStatus, setEditFormTaskStatus] = useState<TaskStatus>("PENDIENTE");
@@ -231,8 +221,13 @@ export default function CrmTasksPage() {
   const [editFormTaskAssigneeName, setEditFormTaskAssigneeName] = useState("");
   const [editFormTaskTags, setEditFormTaskTags] = useState("");
 
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor)
   );
 
@@ -291,206 +286,212 @@ export default function CrmTasksPage() {
   }, [toast]);
 
   const handleTaskDragEnd = useCallback((event: DragEndEvent) => {
-    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event))); // Keep for debugging
+    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event)));
     const { active, over } = event;
-    console.log("Active ID:", active.id);
-    console.log("Over ID:", over ? over.id : null);
+    console.log("Active ID:", active.id as string);
+    console.log("Over ID:", over ? over.id as string : null);
 
     if (!over) {
-      console.log("Drag ended but no valid 'over' target.");
-      return;
+        console.log("Drag ended but no valid 'over' target.");
+        return;
     }
 
     const taskId = active.id as string;
-    const targetStatus = over.id as TaskStatus;
+    const targetStatus = over.id as TaskStatus; 
+    const taskToMove = tasks.find(t => t.id === taskId);
 
-    setTasks((prevTasks) => {
-      const taskToMove = prevTasks.find(t => t.id === taskId);
-      if (taskToMove && taskToMove.status !== targetStatus) {
-        console.log(`Attempting to move task ${taskId} to status ${targetStatus}`);
-        toast({
-          title: "Task Status Updated",
-          description: `Task "${taskToMove.title}" moved to ${statusToColumnTitle[targetStatus]}.`,
-        });
-        return prevTasks.map((task) =>
+    if (taskToMove && taskToMove.status !== targetStatus) {
+      console.log(`Attempting to move task ${taskId} to status ${targetStatus}`);
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
           task.id === taskId ? { ...task, status: targetStatus } : task
-        );
-      }
-      console.log(`Task ${taskId} not moved. Current status: ${taskToMove?.status}, target status: ${targetStatus}.`);
-      return prevTasks;
-    });
-  }, [toast]);
+        )
+      );
+      toast({
+        title: "Task Status Updated",
+        description: `Task "${taskToMove.title}" moved to ${statusToColumnTitle[targetStatus]}.`,
+      });
+    } else {
+        console.log(`Task ${taskId} not moved. Current status: ${taskToMove?.status}, target status: ${targetStatus}.`);
+    }
+  }, [tasks, toast]);
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleTaskDragEnd} announcements={customAnnouncements}>
-      <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center"><ClipboardCheck className="mr-3 h-8 w-8 text-primary"/>Tasks Management</h1>
-            <p className="text-muted-foreground">Organiza y haz seguimiento de las tareas.</p>
-          </div>
-          <Dialog open={isAddTaskDialogOpen} onOpenChange={setIsAddTaskDialogOpen}>
-              <DialogTrigger asChild>
-                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                      <PlusCircle className="mr-2 h-4 w-4" /> Add New Task
-                  </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[625px]">
-                  <DialogHeader>
-                      <DialogTitle>Add New Task</DialogTitle>
-                      <DialogDescription>Enter task details.</DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleAddTaskSubmit}>
-                      <ScrollArea className="max-h-[60vh] p-1">
-                          <div className="grid gap-4 py-4 pr-4">
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                  <Label htmlFor="newTaskTitle" className="text-right col-span-1">Title</Label>
-                                  <Input id="newTaskTitle" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="e.g., Follow up with client" className="col-span-3" required />
-                              </div>
-                              <div className="grid grid-cols-4 items-start gap-4">
-                                  <Label htmlFor="newTaskDescription" className="text-right col-span-1 pt-2">Description</Label>
-                                  <Textarea id="newTaskDescription" value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} placeholder="Provide details..." className="col-span-3" rows={3}/>
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                  <Label htmlFor="newTaskStatus" className="text-right col-span-1">Status</Label>
-                                  <Select value={newTaskStatus} onValueChange={(value: TaskStatus) => setNewTaskStatus(value)}>
-                                      <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
-                                      <SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent>
-                                  </Select>
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                  <Label htmlFor="newTaskDueDate" className="text-right col-span-1">Due Date</Label>
-                                  <div className="col-span-3 relative">
-                                      <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                      <Input id="newTaskDueDate" type="date" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} className="pl-10" />
-                                  </div>
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                  <Label htmlFor="newTaskPriority" className="text-right col-span-1">Priority</Label>
-                                  <Select value={newTaskPriority} onValueChange={(value: TaskPriority) => setNewTaskPriority(value)}>
-                                      <SelectTrigger className="col-span-3"><SelectValue placeholder="Select priority" /></SelectTrigger>
-                                      <SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent>
-                                  </Select>
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                  <Label htmlFor="newTaskAssigneeName" className="text-right col-span-1">Assignee</Label>
-                                  <Input id="newTaskAssigneeName" value={newTaskAssigneeName} onChange={(e) => setNewTaskAssigneeName(e.target.value)} placeholder="e.g., John Doe" className="col-span-3" />
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                  <Label htmlFor="newTaskTags" className="text-right col-span-1">Tags</Label>
-                                  <Input id="newTaskTags" value={newTaskTags} onChange={(e) => setNewTaskTags(e.target.value)} placeholder="e.g., urgent, client_x" className="col-span-3" />
-                                  <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p>
-                              </div>
-                          </div>
-                      </ScrollArea>
-                      <DialogFooter className="pt-4 border-t">
-                          <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddTaskForm}>Cancel</Button></DialogClose>
-                          <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Task</Button>
-                      </DialogFooter>
-                  </form>
-              </DialogContent>
-          </Dialog>
+    <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center"><ClipboardCheck className="mr-3 h-8 w-8 text-primary"/>Tasks Management</h1>
+          <p className="text-muted-foreground">Organiza y haz seguimiento de las tareas.</p>
         </div>
+        <Dialog open={isAddTaskDialogOpen} onOpenChange={setIsAddTaskDialogOpen}>
+            <DialogTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Task
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[625px]">
+                <DialogHeader>
+                    <DialogTitle>Add New Task</DialogTitle>
+                    <DialogDescription>Enter task details.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddTaskSubmit}>
+                    <div className="max-h-[60vh] overflow-y-auto p-1"> {/* Scroll for form content */}
+                        <div className="grid gap-4 py-4 pr-4">
+                            {/* Form fields */}
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="newTaskTitle" className="text-right col-span-1">Title</Label>
+                                <Input id="newTaskTitle" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="e.g., Follow up with client" className="col-span-3" required />
+                            </div>
+                            <div className="grid grid-cols-4 items-start gap-4">
+                                <Label htmlFor="newTaskDescription" className="text-right col-span-1 pt-2">Description</Label>
+                                <Textarea id="newTaskDescription" value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} placeholder="Provide details..." className="col-span-3" rows={3}/>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="newTaskStatus" className="text-right col-span-1">Status</Label>
+                                <Select value={newTaskStatus} onValueChange={(value: TaskStatus) => setNewTaskStatus(value)}>
+                                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
+                                    <SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="newTaskDueDate" className="text-right col-span-1">Due Date</Label>
+                                <div className="col-span-3 relative">
+                                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input id="newTaskDueDate" type="date" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} className="pl-10" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="newTaskPriority" className="text-right col-span-1">Priority</Label>
+                                <Select value={newTaskPriority} onValueChange={(value: TaskPriority) => setNewTaskPriority(value)}>
+                                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select priority" /></SelectTrigger>
+                                    <SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="newTaskAssigneeName" className="text-right col-span-1">Assignee</Label>
+                                <Input id="newTaskAssigneeName" value={newTaskAssigneeName} onChange={(e) => setNewTaskAssigneeName(e.target.value)} placeholder="e.g., John Doe" className="col-span-3" />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="newTaskTags" className="text-right col-span-1">Tags</Label>
+                                <Input id="newTaskTags" value={newTaskTags} onChange={(e) => setNewTaskTags(e.target.value)} placeholder="e.g., urgent, client_x" className="col-span-3" />
+                                <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter className="pt-4 border-t mt-2">
+                        <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddTaskForm}>Cancel</Button></DialogClose>
+                        <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Task</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+      </div>
 
-        {/* Edit Task Dialog */}
-        <Dialog open={isEditTaskDialogOpen} onOpenChange={setIsEditTaskDialogOpen}>
-          <DialogContent className="sm:max-w-[625px]">
-            <DialogHeader>
-              <DialogTitle>Edit Task: {editingTask?.title}</DialogTitle>
-              <DialogDescription>Update task details.</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleEditTaskSubmit}>
-              <ScrollArea className="max-h-[60vh] p-1">
-                <div className="grid gap-4 py-4 pr-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormTaskTitle" className="text-right col-span-1">Title</Label>
-                    <Input id="editFormTaskTitle" value={editFormTaskTitle} onChange={(e) => setEditFormTaskTitle(e.target.value)} className="col-span-3" required />
+      <Dialog open={isEditTaskDialogOpen} onOpenChange={setIsEditTaskDialogOpen}>
+        <DialogContent className="sm:max-w-[625px]">
+          <DialogHeader>
+            <DialogTitle>Edit Task: {editingTask?.title}</DialogTitle>
+            <DialogDescription>Update task details.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditTaskSubmit}>
+             <div className="max-h-[60vh] overflow-y-auto p-1"> {/* Scroll for form content */}
+              <div className="grid gap-4 py-4 pr-4">
+                {/* Form fields for editing */}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="editFormTaskTitle" className="text-right col-span-1">Title</Label>
+                  <Input id="editFormTaskTitle" value={editFormTaskTitle} onChange={(e) => setEditFormTaskTitle(e.target.value)} className="col-span-3" required />
+                </div>
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label htmlFor="editFormTaskDescription" className="text-right col-span-1 pt-2">Description</Label>
+                  <Textarea id="editFormTaskDescription" value={editFormTaskDescription} onChange={(e) => setEditFormTaskDescription(e.target.value)} className="col-span-3" rows={3}/>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="editFormTaskStatus" className="text-right col-span-1">Status</Label>
+                  <Select value={editFormTaskStatus} onValueChange={(value: TaskStatus) => setEditFormTaskStatus(value)}>
+                    <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+                    <SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="editFormTaskDueDate" className="text-right col-span-1">Due Date</Label>
+                  <div className="col-span-3 relative">
+                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="editFormTaskDueDate" type="date" value={editFormTaskDueDate} onChange={(e) => setEditFormTaskDueDate(e.target.value)} className="pl-10" />
                   </div>
-                  <div className="grid grid-cols-4 items-start gap-4">
-                    <Label htmlFor="editFormTaskDescription" className="text-right col-span-1 pt-2">Description</Label>
-                    <Textarea id="editFormTaskDescription" value={editFormTaskDescription} onChange={(e) => setEditFormTaskDescription(e.target.value)} className="col-span-3" rows={3}/>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormTaskStatus" className="text-right col-span-1">Status</Label>
-                    <Select value={editFormTaskStatus} onValueChange={(value: TaskStatus) => setEditFormTaskStatus(value)}>
-                      <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
-                      <SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormTaskDueDate" className="text-right col-span-1">Due Date</Label>
-                    <div className="col-span-3 relative">
-                      <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input id="editFormTaskDueDate" type="date" value={editFormTaskDueDate} onChange={(e) => setEditFormTaskDueDate(e.target.value)} className="pl-10" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="editFormTaskPriority" className="text-right col-span-1">Priority</Label>
+                  <Select value={editFormTaskPriority} onValueChange={(value: TaskPriority) => setEditFormTaskPriority(value)}>
+                    <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+                    <SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="editFormTaskAssigneeName" className="text-right col-span-1">Assignee</Label>
+                  <Input id="editFormTaskAssigneeName" value={editFormTaskAssigneeName} onChange={(e) => setEditFormTaskAssigneeName(e.target.value)} className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="editFormTaskTags" className="text-right col-span-1">Tags</Label>
+                  <Input id="editFormTaskTags" value={editFormTaskTags} onChange={(e) => setEditFormTaskTags(e.target.value)} className="col-span-3" />
+                  <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="pt-4 border-t mt-2">
+              <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditTaskDialogOpen(false)}>Cancel</Button></DialogClose>
+              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <p className="text-sm text-muted-foreground flex-shrink-0">
+        Arrastra las tareas entre columnas para cambiar su estado.
+      </p>
+      
+      {!isClient && <div className="flex-1 flex items-center justify-center text-muted-foreground">Loading board...</div>}
+      {isClient && (
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleTaskDragEnd} announcements={customAnnouncements}>
+          <div className="flex-1 overflow-x-auto pb-4">
+            <div className="flex gap-4 min-w-max h-full">
+              {TASK_STATUSES.map((statusKey) => {
+                const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: statusKey });
+                return (
+                  <div
+                    key={statusKey}
+                    ref={setDroppableRef}
+                    className={cn(
+                      "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg transition-colors duration-200 min-h-[400px]", // Ensure columns have min-height
+                      isOver && "bg-primary/10 border-2 border-primary"
+                    )}
+                  >
+                    <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
+                      <h3 className="text-md font-semibold">
+                        {statusToColumnTitle[statusKey]}
+                      </h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {tasks.filter(task => task.status === statusKey).length}
+                      </Badge>
+                    </div>
+                    {/* This inner div handles the scroll for tasks within the column */}
+                    <div className="flex-1 overflow-y-auto p-3 pr-1 space-y-3">
+                      {tasks.filter(task => task.status === statusKey).length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>
+                      )}
+                      {tasks
+                        .filter(task => task.status === statusKey)
+                        .map(task => (
+                          <TaskCard key={task.id} task={task} onEdit={openEditTaskDialog} onDelete={handleDeleteTask} />
+                        ))}
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormTaskPriority" className="text-right col-span-1">Priority</Label>
-                    <Select value={editFormTaskPriority} onValueChange={(value: TaskPriority) => setEditFormTaskPriority(value)}>
-                      <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
-                      <SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormTaskAssigneeName" className="text-right col-span-1">Assignee</Label>
-                    <Input id="editFormTaskAssigneeName" value={editFormTaskAssigneeName} onChange={(e) => setEditFormTaskAssigneeName(e.target.value)} className="col-span-3" />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormTaskTags" className="text-right col-span-1">Tags</Label>
-                    <Input id="editFormTaskTags" value={editFormTaskTags} onChange={(e) => setEditFormTaskTags(e.target.value)} className="col-span-3" />
-                    <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p>
-                  </div>
-                </div>
-              </ScrollArea>
-              <DialogFooter className="pt-4 border-t">
-                <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditTaskDialogOpen(false)}>Cancel</Button></DialogClose>
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        <p className="text-sm text-muted-foreground flex-shrink-0">
-          Arrastra las tareas entre columnas para cambiar su estado.
-        </p>
-
-        <div className="flex-1 overflow-x-auto pb-4">
-          <div className="flex gap-4 min-w-max h-full">
-            {TASK_STATUSES.map((statusKey) => {
-              const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: statusKey });
-              return (
-                <div
-                  key={statusKey}
-                  ref={setDroppableRef}
-                  className={cn(
-                    "w-[300px] flex-shrink-0 flex flex-col bg-muted/40 shadow-md rounded-lg p-0 transition-colors duration-200 min-h-[400px]",
-                    isOver && "bg-primary/10 border-2 border-primary"
-                  )}
-                >
-                   <div className="p-4 border-b sticky top-0 bg-muted/40 rounded-t-lg z-10 flex justify-between items-center">
-                    <h3 className="text-md font-semibold">
-                      {statusToColumnTitle[statusKey]}
-                    </h3>
-                    <Badge variant="secondary" className="text-xs">
-                      {tasks.filter(task => task.status === statusKey).length}
-                    </Badge>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                    {tasks.filter(task => task.status === statusKey).length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>
-                    )}
-                    {tasks
-                      .filter(task => task.status === statusKey)
-                      .map(task => (
-                        <TaskCard key={task.id} task={task} onEdit={openEditTaskDialog} onDelete={handleDeleteTask} />
-                      ))}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </div>
-    </DndContext>
+        </DndContext>
+      )}
+    </div>
   );
 }
+    
