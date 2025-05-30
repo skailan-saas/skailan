@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -9,17 +10,22 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Edit2, Mail, MessageSquare, MoreVertical, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Star, Trash2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Edit2, Mail, MessageSquare, MoreVertical, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Star, Trash2, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { summarizeConversation, suggestResponse } from "@/ai/flows"; 
+import { useToast } from "@/hooks/use-toast";
+
+type MessageType = "text" | "image" | "product" | "interactive";
+type MessageSender = "user" | "agent" | "system";
 
 type Message = {
   id: string;
-  sender: "user" | "agent" | "system";
+  sender: MessageSender;
   content: string;
   timestamp: string;
-  type: "text" | "image" | "product" | "interactive";
+  type: MessageType;
   imageUrl?: string;
   productName?: string;
   productPrice?: string;
@@ -28,23 +34,29 @@ type Message = {
   listItems?: { title: string; description?: string; payload: string }[];
 };
 
+type ConversationStatus = "active" | "assigned" | "closed" | "archived";
+type Channel = "whatsapp" | "messenger" | "instagram" | "web";
+
 type Conversation = {
   id: string;
   userName: string;
   lastMessageSnippet: string;
   avatarUrl: string;
-  dataAiHint?: string; // Added for placeholder images
+  dataAiHint?: string;
   unreadCount: number;
   timestamp: string;
-  channel: "whatsapp" | "messenger" | "instagram" | "web";
+  channel: Channel;
   tags?: string[];
+  status: ConversationStatus;
+  assignedAgentName?: string;
 };
 
 const initialConversations: Conversation[] = [
-  { id: "1", userName: "Alice Wonderland", lastMessageSnippet: "Thanks for your help!", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female avatar", unreadCount: 0, timestamp: "10:30 AM", channel: "whatsapp", tags: ["vip", "order_issue"] },
-  { id: "2", userName: "Bob The Builder", lastMessageSnippet: "Can I get a quote for...", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "male avatar", unreadCount: 2, timestamp: "11:15 AM", channel: "messenger" },
-  { id: "3", userName: "Charlie Brown", lastMessageSnippet: "Is this item in stock?", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "person avatar", unreadCount: 0, timestamp: "09:00 AM", channel: "instagram", tags: ["new_lead"] },
-  { id: "4", userName: "Diana Prince", lastMessageSnippet: "My order hasn't arrived.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", unreadCount: 1, timestamp: "Yesterday", channel: "web", tags: ["urgent"] },
+  { id: "1", userName: "Alice Wonderland", lastMessageSnippet: "Thanks for your help!", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female avatar", unreadCount: 0, timestamp: "10:30 AM", channel: "whatsapp", tags: ["vip", "order_issue"], status: "closed", assignedAgentName: "Agent Smith" },
+  { id: "2", userName: "Bob The Builder", lastMessageSnippet: "Can I get a quote for...", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "male avatar", unreadCount: 2, timestamp: "11:15 AM", channel: "messenger", status: "active" },
+  { id: "3", userName: "Charlie Brown", lastMessageSnippet: "Is this item in stock?", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "person avatar", unreadCount: 0, timestamp: "09:00 AM", channel: "instagram", tags: ["new_lead"], status: "assigned", assignedAgentName: "Jane Doe" },
+  { id: "4", userName: "Diana Prince", lastMessageSnippet: "My order hasn't arrived.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", unreadCount: 1, timestamp: "Yesterday", channel: "web", tags: ["urgent"], status: "active" },
+  { id: "5", userName: "Edward Scissorhands", lastMessageSnippet: "Need help with pruning.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "goth man", unreadCount: 0, timestamp: "2 days ago", channel: "whatsapp", status: "archived" },
 ];
 
 const initialMessages: Record<string, Message[]> = {
@@ -80,30 +92,49 @@ const initialMessages: Record<string, Message[]> = {
       productDescription: "Noise-cancelling, 20hr battery.",
       productPrice: "$99.99",
       imageUrl: "https://placehold.co/300x200.png",
+      dataAiHint: "headphones audio",
     },
   ],
   "4": [
      { id: "m4-1", sender: "user", content: "My order hasn't arrived.", timestamp: "Yesterday", type: "text" },
+  ],
+  "5": [
+    { id: "m5-1", sender: "user", content: "Need help with pruning.", timestamp: "2 days ago", type: "text" },
+    { id: "m5-2", sender: "agent", content: "Certainly, Edward. What seems to be the trouble with your topiary?", timestamp: "2 days ago", type: "text" },
   ]
 };
 
+type FilterOption = ConversationStatus | "all";
 
 export default function AgentWorkspacePage() {
+  const { toast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(initialConversations[0]?.id || null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
+    initialConversations.find(c => c.status !== 'archived')?.id || null
+  );
   const [messages, setMessages] = useState<Message[]>(selectedConversationId ? initialMessages[selectedConversationId] : []);
   const [newMessage, setNewMessage] = useState("");
   const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FilterOption>("all");
 
   useEffect(() => {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
+      // Mark as read (visually)
+      setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
     } else {
       setMessages([]);
     }
   }, [selectedConversationId]);
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
+
+  const displayedConversations = useMemo(() => {
+    if (activeFilter === "all") {
+      return conversations.filter(c => c.status !== 'archived');
+    }
+    return conversations.filter(c => c.status === activeFilter);
+  }, [conversations, activeFilter]);
 
   const handleSendMessage = () => {
     if (newMessage.trim() === "" || !selectedConversationId) return;
@@ -115,8 +146,11 @@ export default function AgentWorkspacePage() {
       type: "text",
     };
     setMessages(prev => [...prev, msg]);
+    // Update lastMessageSnippet for the current conversation
+    setConversations(prevConvs => prevConvs.map(conv => 
+      conv.id === selectedConversationId ? { ...conv, lastMessageSnippet: newMessage, timestamp: msg.timestamp } : conv
+    ));
     setNewMessage("");
-    // Here you would also send the message to the backend
   };
 
   const handleSuggestResponse = async () => {
@@ -129,7 +163,7 @@ export default function AgentWorkspacePage() {
       setNewMessage(response.suggestedResponse);
     } catch (error) {
       console.error("Error suggesting response:", error);
-      // Show toast notification
+      toast({ title: "AI Suggestion Failed", description: "Could not generate a response.", variant: "destructive"});
     } finally {
       setIsLoadingAi(false);
     }
@@ -141,27 +175,92 @@ export default function AgentWorkspacePage() {
     try {
       const history = messages.map(m => `${m.sender}: ${m.content}`).join('\n');
       const response = await summarizeConversation({ conversationHistory: history });
-      // Display summary, e.g., in a toast or a dedicated section in lead info
-      alert(`Summary: ${response.summary}`); // Placeholder
+      toast({ title: "Conversation Summary", description: response.summary, duration: 10000 });
     } catch (error) {
       console.error("Error summarizing conversation:", error);
+      toast({ title: "AI Summary Failed", description: "Could not summarize the conversation.", variant: "destructive"});
     } finally {
       setIsLoadingAi(false);
     }
   };
 
+  const updateConversationStatus = (id: string, status: ConversationStatus, agentName?: string) => {
+    setConversations(prev => prev.map(conv => {
+      if (conv.id === id) {
+        const updatedConv = { ...conv, status };
+        if (agentName !== undefined) { // Allows clearing agent name if an empty string is passed
+          updatedConv.assignedAgentName = agentName || undefined;
+        }
+        return updatedConv;
+      }
+      return conv;
+    }));
+  };
+
+  const handleAssignAction = () => {
+    if (!selectedConversationId) return;
+    // In a real app, this would open a dialog to select an agent
+    const demoAgent = "Agent Demo";
+    updateConversationStatus(selectedConversationId, "assigned", demoAgent);
+    toast({ title: "Conversation Assigned", description: `Assigned to ${demoAgent}.` });
+  };
+
+  const handleCloseAction = () => {
+    if (!selectedConversationId) return;
+    updateConversationStatus(selectedConversationId, "closed");
+    toast({ title: "Conversation Closed" });
+  };
+
+  const handleArchiveAction = () => {
+    if (!selectedConversationId) return;
+    const oldStatus = selectedConversation?.status;
+    updateConversationStatus(selectedConversationId, "archived");
+    toast({ title: "Conversation Archived" });
+    // Select next available non-archived conversation or null
+    const nextConv = conversations.find(c => c.id !== selectedConversationId && c.status !== 'archived');
+    setSelectedConversationId(nextConv?.id || null);
+    // If the current filter was the status of the archived item, switch to 'all'
+    if (activeFilter === oldStatus) {
+        setActiveFilter("all");
+    }
+  };
+  
+  const handleUnarchiveAction = () => {
+    if (!selectedConversationId || selectedConversation?.status !== "archived") return;
+    // For simplicity, unarchiving sets it to 'active' and clears agent.
+    // A more complex logic might revert to its previous status or make it assignable.
+    updateConversationStatus(selectedConversationId, "active", ""); 
+    toast({ title: "Conversation Unarchived" });
+    setActiveFilter("all"); // Switch view to 'all' to see the unarchived item
+  };
+
 
   return (
     <TooltipProvider>
-      <div className="h-[calc(100vh-4rem)] flex flex-col md:grid md:grid-cols-[300px_1fr_350px] bg-background"> {/* Adjusted for header height */}
+      <div className="h-[calc(100vh-4rem)] flex flex-col md:grid md:grid-cols-[300px_1fr_350px] bg-background">
         {/* Conversations List Panel */}
         <Card className="flex flex-col rounded-none border-0 md:border-r h-full">
-          <CardHeader className="p-4">
+          <CardHeader className="p-4 space-y-3">
             <Input placeholder="Search conversations..." className="rounded-full" />
+            <Tabs value={activeFilter} onValueChange={(value) => setActiveFilter(value as FilterOption)}>
+              <TabsList className="grid w-full grid-cols-3 h-auto sm:grid-cols-5">
+                <TabsTrigger value="all" className="text-xs px-1 sm:px-2">Todas</TabsTrigger>
+                <TabsTrigger value="active" className="text-xs px-1 sm:px-2">Activas</TabsTrigger>
+                <TabsTrigger value="assigned" className="text-xs px-1 sm:px-2">Asignadas</TabsTrigger>
+                <TabsTrigger value="closed" className="text-xs px-1 sm:px-2">Cerradas</TabsTrigger>
+                <TabsTrigger value="archived" className="text-xs px-1 sm:px-2">Archivadas</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </CardHeader>
           <ScrollArea className="flex-1">
             <div className="space-y-1 p-2">
-              {conversations.map((conv) => (
+              {displayedConversations.length === 0 && (
+                <div className="text-center text-muted-foreground p-4">
+                  <Inbox className="mx-auto h-10 w-10 mb-2"/>
+                  No conversations in this view.
+                </div>
+              )}
+              {displayedConversations.map((conv) => (
                 <Button
                   key={conv.id}
                   variant={selectedConversationId === conv.id ? "secondary" : "ghost"}
@@ -178,8 +277,11 @@ export default function AgentWorkspacePage() {
                       <span className="text-xs text-muted-foreground">{conv.timestamp}</span>
                     </div>
                     <p className="text-sm text-muted-foreground truncate">{conv.lastMessageSnippet}</p>
+                    {conv.status === "assigned" && conv.assignedAgentName && (
+                        <Badge variant="outline" className="text-xs mt-1">Asignada a: {conv.assignedAgentName}</Badge>
+                    )}
                   </div>
-                  {conv.unreadCount > 0 && (
+                  {conv.unreadCount > 0 && conv.status !== "archived" && (
                     <Badge variant="default" className="ml-2 bg-primary text-primary-foreground">{conv.unreadCount}</Badge>
                   )}
                 </Button>
@@ -191,16 +293,40 @@ export default function AgentWorkspacePage() {
         {/* Chat View Panel */}
         {selectedConversation ? (
           <div className="flex flex-col h-full">
-            <header className="flex items-center p-4 border-b gap-3">
+            <header className="flex items-center p-3 border-b gap-3">
               <Avatar>
                 <AvatarImage src={selectedConversation.avatarUrl} alt={selectedConversation.userName} data-ai-hint={selectedConversation.dataAiHint || "avatar person"}/>
                 <AvatarFallback>{selectedConversation.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
-              <div>
+              <div className="flex-1">
                 <h2 className="font-semibold text-lg">{selectedConversation.userName}</h2>
-                <span className="text-xs text-muted-foreground capitalize">{selectedConversation.channel}</span>
+                <span className="text-xs text-muted-foreground capitalize">
+                  {selectedConversation.channel} - {selectedConversation.status === "assigned" && selectedConversation.assignedAgentName ? `Asignada a ${selectedConversation.assignedAgentName}` : selectedConversation.status}
+                </span>
               </div>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                {selectedConversation.status !== "archived" && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={handleAssignAction}><UserPlus className="h-5 w-5" /></Button></TooltipTrigger>
+                      <TooltipContent><p>Asignar Conversación</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={handleCloseAction}><XCircle className="h-5 w-5" /></Button></TooltipTrigger>
+                      <TooltipContent><p>Cerrar Conversación</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={handleArchiveAction}><ArchiveIcon className="h-5 w-5" /></Button></TooltipTrigger>
+                      <TooltipContent><p>Archivar Conversación</p></TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+                 {selectedConversation.status === "archived" && (
+                    <Tooltip>
+                      <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={handleUnarchiveAction}><ArchiveIcon className="h-5 w-5 text-green-600" /></Button></TooltipTrigger>
+                      <TooltipContent><p>Desarchivar Conversación</p></TooltipContent>
+                    </Tooltip>
+                 )}
                 <Tooltip>
                   <TooltipTrigger asChild><Button variant="ghost" size="icon"><Phone className="h-5 w-5" /></Button></TooltipTrigger>
                   <TooltipContent><p>Start Call</p></TooltipContent>
@@ -209,7 +335,7 @@ export default function AgentWorkspacePage() {
                   <TooltipTrigger asChild><Button variant="ghost" size="icon"><Video className="h-5 w-5" /></Button></TooltipTrigger>
                   <TooltipContent><p>Start Video Call</p></TooltipContent>
                 </Tooltip>
-                <Button variant="ghost" size="icon"><MoreVertical className="h-5 w-5" /></Button>
+                {/* <Button variant="ghost" size="icon"><MoreVertical className="h-5 w-5" /></Button> */}
               </div>
             </header>
             <ScrollArea className="flex-1 p-4 space-y-4 bg-muted/20">
@@ -222,7 +348,7 @@ export default function AgentWorkspacePage() {
                     )}
                     {msg.type === "product" && (
                       <div className="space-y-1">
-                        {msg.imageUrl && <Image src={msg.imageUrl} alt={msg.productName || "Product"} width={150} height={100} className="rounded" data-ai-hint="product image"/>}
+                        {msg.imageUrl && <Image src={msg.imageUrl} alt={msg.productName || "Product"} width={150} height={100} className="rounded" data-ai-hint={msg.dataAiHint || "product image"}/>}
                         <p className="font-semibold">{msg.productName}</p>
                         {msg.productDescription && <p className="text-xs">{msg.productDescription}</p>}
                         <p className="font-bold">{msg.productPrice}</p>
@@ -243,6 +369,7 @@ export default function AgentWorkspacePage() {
                 </div>
               ))}
             </ScrollArea>
+            {selectedConversation.status !== "closed" && selectedConversation.status !== "archived" && (
             <footer className="p-4 border-t bg-background">
               <div className="relative">
                 <Textarea
@@ -276,10 +403,21 @@ export default function AgentWorkspacePage() {
                 </Button>
               </div>
             </footer>
+            )}
+             {(selectedConversation.status === "closed" || selectedConversation.status === "archived") && (
+                <footer className="p-4 border-t bg-background text-center">
+                    <p className="text-sm text-muted-foreground">
+                        This conversation is {selectedConversation.status}. 
+                        {selectedConversation.status === "archived" ? " You can unarchive it to continue." : " No further actions can be taken."}
+                    </p>
+                </footer>
+            )}
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <p>Select a conversation to start chatting.</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground bg-muted/20 p-4">
+            <Inbox className="h-16 w-16 mb-4 text-gray-400"/>
+            <p className="text-lg">Select a conversation to start chatting.</p>
+            <p className="text-sm text-gray-500">Or use the filters above to find specific conversations.</p>
           </div>
         )}
 
@@ -295,9 +433,26 @@ export default function AgentWorkspacePage() {
               </Avatar>
               <div>
                 <CardTitle className="text-xl">{selectedConversation.userName}</CardTitle>
-                <span className="text-sm text-muted-foreground">Lead Score: 85</span>
+                <span className="text-sm text-muted-foreground">Lead Score: 85 (Demo)</span> {/* Placeholder */}
               </div>
               <Button variant="ghost" size="icon" className="ml-auto"><Edit2 className="h-5 w-5" /></Button>
+            </div>
+             <div className="mt-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Status:</span>
+                    <Badge variant={
+                        selectedConversation.status === "closed" || selectedConversation.status === "archived" ? "destructive" :
+                        selectedConversation.status === "assigned" ? "secondary" : "default"
+                    } className={selectedConversation.status === "active" ? "bg-green-500 text-white" : ""}>
+                        {selectedConversation.status.charAt(0).toUpperCase() + selectedConversation.status.slice(1)}
+                    </Badge>
+                </div>
+                {selectedConversation.assignedAgentName && selectedConversation.status === "assigned" && (
+                    <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Assigned to:</span>
+                        <span>{selectedConversation.assignedAgentName}</span>
+                    </div>
+                )}
             </div>
              <div className="mt-2 flex flex-wrap gap-1">
                 {selectedConversation.tags?.map(tag => <Badge key={tag} variant="secondary">{tag}</Badge>)}
@@ -308,22 +463,22 @@ export default function AgentWorkspacePage() {
               <div>
                 <h4 className="font-semibold text-sm mb-1">Contact Info</h4>
                 <div className="space-y-1 text-sm text-muted-foreground">
-                  <p className="flex items-center"><Mail className="h-4 w-4 mr-2 text-sky-500" /> {selectedConversation.userName.toLowerCase().replace(" ", ".")}@example.com</p>
+                  <p className="flex items-center"><Mail className="h-4 w-4 mr-2 text-sky-500" /> {selectedConversation.userName.toLowerCase().replace(/\s+/g, ".")}@example.com</p>
                   <p className="flex items-center"><Phone className="h-4 w-4 mr-2 text-green-500" /> +1 (555) 123-4567</p>
                 </div>
               </div>
               <Separator />
               <div>
-                <h4 className="font-semibold text-sm mb-1">Recent Activity</h4>
+                <h4 className="font-semibold text-sm mb-1">Recent Activity (Demo)</h4>
                 <ul className="space-y-2 text-xs text-muted-foreground list-disc list-inside">
                     <li>Viewed pricing page - 2 hours ago</li>
                     <li>Downloaded brochure - 1 day ago</li>
-                    <li>First contact via Web Chat - 3 days ago</li>
+                    <li>First contact via {selectedConversation.channel} - {Math.floor(Math.random() * 5) + 1} days ago</li>
                 </ul>
               </div>
                <Separator />
               <div>
-                <h4 className="font-semibold text-sm mb-1">Products/Services of Interest</h4>
+                <h4 className="font-semibold text-sm mb-1">Products/Services of Interest (Demo)</h4>
                  <Badge variant="outline">Website Development</Badge>
                  <Badge variant="outline" className="ml-1">Chatbot Integration</Badge>
               </div>
@@ -334,8 +489,10 @@ export default function AgentWorkspacePage() {
           </CardFooter>
           </>
         ) : (
-           <div className="flex-1 flex items-center justify-center text-muted-foreground p-4">
-            <p>Select a conversation to see lead details.</p>
+           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
+             <UserCircle className="h-16 w-16 mb-4 text-gray-400"/>
+            <p className="text-lg">Lead Information</p>
+            <p className="text-sm text-gray-500">Select a conversation to see details about the contact.</p>
           </div>
         )}
         </Card>
@@ -343,3 +500,5 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
+
+    
