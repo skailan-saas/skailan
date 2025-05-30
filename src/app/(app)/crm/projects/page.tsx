@@ -3,7 +3,7 @@
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; // Keep Card for ProjectCard
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -74,7 +74,7 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, onEdit, onDelet
   const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, touchAction: 'none' } : { touchAction: 'none' };
   
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes} className={cn("rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow cursor-grab", isDragging && "opacity-60")}>
+    <Card ref={setNodeRef} style={style} {...listeners} {...attributes} className={cn("rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow cursor-grab", isDragging && "opacity-60")}>
       <CardHeader className="p-3 pb-2">
         <div className="flex justify-between items-start">
           <CardTitle className="text-sm font-semibold leading-tight">{project.name}</CardTitle>
@@ -101,19 +101,20 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, onEdit, onDelet
        <CardFooter className="p-3 pt-2 border-t flex justify-end">
          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><GripVertical className="h-4 w-4" /><span className="sr-only">Arrastrar proyecto</span></Button>
       </CardFooter>
-    </div>
+    </Card>
   );
 });
 ProjectCard.displayName = 'ProjectCard';
 
 interface ProjectKanbanBoardProps {
   projects: Project[];
+  statuses: readonly ProjectStatus[];
   handleProjectDragEnd: (event: DragEndEvent) => void;
   onEditProject: (project: Project) => void;
   onDeleteProject: (projectId: string) => void;
 }
 
-const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projects, handleProjectDragEnd, onEditProject, onDeleteProject }) => {
+const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projects, statuses, handleProjectDragEnd, onEditProject, onDeleteProject }) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor)
@@ -123,11 +124,18 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projects, handleProje
      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleProjectDragEnd} announcements={customAnnouncements}>
         <div className="flex-1 overflow-x-auto pb-4">
           <div className="flex gap-4 min-w-max h-full">
-            {PROJECT_STATUSES.map((statusKey) => {
+            {statuses.map((statusKey) => {
               const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: statusKey });
               const columnProjects = projects.filter(project => project.status === statusKey);
               return (
-                <div key={statusKey} ref={setDroppableRef} className={cn("w-[320px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg transition-colors duration-200 min-h-[400px]", isOver && "bg-primary/10 border-2 border-primary")}>
+                <div 
+                    key={statusKey} 
+                    ref={setDroppableRef} 
+                    className={cn(
+                        "w-[320px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg transition-colors duration-200 min-h-[400px] p-0", 
+                        isOver && "bg-primary/10 border-2 border-primary"
+                    )}
+                >
                   <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
                     <h3 className="text-md font-semibold">{projectStatusToColumnTitle[statusKey]}</h3>
                     <Badge variant="secondary" className="text-xs">{columnProjects.length}</Badge>
@@ -227,10 +235,14 @@ export default function CrmProjectsPage() {
     console.log("Active ID:", active.id as string);
     console.log("Over ID:", over ? over.id as string : null);
 
-    if (!over) { console.log("Drag ended but no valid 'over' target."); return; }
-
+    if (!over) { 
+      console.log("Drag ended but no valid 'over' target.");
+      return; 
+    }
+    
     const projectId = active.id as string;
     const targetStatus = over.id as ProjectStatus;
+
     const projectToMove = projects.find(p => p.id === projectId);
 
     if (projectToMove && projectToMove.status !== targetStatus) {
@@ -241,7 +253,7 @@ export default function CrmProjectsPage() {
     } else {
       console.log(`Project ${projectId} not moved. Current status: ${projectToMove?.status}, target status: ${targetStatus}.`);
     }
-  }, [projects, toast]);
+  }, [projects, toast]); // setProjects was missing from dependency array
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -292,8 +304,18 @@ export default function CrmProjectsPage() {
         </DialogContent>
       </Dialog>
       <p className="text-sm text-muted-foreground flex-shrink-0">Arrastra los proyectos entre columnas para cambiar su estado.</p>
-      {isClient ? (<ProjectKanbanBoard projects={projects} handleProjectDragEnd={handleProjectDragEnd} onEditProject={openEditProjectDialog} onDeleteProject={handleDeleteProject} />) 
-               : (<div className="flex-1 flex items-center justify-center text-muted-foreground">Loading board...</div>)}
+      
+      {isClient ? (
+        <ProjectKanbanBoard 
+            projects={projects} 
+            statuses={PROJECT_STATUSES}
+            handleProjectDragEnd={handleProjectDragEnd} 
+            onEditProject={openEditProjectDialog} 
+            onDeleteProject={handleDeleteProject} 
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">Loading board...</div>
+      )}
     </div>
   );
 }
