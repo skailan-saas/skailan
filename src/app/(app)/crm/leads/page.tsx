@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's not used here
 import { Label } from "@/components/ui/label";
 import { PlusCircle, Users, Search, Filter, MoreHorizontal, Edit, Trash2, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -157,7 +157,7 @@ export default function CrmLeadsPage() {
       company: values.company || undefined,
       source: values.source,
       status: values.status,
-      lastContacted: new Date().toISOString().split('T')[0], // Or preserve original lastContacted based on logic
+      lastContacted: new Date().toISOString().split('T')[0], 
     };
 
     setLeads(prevLeads => prevLeads.map(l => l.id === editingLead.id ? updatedLead : l));
@@ -468,18 +468,18 @@ export default function CrmLeadsPage() {
               )}
               <div>
                 <p className="font-medium text-muted-foreground">Source:</p>
-                <p><Badge variant="outline">{viewingLead.source}</Badge></p>
+                <div><Badge variant="outline">{viewingLead.source}</Badge></div>
               </div>
               <div>
                 <p className="font-medium text-muted-foreground">Status:</p>
-                <p>
+                <div>
                   <Badge 
                     variant={viewingLead.status === "CONVERTED" ? "default" : viewingLead.status === "QUALIFIED" ? "secondary" : viewingLead.status === "LOST" ? "destructive" : "outline"}
                     className={viewingLead.status === "CONVERTED" ? "bg-green-600 text-white" : ""}
                   >
                     {viewingLead.status}
                   </Badge>
-                </p>
+                </div>
               </div>
               {viewingLead.assignedTo && (
                  <div>
@@ -637,6 +637,3 @@ export default function CrmLeadsPage() {
     </div>
   );
 }
-
-
-    
