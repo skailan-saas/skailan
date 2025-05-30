@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Edit2, Mail, MessageSquare, MoreVertical, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Star, Trash2, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
-import { summarizeConversation, suggestResponse } from "@/ai/flows"; 
+import { summarizeConversation, suggestResponse } from "@/ai/flows";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -73,24 +73,24 @@ const initialMessages: Record<string, Message[]> = {
     { id: "m2-2", sender: "user", content: "Can I get a quote for building a website?", timestamp: "11:15 AM", type: "text" },
     { id: "m2-3", sender: "agent", content: "Hi Bob! We can certainly help with that. What kind of website are you looking for?", timestamp: "11:16 AM", type: "text" },
     { id: "m2-4", sender: "user", content: "An e-commerce site.", timestamp: "11:18 AM", type: "text" },
-    { 
-      id: "m2-5", 
-      sender: "agent", 
-      content: "Great! We have several packages. Would you like to see some options?", 
-      timestamp: "11:20 AM", 
+    {
+      id: "m2-5",
+      sender: "agent",
+      content: "Great! We have several packages. Would you like to see some options?",
+      timestamp: "11:20 AM",
       type: "interactive",
       buttons: [{label: "Yes, show options", payload: "show_options"}, {label: "No, tell me more", payload: "tell_more"}]
     },
   ],
    "3": [
     { id: "m3-1", sender: "user", content: "Is this item in stock?", timestamp: "09:00 AM", type: "text" },
-    { 
-      id: "m3-2", 
-      sender: "agent", 
-      content: "Which item are you referring to? Here's our latest catalog:", 
-      timestamp: "09:01 AM", 
-      type: "product", 
-      productName: "Wireless Headphones", 
+    {
+      id: "m3-2",
+      sender: "agent",
+      content: "Which item are you referring to? Here's our latest catalog:",
+      timestamp: "09:01 AM",
+      type: "product",
+      productName: "Wireless Headphones",
       productDescription: "Noise-cancelling, 20hr battery.",
       productPrice: "$99.99",
       imageUrl: "https://placehold.co/300x200.png",
@@ -118,14 +118,18 @@ export default function AgentWorkspacePage() {
   const [newMessage, setNewMessage] = useState("");
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterOption>("all");
+  const [contactDaysAgo, setContactDaysAgo] = useState<number | null>(null);
 
   useEffect(() => {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
       // Mark as read (visually)
       setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
+      // Generate random days for contact history for the selected conversation
+      setContactDaysAgo(Math.floor(Math.random() * 5) + 1);
     } else {
       setMessages([]);
+      setContactDaysAgo(null);
     }
   }, [selectedConversationId]);
 
@@ -149,7 +153,7 @@ export default function AgentWorkspacePage() {
     };
     setMessages(prev => [...prev, msg]);
     // Update lastMessageSnippet for the current conversation
-    setConversations(prevConvs => prevConvs.map(conv => 
+    setConversations(prevConvs => prevConvs.map(conv =>
       conv.id === selectedConversationId ? { ...conv, lastMessageSnippet: newMessage, timestamp: msg.timestamp } : conv
     ));
     setNewMessage("");
@@ -170,7 +174,7 @@ export default function AgentWorkspacePage() {
       setIsLoadingAi(false);
     }
   };
-  
+
   const handleSummarizeConversation = async () => {
     if (!selectedConversationId) return;
     setIsLoadingAi(true);
@@ -226,12 +230,12 @@ export default function AgentWorkspacePage() {
         setActiveFilter("all");
     }
   };
-  
+
   const handleUnarchiveAction = () => {
     if (!selectedConversationId || selectedConversation?.status !== "archived") return;
     // For simplicity, unarchiving sets it to 'active' and clears agent.
     // A more complex logic might revert to its previous status or make it assignable.
-    updateConversationStatus(selectedConversationId, "active", ""); 
+    updateConversationStatus(selectedConversationId, "active", "");
     toast({ title: "Conversation Unarchived" });
     setActiveFilter("all"); // Switch view to 'all' to see the unarchived item
   };
@@ -357,7 +361,7 @@ export default function AgentWorkspacePage() {
                       </div>
                     )}
                     {msg.type === "interactive" && msg.buttons && (
-                      <div className="mt-1"> {/* Container for interactive message content + buttons */}
+                       <div className="mt-1"> {/* Container for interactive message content + buttons */}
                         {msg.content && <p className="text-sm mb-2">{msg.content}</p>}
                         <div className="flex flex-col gap-2 pt-1"> {/* Container for buttons only */}
                           {msg.buttons.map(btn => (
@@ -422,7 +426,7 @@ export default function AgentWorkspacePage() {
              {(selectedConversation.status === "closed" || selectedConversation.status === "archived") && (
                 <footer className="p-4 border-t bg-background text-center">
                     <p className="text-sm text-muted-foreground">
-                        This conversation is {selectedConversation.status}. 
+                        This conversation is {selectedConversation.status}.
                         {selectedConversation.status === "archived" ? " You can unarchive it to continue." : " No further actions can be taken."}
                     </p>
                 </footer>
@@ -488,7 +492,11 @@ export default function AgentWorkspacePage() {
                 <ul className="space-y-2 text-xs text-muted-foreground list-disc list-inside">
                     <li>Viewed pricing page - 2 hours ago</li>
                     <li>Downloaded brochure - 1 day ago</li>
-                    <li>First contact via {selectedConversation.channel} - {Math.floor(Math.random() * 5) + 1} days ago</li>
+                    {contactDaysAgo !== null ? (
+                      <li>First contact via {selectedConversation.channel} - {contactDaysAgo} {contactDaysAgo === 1 ? 'day' : 'days'} ago</li>
+                    ) : (
+                      <li>Loading contact history...</li>
+                    )}
                 </ul>
               </div>
                <Separator />
@@ -515,5 +523,3 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
-
-    
