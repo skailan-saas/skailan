@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState, useEffect, type FormEvent } from "react";
+import React, { useState, useEffect, type FormEvent, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,23 +16,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlusCircle, Edit, Trash2, MoreHorizontal, UserPlus, ShieldCheck, Search, Users as UsersIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/lib/supabase/client";
+// import { supabase } from "@/lib/supabase/client"; // Not directly used for UI demo logic
 import { useToast } from "@/hooks/use-toast";
 
-// Types (can be moved to a types file)
+// Types
 type Role = {
   id: string;
   name: string;
   description: string;
-  userCount?: number; // Optional, could be derived
+  // userCount is now derived dynamically
 };
 
 type UserInTenant = {
-  id: string; // Supabase auth user ID
-  name: string; 
+  id: string;
+  name: string;
   email: string;
   role: string; // Role name
-  avatarUrl?: string; 
+  avatarUrl?: string;
   dataAiHint?: string;
 };
 
@@ -55,10 +56,10 @@ const mockPermissions: Permission[] = [
 ];
 
 const initialSystemRoles: Role[] = [
-  { id: "1", name: "Administrator", description: "Full access to tenant features and settings.", userCount: 1 },
-  { id: "2", name: "Agent Supervisor", description: "Manages agents and reviews conversations within the tenant.", userCount: 0 },
-  { id: "3", name: "Agent", description: "Handles customer conversations within the tenant.", userCount: 0 },
-  { id: "4", name: "Read-Only Analyst", description: "Views analytics and reports for the tenant.", userCount: 0 },
+  { id: "role-admin", name: "Administrator", description: "Full access to tenant features and settings." },
+  { id: "role-supervisor", name: "Agent Supervisor", description: "Manages agents and reviews conversations within the tenant." },
+  { id: "role-agent", name: "Agent", description: "Handles customer conversations within the tenant." },
+  { id: "role-analyst", name: "Read-Only Analyst", description: "Views analytics and reports for the tenant." },
 ];
 
 const initialUsers: UserInTenant[] = [
@@ -69,12 +70,12 @@ const initialUsers: UserInTenant[] = [
 export default function RolesPage() {
   const { toast } = useToast();
   const [roles, setRoles] = useState<Role[]>(initialSystemRoles);
-  const [users, setUsers] = useState<UserInTenant[]>(initialUsers); 
-  const [selectedRole, setSelectedRole] = useState<Role | null>(roles[0] || null);
-  
+  const [users, setUsers] = useState<UserInTenant[]>(initialUsers);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(roles.length > 0 ? roles[0] : null);
+
   const [isInviteUserOpen, setIsInviteUserOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<string>(roles[0]?.id || "");
+  const [inviteRole, setInviteRole] = useState<string>(roles.length > 0 ? roles[0].id : "");
 
   const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
@@ -83,13 +84,13 @@ export default function RolesPage() {
   const [isRemoveUserConfirmOpen, setIsRemoveUserConfirmOpen] = useState(false);
   const [userToRemove, setUserToRemove] = useState<UserInTenant | null>(null);
 
-  const handleInviteUser = async (e: FormEvent<HTMLFormElement>) => {
+  const handleInviteUser = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inviteEmail || !inviteRole) {
         toast({ title: "Missing Information", description: "Please provide email and role.", variant: "destructive" });
         return;
     }
-    
+
     const selectedRoleDetails = roles.find(r => r.id === inviteRole);
     if (!selectedRoleDetails) {
         toast({ title: "Invalid Role", description: "Selected role not found.", variant: "destructive" });
@@ -98,17 +99,17 @@ export default function RolesPage() {
 
     const newUser: UserInTenant = {
         id: `user-${Date.now()}`,
-        name: inviteEmail.split('@')[0], // Placeholder name
+        name: inviteEmail.split('@')[0] || "New User",
         email: inviteEmail,
-        role: selectedRoleDetails.name,
+        role: selectedRoleDetails.name, // Store role name
         avatarUrl: `https://placehold.co/40x40.png`,
-        dataAiHint: "new user"
+        dataAiHint: "new user avatar"
     };
     setUsers(prev => [...prev, newUser]);
 
     toast({ title: "Simulated Invitation", description: `User ${inviteEmail} invited as ${selectedRoleDetails.name}. Backend implementation needed.`});
     setInviteEmail("");
-    setInviteRole(roles[0]?.id || "");
+    setInviteRole(roles.length > 0 ? roles[0].id : "");
     setIsInviteUserOpen(false);
   };
 
@@ -118,31 +119,30 @@ export default function RolesPage() {
       toast({ title: "Role Name Required", description: "Please enter a name for the new role.", variant: "destructive" });
       return;
     }
-    const newRole: Role = {
-      id: `role-${Date.now()}`, 
+    const newRoleToAdd: Role = {
+      id: `role-${Date.now()}`,
       name: newRoleName,
       description: newRoleDescription,
-      userCount: 0,
     };
-    setRoles(prev => [...prev, newRole]);
+    setRoles(prev => [...prev, newRoleToAdd]);
     toast({ title: "Role Added", description: `Role "${newRoleName}" has been added.` });
     setNewRoleName("");
     setNewRoleDescription("");
     setIsAddRoleOpen(false);
   };
 
-  const triggerRemoveUserConfirmation = (user: UserInTenant) => {
+  const triggerRemoveUserConfirmation = useCallback((user: UserInTenant) => {
     setUserToRemove(user);
     setIsRemoveUserConfirmOpen(true);
-  };
+  }, []);
 
-  const confirmRemoveUser = () => {
+  const confirmRemoveUser = useCallback(() => {
     if (!userToRemove) return;
     setUsers(prevUsers => prevUsers.filter(u => u.id !== userToRemove.id));
     toast({ title: "User Removed (Demo)", description: `User ${userToRemove.email} removed from tenant.` });
     setUserToRemove(null);
     setIsRemoveUserConfirmOpen(false);
-  };
+  }, [userToRemove, toast, setUsers, setIsRemoveUserConfirmOpen]);
 
   return (
     <ScrollArea className="h-[calc(100vh-4rem)]">
@@ -181,7 +181,7 @@ export default function RolesPage() {
                   </Select>
                 </div>
                 <DialogFooter>
-                  <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                  <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
                   <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Send Invitation</Button>
                 </DialogFooter>
               </form>
@@ -207,7 +207,7 @@ export default function RolesPage() {
                         <Input id="newRoleDescription" placeholder="Briefly describe this role's purpose" value={newRoleDescription} onChange={e => setNewRoleDescription(e.target.value)}/>
                     </div>
                     <DialogFooter>
-                        <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                        <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
                         <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Create Role</Button>
                     </DialogFooter>
                 </form>
@@ -238,7 +238,7 @@ export default function RolesPage() {
                                 <span className="font-medium block">{role.name}</span>
                                 <span className="text-xs text-muted-foreground block truncate">{role.description}</span>
                                 <span className="text-xs text-muted-foreground">
-                                    {(users.filter(u => u.role === role.name).length) || role.userCount || 0} users
+                                    {(users.filter(u => u.role === role.name).length)} users
                                 </span>
                             </div>
                             <DropdownMenu>
@@ -246,7 +246,7 @@ export default function RolesPage() {
                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => setSelectedRole(role); /* TODO: Open edit role dialog */}}><Edit className="mr-2 h-4 w-4" /> Edit Role Details</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => { /* TODO: Open edit role dialog */ setSelectedRole(role);}}><Edit className="mr-2 h-4 w-4" /> Edit Role Details</DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => setSelectedRole(role)}><ShieldCheck className="mr-2 h-4 w-4" /> Edit Permissions</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -274,7 +274,7 @@ export default function RolesPage() {
                     <div className="space-y-2">
                     {permissionsInCategory.map(permission => (
                         <div key={permission.id} className="flex items-start p-3 border rounded-md hover:bg-muted/50">
-                            <Checkbox id={`perm-${permission.id}`} className="mr-3 mt-1" defaultChecked={Math.random() > 0.5} /> 
+                            <Checkbox id={`perm-${permission.id}`} className="mr-3 mt-1" defaultChecked={Math.random() > 0.5} />
                             <div className="grid gap-1.5 leading-none">
                                 <Label htmlFor={`perm-${permission.id}`} className="font-medium cursor-pointer">
                                 {permission.name}
@@ -297,7 +297,7 @@ export default function RolesPage() {
           )}
         </Card>
       </div>
-      
+
       <Card className="shadow-lg">
         <CardHeader className="border-b p-4 flex flex-row items-center justify-between">
           <div>
@@ -346,7 +346,9 @@ export default function RolesPage() {
                         <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Change Role</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { /* TODO: Open change role dialog */ }}>
+                            <Edit className="mr-2 h-4 w-4" /> Change Role
+                        </DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => triggerRemoveUserConfirmation(user)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Remove from Tenant
                         </DropdownMenuItem>
@@ -361,19 +363,18 @@ export default function RolesPage() {
         </CardContent>
       </Card>
 
-      {/* Remove User Confirmation Dialog */}
       <AlertDialog open={isRemoveUserConfirmOpen} onOpenChange={setIsRemoveUserConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to remove this user?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will remove user{" "}
-              <strong>{userToRemove?.email}</strong> from the tenant. They will
+              <strong>{userToRemove?.email || 'this user'}</strong> from the tenant. They will
               lose access.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setUserToRemove(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {setUserToRemove(null); setIsRemoveUserConfirmOpen(false);}} type="button">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmRemoveUser} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
               Remove User
             </AlertDialogAction>
@@ -385,4 +386,3 @@ export default function RolesPage() {
     </ScrollArea>
   );
 }
-
