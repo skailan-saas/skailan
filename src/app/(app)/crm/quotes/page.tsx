@@ -10,13 +10,39 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays } from "lucide-react";
+import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState, type FormEvent, useEffect } from "react";
+import { useState, type FormEvent, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "CANCELED"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
+
+// Simplified Product interface for quotes page - in a real app, this would come from a shared store/API
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  type: "PRODUCTO" | "SERVICIO";
+}
+
+const mockProducts: Product[] = [
+  { id: "prod-1", name: "Premium Website Development", price: 5000, type: "SERVICIO" },
+  { id: "prod-2", name: "Wireless Noise-Cancelling Headphones", price: 199.99, type: "PRODUCTO" },
+  { id: "prod-3", name: "Monthly SEO Consulting", price: 750, type: "SERVICIO"},
+  { id: "prod-4", name: "E-commerce Platform Setup", price: 3500, type: "SERVICIO"},
+  { id: "prod-5", name: "Graphic Design Package", price: 1200, type: "SERVICIO"},
+];
+
+
+interface QuoteLineItem {
+  id: string; // Unique ID for the line item itself
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
 
 interface Quote {
   id: string;
@@ -26,7 +52,8 @@ interface Quote {
   dateCreated: string;
   expiryDate?: string;
   status: QuoteStatus;
-  totalAmount: number;
+  lineItems: QuoteLineItem[];
+  totalAmount: number; // This will be calculated
 }
 
 const initialQuotesData: Quote[] = [
@@ -38,6 +65,10 @@ const initialQuotesData: Quote[] = [
     dateCreated: "2024-07-20",
     expiryDate: "2024-08-20",
     status: "SENT",
+    lineItems: [
+      { id: "qli-1-1", productId: "prod-1", productName: "Premium Website Development", quantity: 1, unitPrice: 5000, total: 5000 },
+      { id: "qli-1-2", productId: "prod-3", productName: "Monthly SEO Consulting", quantity: 1, unitPrice: 250, total: 250 },
+    ],
     totalAmount: 5250.00,
   },
   {
@@ -48,6 +79,10 @@ const initialQuotesData: Quote[] = [
     dateCreated: "2024-07-22",
     expiryDate: "2024-08-22",
     status: "ACCEPTED",
+    lineItems: [
+      { id: "qli-2-1", productId: "prod-2", productName: "Wireless Noise-Cancelling Headphones", quantity: 5, unitPrice: 199.99, total: 999.95 },
+      { id: "qli-2-2", productId: "prod-5", productName: "Graphic Design Package", quantity: 1, unitPrice: 800.55, total: 800.55 },
+    ],
     totalAmount: 1800.50,
   },
 ];
@@ -55,80 +90,123 @@ const initialQuotesData: Quote[] = [
 export default function CrmQuotesPage() {
   const { toast } = useToast();
   const [quotes, setQuotes] = useState<Quote[]>(initialQuotesData);
-  const [isAddQuoteDialogOpen, setIsAddQuoteDialogOpen] = useState(false);
-  const [isEditQuoteDialogOpen, setIsEditQuoteDialogOpen] = useState(false);
+  const [isAddOrEditQuoteDialogOpen, setIsAddOrEditQuoteDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
 
-  // Form state for adding
-  const [newQuoteLeadName, setNewQuoteLeadName] = useState("");
-  const [newQuoteExpiryDate, setNewQuoteExpiryDate] = useState("");
-  const [newQuoteStatus, setNewQuoteStatus] = useState<QuoteStatus>("DRAFT");
-  const [newQuoteTotalAmount, setNewQuoteTotalAmount] = useState<number | string>("");
+  // Form state for Add/Edit Dialog
+  const [currentLeadName, setCurrentLeadName] = useState("");
+  const [currentExpiryDate, setCurrentExpiryDate] = useState("");
+  const [currentStatus, setCurrentStatus] = useState<QuoteStatus>("DRAFT");
+  const [currentLineItems, setCurrentLineItems] = useState<QuoteLineItem[]>([]);
 
-  // Form state for editing
-  const [editFormQuoteLeadName, setEditFormQuoteLeadName] = useState("");
-  const [editFormQuoteExpiryDate, setEditFormQuoteExpiryDate] = useState("");
-  const [editFormQuoteStatus, setEditFormQuoteStatus] = useState<QuoteStatus>("DRAFT");
-  const [editFormQuoteTotalAmount, setEditFormQuoteTotalAmount] = useState<number | string>("");
+  // State for adding a new line item
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [itemQuantity, setItemQuantity] = useState<number | string>(1);
+  const [itemUnitPrice, setItemUnitPrice] = useState<number | string>("");
 
+  const calculatedTotalAmount = useMemo(() => {
+    return currentLineItems.reduce((sum, item) => sum + item.total, 0);
+  }, [currentLineItems]);
 
-  const resetAddQuoteForm = () => {
-    setNewQuoteLeadName("");
-    setNewQuoteExpiryDate("");
-    setNewQuoteStatus("DRAFT");
-    setNewQuoteTotalAmount("");
+  const resetDialogForm = () => {
+    setCurrentLeadName("");
+    setCurrentExpiryDate("");
+    setCurrentStatus("DRAFT");
+    setCurrentLineItems([]);
+    setSelectedProductId("");
+    setItemQuantity(1);
+    setItemUnitPrice("");
+    setEditingQuote(null);
   };
 
-  const handleAddQuoteSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const amount = parseFloat(String(newQuoteTotalAmount));
-    if (isNaN(amount) || amount <= 0) {
-      toast({ title: "Invalid Amount", description: "Please enter a valid total amount.", variant: "destructive" });
+  const handleProductSelectionChange = (productId: string) => {
+    setSelectedProductId(productId);
+    const product = mockProducts.find(p => p.id === productId);
+    if (product) {
+      setItemUnitPrice(product.price);
+    } else {
+      setItemUnitPrice("");
+    }
+  };
+
+  const handleAddLineItem = () => {
+    const product = mockProducts.find(p => p.id === selectedProductId);
+    const quantity = Number(itemQuantity);
+    const unitPrice = Number(itemUnitPrice);
+
+    if (!product || isNaN(quantity) || quantity <= 0 || isNaN(unitPrice) || unitPrice < 0) {
+      toast({ title: "Invalid Item", description: "Please select a product and enter valid quantity/price.", variant: "destructive" });
       return;
     }
-    const newQuoteToAdd: Quote = {
-      id: `quote-${Date.now()}`,
-      quoteNumber: `QT-${new Date().getFullYear()}-${String(quotes.length + 1).padStart(3, '0')}`,
-      dateCreated: new Date().toISOString().split('T')[0],
-      leadName: newQuoteLeadName,
-      expiryDate: newQuoteExpiryDate || undefined,
-      status: newQuoteStatus,
-      totalAmount: amount,
+    const newLineItem: QuoteLineItem = {
+      id: `qli-${Date.now()}`,
+      productId: product.id,
+      productName: product.name,
+      quantity,
+      unitPrice,
+      total: quantity * unitPrice,
     };
-    setQuotes(prevQuotes => [newQuoteToAdd, ...prevQuotes]);
-    toast({ title: "Quote Added", description: `Quote for ${newQuoteToAdd.leadName} has been added.` });
-    resetAddQuoteForm();
-    setIsAddQuoteDialogOpen(false);
+    setCurrentLineItems(prev => [...prev, newLineItem]);
+    // Reset line item form
+    setSelectedProductId("");
+    setItemQuantity(1);
+    setItemUnitPrice("");
   };
 
+  const handleRemoveLineItem = (itemId: string) => {
+    setCurrentLineItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  const handleSaveQuote = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!currentLeadName.trim()) {
+        toast({ title: "Missing Lead Name", description: "Please enter a name for the lead/customer.", variant: "destructive" });
+        return;
+    }
+    if (currentLineItems.length === 0) {
+        toast({ title: "No Line Items", description: "Please add at least one item to the quote.", variant: "destructive" });
+        return;
+    }
+
+    const quoteData: Omit<Quote, 'id' | 'quoteNumber' | 'dateCreated'> = {
+      leadName: currentLeadName,
+      expiryDate: currentExpiryDate || undefined,
+      status: currentStatus,
+      lineItems: currentLineItems,
+      totalAmount: calculatedTotalAmount,
+    };
+
+    if (editingQuote) { // Update existing quote
+      const updatedQuote: Quote = { ...editingQuote, ...quoteData };
+      setQuotes(prevQuotes => prevQuotes.map(q => q.id === editingQuote.id ? updatedQuote : q));
+      toast({ title: "Quote Updated", description: `Quote ${updatedQuote.quoteNumber} has been updated.` });
+    } else { // Add new quote
+      const newQuoteToAdd: Quote = {
+        id: `quote-${Date.now()}`,
+        quoteNumber: `QT-${new Date().getFullYear()}-${String(quotes.length + 1).padStart(3, '0')}`,
+        dateCreated: new Date().toISOString().split('T')[0],
+        ...quoteData,
+      };
+      setQuotes(prevQuotes => [newQuoteToAdd, ...prevQuotes]);
+      toast({ title: "Quote Added", description: `Quote for ${newQuoteToAdd.leadName} has been added.` });
+    }
+    
+    resetDialogForm();
+    setIsAddOrEditQuoteDialogOpen(false);
+  };
+  
   const openEditQuoteDialog = (quote: Quote) => {
     setEditingQuote(quote);
-    setEditFormQuoteLeadName(quote.leadName);
-    setEditFormQuoteExpiryDate(quote.expiryDate || "");
-    setEditFormQuoteStatus(quote.status);
-    setEditFormQuoteTotalAmount(quote.totalAmount);
-    setIsEditQuoteDialogOpen(true);
+    setCurrentLeadName(quote.leadName);
+    setCurrentExpiryDate(quote.expiryDate || "");
+    setCurrentStatus(quote.status);
+    setCurrentLineItems([...quote.lineItems]); // Create a new array copy
+    setIsAddOrEditQuoteDialogOpen(true);
   };
 
-  const handleEditQuoteSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!editingQuote) return;
-    const amount = parseFloat(String(editFormQuoteTotalAmount));
-    if (isNaN(amount) || amount <= 0) {
-      toast({ title: "Invalid Amount", description: "Please enter a valid total amount.", variant: "destructive" });
-      return;
-    }
-    const updatedQuote: Quote = {
-      ...editingQuote,
-      leadName: editFormQuoteLeadName,
-      expiryDate: editFormQuoteExpiryDate || undefined,
-      status: editFormQuoteStatus,
-      totalAmount: amount,
-    };
-    setQuotes(prevQuotes => prevQuotes.map(q => q.id === editingQuote.id ? updatedQuote : q));
-    toast({ title: "Quote Updated", description: `Quote ${updatedQuote.quoteNumber} has been updated.` });
-    setIsEditQuoteDialogOpen(false);
-    setEditingQuote(null);
+  const openAddQuoteDialog = () => {
+    resetDialogForm();
+    setIsAddOrEditQuoteDialogOpen(true);
   };
   
   const handleDeleteQuote = (quoteId: string) => {
@@ -145,88 +223,111 @@ export default function CrmQuotesPage() {
             Create, send, and track your sales quotes.
           </p>
         </div>
-        <Dialog open={isAddQuoteDialogOpen} onOpenChange={setIsAddQuoteDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <PlusCircle className="mr-2 h-4 w-4" /> Create New Quote
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[525px]">
-            <DialogHeader>
-              <DialogTitle>Create New Quote</DialogTitle>
-              <DialogDescription>Enter the details for the new sales quote.</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleAddQuoteSubmit}>
-              <div className="grid gap-4 py-4">
+        <Button onClick={openAddQuoteDialog} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+          <PlusCircle className="mr-2 h-4 w-4" /> Create New Quote
+        </Button>
+      </div>
+      
+      <Dialog open={isAddOrEditQuoteDialogOpen} onOpenChange={(isOpen) => {
+          if (!isOpen) resetDialogForm();
+          setIsAddOrEditQuoteDialogOpen(isOpen);
+        }}>
+        <DialogContent className="sm:max-w-[725px]">
+          <DialogHeader>
+            <DialogTitle>{editingQuote ? `Edit Quote: ${editingQuote.quoteNumber}` : "Create New Quote"}</DialogTitle>
+            <DialogDescription>Enter the details for the sales quote.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveQuote}>
+            <ScrollArea className="max-h-[65vh] p-1">
+              <div className="grid gap-4 py-4 pr-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="newQuoteLeadName" className="text-right col-span-1">Lead/Customer</Label>
-                  <Input id="newQuoteLeadName" value={newQuoteLeadName} onChange={(e) => setNewQuoteLeadName(e.target.value)} placeholder="e.g., Acme Corp" className="col-span-3" required />
+                  <Label htmlFor="currentLeadName" className="text-right col-span-1">Lead/Customer</Label>
+                  <Input id="currentLeadName" value={currentLeadName} onChange={(e) => setCurrentLeadName(e.target.value)} placeholder="e.g., Acme Corp" className="col-span-3" required />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="newQuoteExpiryDate" className="text-right col-span-1">Expiry Date</Label>
+                  <Label htmlFor="currentExpiryDate" className="text-right col-span-1">Expiry Date</Label>
                   <div className="col-span-3 relative">
                     <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="newQuoteExpiryDate" type="date" value={newQuoteExpiryDate} onChange={(e) => setNewQuoteExpiryDate(e.target.value)} className="pl-10" />
+                    <Input id="currentExpiryDate" type="date" value={currentExpiryDate} onChange={(e) => setCurrentExpiryDate(e.target.value)} className="pl-10" />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="newQuoteStatus" className="text-right col-span-1">Status</Label>
-                  <Select value={newQuoteStatus} onValueChange={(value: QuoteStatus) => setNewQuoteStatus(value)}>
+                  <Label htmlFor="currentStatus" className="text-right col-span-1">Status</Label>
+                  <Select value={currentStatus} onValueChange={(value: QuoteStatus) => setCurrentStatus(value)}>
                     <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
                     <SelectContent>{QUOTE_STATUSES.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="newQuoteTotalAmount" className="text-right col-span-1">Total ($)</Label>
-                  <Input id="newQuoteTotalAmount" type="number" value={newQuoteTotalAmount} onChange={(e) => setNewQuoteTotalAmount(e.target.value)} placeholder="e.g., 1500.00" className="col-span-3" required step="0.01" min="0"/>
-                </div>
-                <div className="col-span-4 text-sm text-muted-foreground text-center pt-2">Line item editor placeholder.</div>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddQuoteForm}>Cancel</Button></DialogClose>
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Quote</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-      
-      {/* Edit Quote Dialog */}
-      <Dialog open={isEditQuoteDialogOpen} onOpenChange={setIsEditQuoteDialogOpen}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle>Edit Quote: {editingQuote?.quoteNumber}</DialogTitle>
-            <DialogDescription>Update the details for this sales quote.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditQuoteSubmit}>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="editFormQuoteLeadName" className="text-right col-span-1">Lead/Customer</Label>
-                <Input id="editFormQuoteLeadName" value={editFormQuoteLeadName} onChange={(e) => setEditFormQuoteLeadName(e.target.value)} className="col-span-3" required />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="editFormQuoteExpiryDate" className="text-right col-span-1">Expiry Date</Label>
-                 <div className="col-span-3 relative">
-                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="editFormQuoteExpiryDate" type="date" value={editFormQuoteExpiryDate} onChange={(e) => setEditFormQuoteExpiryDate(e.target.value)} className="pl-10" />
+
+                {/* Line Items Section */}
+                <div className="col-span-4 space-y-3 pt-4 border-t mt-2">
+                  <h3 className="text-md font-semibold col-span-4">Line Items</h3>
+                  <div className="grid grid-cols-12 items-end gap-2 p-2 border rounded-md bg-muted/30">
+                    <div className="col-span-5">
+                      <Label htmlFor="selectedProduct">Product/Service</Label>
+                      <Select value={selectedProductId} onValueChange={handleProductSelectionChange}>
+                        <SelectTrigger id="selectedProduct"><SelectValue placeholder="Select item" /></SelectTrigger>
+                        <SelectContent>
+                          {mockProducts.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.type})</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2">
+                      <Label htmlFor="itemQuantity">Qty</Label>
+                      <Input id="itemQuantity" type="number" value={itemQuantity} onChange={e => setItemQuantity(e.target.value)} min="1" className="text-center"/>
+                    </div>
+                    <div className="col-span-3">
+                      <Label htmlFor="itemUnitPrice">Unit Price ($)</Label>
+                      <Input id="itemUnitPrice" type="number" value={itemUnitPrice} onChange={e => setItemUnitPrice(e.target.value)} step="0.01" min="0" />
+                    </div>
+                    <div className="col-span-2">
+                      <Button type="button" onClick={handleAddLineItem} className="w-full bg-primary/80 hover:bg-primary/70 text-primary-foreground">
+                        <PackagePlus className="h-4 w-4 sm:mr-2"/> <span className="hidden sm:inline">Add</span>
+                      </Button>
+                    </div>
                   </div>
+                  
+                  {currentLineItems.length > 0 && (
+                    <div className="col-span-4 mt-2">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Product/Service</TableHead>
+                            <TableHead className="text-center w-[70px]">Qty</TableHead>
+                            <TableHead className="text-right w-[100px]">Unit Price</TableHead>
+                            <TableHead className="text-right w-[100px]">Total</TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {currentLineItems.map(item => (
+                            <TableRow key={item.id}>
+                              <TableCell className="font-medium">{item.productName}</TableCell>
+                              <TableCell className="text-center">{item.quantity}</TableCell>
+                              <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-semibold">${item.total.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveLineItem(item.id)} className="text-destructive hover:text-destructive/80">
+                                  <Trash2 className="h-4 w-4"/>
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                  <div className="col-span-4 text-right font-bold text-lg mt-4">
+                    Total Quote Amount: ${calculatedTotalAmount.toFixed(2)}
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="editFormQuoteStatus" className="text-right col-span-1">Status</Label>
-                <Select value={editFormQuoteStatus} onValueChange={(value: QuoteStatus) => setEditFormQuoteStatus(value)}>
-                  <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
-                  <SelectContent>{QUOTE_STATUSES.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="editFormQuoteTotalAmount" className="text-right col-span-1">Total ($)</Label>
-                <Input id="editFormQuoteTotalAmount" type="number" value={editFormQuoteTotalAmount} onChange={(e) => setEditFormQuoteTotalAmount(e.target.value)} className="col-span-3" required step="0.01" min="0"/>
-              </div>
-               <div className="col-span-4 text-sm text-muted-foreground text-center pt-2">Line item editor placeholder.</div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditQuoteDialogOpen(false)}>Cancel</Button></DialogClose>
-              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
+            </ScrollArea>
+            <DialogFooter className="pt-4 border-t">
+              <DialogClose asChild><Button type="button" variant="outline" onClick={resetDialogForm}>Cancel</Button></DialogClose>
+              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                {editingQuote ? "Save Changes" : "Save Quote"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -291,8 +392,8 @@ export default function CrmQuotesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Eye className="mr-2 h-4 w-4" /> View Quote</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Eye className="mr-2 h-4 w-4" /> View/Edit Quote</DropdownMenuItem>
+                          {/* <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem> */}
                           <DropdownMenuItem><Send className="mr-2 h-4 w-4" /> Send Quote</DropdownMenuItem>
                           <DropdownMenuItem><Download className="mr-2 h-4 w-4" /> Download PDF</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteQuote(quote.id)}>
@@ -323,6 +424,4 @@ export default function CrmQuotesPage() {
     </div>
   );
 }
-    
-
     
