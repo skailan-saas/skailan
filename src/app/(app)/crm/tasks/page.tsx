@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, GripVertical, Tag, Eye, Edit, Trash2 } from "lucide-react";
 import { useState, type FC, type FormEvent, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 const TASK_STATUSES = ["PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"] as const;
@@ -109,7 +109,7 @@ const TaskCard: FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
       {...attributes}
       className={cn(
         "mb-3 shadow-md hover:shadow-lg transition-shadow bg-card cursor-grab",
-        isDragging && "opacity-60 z-50 shadow-2xl"
+        isDragging && "opacity-60" // Simplified dragging style
       )}
     >
       <CardHeader className="p-3 pb-2">
@@ -156,7 +156,7 @@ const TaskCard: FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
         {task.assignee ? (
           <div className="flex items-center gap-2">
             <Avatar className="h-6 w-6">
-              <AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"} />
+              <AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"}/>
               <AvatarFallback className="text-xs">{task.assignee.avatarFallback}</AvatarFallback>
             </Avatar>
             <span className="text-xs text-muted-foreground">{task.assignee.name}</span>
@@ -198,7 +198,7 @@ export default function CrmTasksPage() {
   const [editFormTaskTags, setEditFormTaskTags] = useState("");
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Added activation constraint
     useSensor(KeyboardSensor)
   );
 
@@ -216,7 +216,7 @@ export default function CrmTasksPage() {
     const newTaskToAdd: Task = {
       id: `task-${Date.now()}`, title: newTaskTitle, description: newTaskDescription || undefined,
       status: newTaskStatus, dueDate: newTaskDueDate || undefined, priority: newTaskPriority || undefined,
-      assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${newTaskAssigneeName[0]}`, avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase(), dataAiHint: "avatar person"} : undefined,
+      assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${newTaskAssigneeName[0]}`, dataAiHint: "avatar person", avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
       tags: newTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
     setTasks(prevTasks => [...prevTasks, newTaskToAdd]);
@@ -243,7 +243,7 @@ export default function CrmTasksPage() {
     const updatedTask: Task = {
       ...editingTask, title: editFormTaskTitle, description: editFormTaskDescription || undefined,
       status: editFormTaskStatus, dueDate: editFormTaskDueDate || undefined, priority: editFormTaskPriority || undefined,
-      assignee: editFormTaskAssigneeName ? { name: editFormTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${editFormTaskAssigneeName[0]}`, avatarFallback: editFormTaskAssigneeName.substring(0,2).toUpperCase(), dataAiHint: "avatar person"} : undefined,
+      assignee: editFormTaskAssigneeName ? { name: editFormTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${editFormTaskAssigneeName[0]}`, dataAiHint: "avatar person", avatarFallback: editFormTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
       tags: editFormTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
     setTasks(prevTasks => prevTasks.map(t => t.id === editingTask.id ? updatedTask : t));
@@ -258,29 +258,39 @@ export default function CrmTasksPage() {
 
   const handleTaskDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event))); // Log entire event
+    console.log("Active ID:", active.id);
+    console.log("Over ID:", over ? over.id : null);
 
-    if (!over) return; // Dropped outside a valid droppable
+    if (over && active.id !== over.id) { 
+      const taskId = active.id as string;
+      const targetStatus = over.id as TaskStatus;
 
-    const taskId = active.id as string;
-    const targetStatus = over.id as TaskStatus; // over.id is the statusKey of the column
+      console.log(`Attempting to move task ${taskId} to status ${targetStatus}`);
 
-    const activeTask = tasks.find(task => task.id === taskId);
-
-    if (activeTask && activeTask.status !== targetStatus) {
-      setTasks((prevTasks) =>
-        prevTasks.map((task) =>
-          task.id === taskId ? { ...task, status: targetStatus } : task
-        )
-      );
-      toast({
-        title: "Task Status Updated",
-        description: `Task "${activeTask.name}" moved to ${statusToColumnTitle[targetStatus]}.`,
+      setTasks((prevTasks) => {
+        const taskToMove = prevTasks.find(t => t.id === taskId);
+        if (taskToMove && taskToMove.status !== targetStatus) {
+          console.log(`Task ${taskId} current status: ${taskToMove.status}, target status: ${targetStatus}. Updating state.`);
+          const updatedTasks = prevTasks.map((task) =>
+            task.id === taskId ? { ...task, status: targetStatus } : task
+          );
+          toast({ 
+            title: "Task Status Updated",
+            description: `Task "${taskToMove.title}" moved to ${statusToColumnTitle[targetStatus]}.`,
+          });
+          return updatedTasks;
+        }
+        console.log(`Task ${taskId} not moved. Current status: ${taskToMove?.status}, target status: ${targetStatus}.`);
+        return prevTasks; 
       });
+    } else {
+      console.log("Drag ended but no valid 'over' target or task was dropped in the same column.");
     }
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTaskDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleTaskDragEnd}>
       <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
           <div>

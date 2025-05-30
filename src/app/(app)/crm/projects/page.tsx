@@ -16,13 +16,13 @@ import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, GripVertical, Eye,
 import { useState, type FC, type FormEvent, useEffect } from "react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
 type ProjectStatus = typeof PROJECT_STATUSES[number];
 
-interface ProjectTeamMember { name: string; avatarUrl: string; avatarFallback: string; dataAiHint?: string }
+interface ProjectTeamMember { name: string; avatarUrl: string; avatarFallback: string; dataAiHint?: string; }
 interface Project {
   id: string;
   name: string;
@@ -80,7 +80,7 @@ const ProjectCard: FC<ProjectCardProps> = ({ project, onEdit, onDelete }) => {
       {...attributes}
       className={cn(
         "mb-3 shadow-md hover:shadow-lg transition-shadow bg-card cursor-grab",
-        isDragging && "opacity-60 z-50 shadow-2xl"
+        isDragging && "opacity-60" // Simplified dragging style
       )}
     >
       <CardHeader className="p-3 pb-2">
@@ -109,7 +109,7 @@ const ProjectCard: FC<ProjectCardProps> = ({ project, onEdit, onDelete }) => {
           <div className="flex items-center -space-x-2">
             {project.team.map(member => (
               <Avatar key={member.name} className="h-6 w-6 border-2 border-background">
-                <AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint={member.dataAiHint || "avatar person"} />
+                <AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint={member.dataAiHint || "avatar person"}/>
                 <AvatarFallback className="text-xs">{member.avatarFallback}</AvatarFallback>
               </Avatar>
             ))}
@@ -162,7 +162,7 @@ export default function CrmProjectsPage() {
   const [editFormProjectDeadline, setEditFormProjectDeadline] = useState("");
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Added activation constraint
     useSensor(KeyboardSensor)
   );
 
@@ -179,7 +179,7 @@ export default function CrmProjectsPage() {
         return;
     }
     const teamMembers: ProjectTeamMember[] = newProjectTeam.split(',').map(name => name.trim()).filter(name => name)
-        .map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png?text=${name[0]}`, avatarFallback: name.substring(0,2).toUpperCase(), dataAiHint: "avatar person"}));
+        .map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png?text=${name[0]}`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
     const newProjectToAdd: Project = {
       id: `proj-${Date.now()}`, name: newProjectName, description: newProjectDescription || undefined,
       status: newProjectStatus, clientName: newProjectClientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
@@ -208,7 +208,7 @@ export default function CrmProjectsPage() {
         return;
     }
     const teamMembers: ProjectTeamMember[] = editFormProjectTeam.split(',').map(name => name.trim()).filter(name => name)
-        .map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png?text=${name[0]}`, avatarFallback: name.substring(0,2).toUpperCase(), dataAiHint: "avatar person"}));
+        .map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png?text=${name[0]}`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
     const updatedProject: Project = {
       ...editingProject, name: editFormProjectName, description: editFormProjectDescription || undefined,
       status: editFormProjectStatus, clientName: editFormProjectClientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
@@ -226,29 +226,39 @@ export default function CrmProjectsPage() {
 
   const handleProjectDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event))); // Log entire event
+    console.log("Active ID:", active.id);
+    console.log("Over ID:", over ? over.id : null);
 
-    if (!over) return;
+    if (over && active.id !== over.id) {
+      const projectId = active.id as string;
+      const targetStatus = over.id as ProjectStatus;
 
-    const projectId = active.id as string;
-    const targetStatus = over.id as ProjectStatus;
+      console.log(`Attempting to move project ${projectId} to status ${targetStatus}`);
 
-    const activeProject = projects.find(project => project.id === projectId);
-
-    if (activeProject && activeProject.status !== targetStatus) {
-      setProjects((prevProjects) =>
-        prevProjects.map((project) =>
-          project.id === projectId ? { ...project, status: targetStatus } : project
-        )
-      );
-      toast({
-        title: "Project Status Updated",
-        description: `Project "${activeProject.name}" moved to ${statusToColumnTitle[targetStatus]}.`,
+      setProjects((prevProjects) => {
+        const projectToMove = prevProjects.find(p => p.id === projectId);
+        if (projectToMove && projectToMove.status !== targetStatus) {
+          console.log(`Project ${projectId} current status: ${projectToMove.status}, target status: ${targetStatus}. Updating state.`);
+          const updatedProjects = prevProjects.map((project) =>
+            project.id === projectId ? { ...project, status: targetStatus } : project
+          );
+          toast({
+            title: "Project Status Updated",
+            description: `Project "${projectToMove.name}" moved to ${statusToColumnTitle[targetStatus]}.`,
+          });
+          return updatedProjects;
+        }
+        console.log(`Project ${projectId} not moved. Current status: ${projectToMove?.status}, target status: ${targetStatus}.`);
+        return prevProjects;
       });
+    } else {
+      console.log("Drag ended but no valid 'over' target or project was dropped in the same column.");
     }
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleProjectDragEnd}>
       <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
           <div>
