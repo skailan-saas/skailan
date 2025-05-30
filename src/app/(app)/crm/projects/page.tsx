@@ -3,7 +3,8 @@
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; 
+// Removed Card import as we replace it with a div for debugging
+// import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -59,40 +60,46 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
   return (
     <Draggable draggableId={project.id} index={index}>
       {(provided, snapshot) => (
-        <Card
+        <div // Replaced Card with div for dnd debugging
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
+            "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card", // Mimic Card styling
             snapshot.isDragging && "shadow-xl opacity-80"
           )}
-          style={{ ...provided.draggableProps.style }}
+          style={{
+            ...provided.draggableProps.style, // This includes the transform for movement
+            touchAction: 'none',
+          }}
         >
-          <CardHeader className="p-3 pb-2">
-            <div className="flex justify-between items-start">
-              <CardTitle className="text-sm font-semibold leading-tight">{project.name}</CardTitle>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onEdit(project)}><Eye className="mr-2 h-4 w-4" /> View/Edit Project</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(project.id)}><Trash2 className="mr-2 h-4 w-4"/> Delete Project</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          {/* Simplified content for debugging drag */}
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="text-sm font-semibold leading-tight">{project.name}</h4>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(project)}><Eye className="mr-2 h-4 w-4" /> View/Edit Project</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(project.id)}><Trash2 className="mr-2 h-4 w-4"/> Delete Project</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {project.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{project.description}</p>}
+          {project.clientName && <p className="text-xs text-muted-foreground mb-1">Cliente: <span className="font-medium text-foreground">{project.clientName}</span></p>}
+          {project.deadline && <p className="text-xs text-muted-foreground flex items-center mb-1"><CalendarDays className="h-3.5 w-3.5 mr-1"/>Fecha Límite: {project.deadline}</p>}
+          {project.team && project.team.length > 0 && (
+            <div className="flex items-center -space-x-2 mb-2">
+              {project.team.map(member => (<Avatar key={member.name} className="h-6 w-6 border-2 border-background"><AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint={member.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{member.avatarFallback}</AvatarFallback></Avatar>))}
+              <span className="pl-3 text-xs text-muted-foreground">({project.team.length} {project.team.length === 1 ? 'miembro' : 'miembros'})</span>
             </div>
-            {project.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{project.description}</p>}
-          </CardHeader>
-          <CardContent className="p-3 pt-1 space-y-2">
-            {project.clientName && <p className="text-xs text-muted-foreground">Cliente: <span className="font-medium text-foreground">{project.clientName}</span></p>}
-            {project.deadline && <p className="text-xs text-muted-foreground flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1"/>Fecha Límite: {project.deadline}</p>}
-            {project.team && project.team.length > 0 && (
-              <div className="flex items-center -space-x-2">
-                {project.team.map(member => (<Avatar key={member.name} className="h-6 w-6 border-2 border-background"><AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint={member.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{member.avatarFallback}</AvatarFallback></Avatar>))}
-                <span className="pl-3 text-xs text-muted-foreground">({project.team.length} {project.team.length === 1 ? 'miembro' : 'miembros'})</span>
-              </div>)}
-            {project.progress !== undefined && (<div><div className="flex justify-between items-center mb-1"><p className="text-xs text-muted-foreground">Progreso:</p><p className="text-xs font-semibold text-primary">{project.progress}%</p></div><Progress value={project.progress} className="h-2" /></div>)}
-          </CardContent>
-        </Card>
+          )}
+          {project.progress !== undefined && (
+            <div>
+                <div className="flex justify-between items-center mb-1"><p className="text-xs text-muted-foreground">Progreso:</p><p className="text-xs font-semibold text-primary">{project.progress}%</p></div>
+                <Progress value={project.progress} className="h-2" />
+            </div>
+          )}
+        </div>
       )}
     </Draggable>
   );
@@ -106,7 +113,7 @@ interface ProjectKanbanBoardProps {
   onDeleteProject: (projectId: string) => void;
 }
 
-const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = React.memo(({ projectsByStatus, onDragEnd, onEditProject, onDeleteProject }) => {
+const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projectsByStatus, onDragEnd, onEditProject, onDeleteProject }) => {
   const [isClient, setIsClient] = useState(false);
   useEffect(() => { setIsClient(true); }, []);
 
@@ -121,12 +128,12 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = React.memo(({ projectsBy
             {PROJECT_STATUSES.map((statusKey) => (
               <Droppable key={statusKey} droppableId={statusKey} type="PROJECT" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
                 {(provided, snapshot) => (
-                  <div
+                  <div // Replaced Card with div for column
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={cn(
                         "w-[320px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]", 
-                        snapshot.isDraggingOver && "bg-primary/10"
+                        snapshot.isDraggingOver && "bg-primary/10 border-primary"
                     )}
                   >
                     <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
@@ -148,7 +155,7 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = React.memo(({ projectsBy
         </div>
       </DragDropContext>
   );
-});
+};
 ProjectKanbanBoard.displayName = 'ProjectKanbanBoard';
 
 
@@ -208,7 +215,7 @@ export default function CrmProjectsPage() {
     });
     toast({ title: "Project Added", description: `Project "${newProjectToAdd.name}" added.` });
     resetAddProjectForm(); setIsAddProjectDialogOpen(false);
-  }, [newProjectName, newProjectDescription, newProjectStatus, newProjectClientName, newProjectTeam, newProjectProgress, newProjectDeadline, resetAddProjectForm, toast]);
+  }, [newProjectName, newProjectDescription, newProjectStatus, newProjectClientName, newProjectTeam, newProjectProgress, newProjectDeadline, resetAddProjectForm, toast, setProjectsByStatus]);
 
   const openEditProjectDialog = useCallback((project: Project) => {
     setEditingProject(project);
@@ -234,29 +241,14 @@ export default function CrmProjectsPage() {
 
     setProjectsByStatus(prev => {
       const newProjectsByStatus = { ...prev };
-      // Remove from old status list if status changed
-      if (editingProject.status !== updatedProject.status) {
-        newProjectsByStatus[editingProject.status] = (newProjectsByStatus[editingProject.status] || []).filter(p => p.id !== editingProject.id);
-      }
-      
-      // Add/Update in new status list
-      const targetList = newProjectsByStatus[updatedProject.status] || [];
-      const projectIndex = targetList.findIndex(p => p.id === updatedProject.id);
-      
-      if (editingProject.status === updatedProject.status && projectIndex > -1) { 
-        targetList[projectIndex] = updatedProject;
-      } else if (editingProject.status !== updatedProject.status) {
-         targetList.push(updatedProject);
-      } else if (projectIndex === -1) { // Should not happen if status didn't change, but as fallback
-         targetList.push(updatedProject);
-      }
-      newProjectsByStatus[updatedProject.status] = [...targetList];
+      newProjectsByStatus[editingProject.status] = (newProjectsByStatus[editingProject.status] || []).filter(p => p.id !== editingProject.id);
+      newProjectsByStatus[updatedProject.status] = [...(newProjectsByStatus[updatedProject.status] || []), updatedProject];
       return newProjectsByStatus;
     });
 
     toast({ title: "Project Updated", description: `Project "${updatedProject.name}" updated.` });
     setIsEditProjectDialogOpen(false); setEditingProject(null);
-  }, [editingProject, editFormProjectName, editFormProjectDescription, editFormProjectStatus, editFormProjectClientName, editFormProjectTeam, editFormProjectProgress, editFormProjectDeadline, toast]);
+  }, [editingProject, editFormProjectName, editFormProjectDescription, editFormProjectStatus, editFormProjectClientName, editFormProjectTeam, editFormProjectProgress, editFormProjectDeadline, toast, setProjectsByStatus]);
 
   const handleDeleteProject = useCallback((projectId: string) => {
     let projectToDelete: Project | undefined;
@@ -276,11 +268,11 @@ export default function CrmProjectsPage() {
      if (projectToDelete) {
       toast({ title: "Project Deleted (Demo)", description: `Project "${projectToDelete.name}" removed.` });
     }
-  }, [toast]);
+  }, [toast, setProjectsByStatus]);
 
   const onDragEndProjects = useCallback((result: DropResult) => {
     const { source, destination } = result;
-    console.log("DragEnd Result:", JSON.parse(JSON.stringify(result)));
+    console.log("DragEnd Result Projects:", JSON.parse(JSON.stringify(result)));
 
     if (!destination) {
       console.log("No destination, drag cancelled or invalid.");
@@ -289,34 +281,30 @@ export default function CrmProjectsPage() {
 
     const sourceStatus = source.droppableId as ProjectStatus;
     const destinationStatus = destination.droppableId as ProjectStatus;
-    const projectId = result.draggableId;
-
+    
     setProjectsByStatus((prevProjectsByStatus) => {
-      const newProjectsByStatus = { ...prevProjectsByStatus };
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prevProjectsByStatus));
       const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
-      const destinationProjects = (sourceStatus === destinationStatus) 
-          ? sourceProjects 
-          : Array.from(newProjectsByStatus[destinationStatus] || []);
-      
       const [movedProject] = sourceProjects.splice(source.index, 1);
 
       if (!movedProject) {
         console.warn("Could not find moved project in source list.");
-        return prevProjectsByStatus; // Return previous state if project not found
+        return prevProjectsByStatus;
       }
+      
+      movedProject.status = destinationStatus;
 
       if (sourceStatus === destinationStatus) {
-        destinationProjects.splice(destination.index, 0, movedProject);
-        newProjectsByStatus[destinationStatus] = destinationProjects;
+        sourceProjects.splice(destination.index, 0, movedProject);
+        newProjectsByStatus[destinationStatus] = sourceProjects;
       } else {
-        movedProject.status = destinationStatus;
+        const destinationProjects = Array.from(newProjectsByStatus[destinationStatus] || []);
         destinationProjects.splice(destination.index, 0, movedProject);
-        
         newProjectsByStatus[sourceStatus] = sourceProjects;
         newProjectsByStatus[destinationStatus] = destinationProjects;
       }
       
-      console.log(`Project ${movedProject.id} moved from ${sourceStatus} to ${destinationStatus}`);
+      console.log(`Project ${movedProject.id} moved from ${sourceStatus}[${source.index}] to ${destinationStatus}[${destination.index}]`);
       toast({ title: "Project Status Updated", description: `Project "${movedProject.name}" moved to ${projectStatusToColumnTitle[destinationStatus]}.` });
       return newProjectsByStatus;
     });
@@ -380,3 +368,4 @@ export default function CrmProjectsPage() {
     </div>
   );
 }
+

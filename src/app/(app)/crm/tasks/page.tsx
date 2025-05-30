@@ -3,7 +3,8 @@
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+// Removed Card import as we replace it with a div for debugging
+// import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -64,43 +65,47 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
   return (
     <Draggable draggableId={task.id} index={index}>
       {(provided, snapshot) => (
-        <Card
+        <div // Replaced Card with div for dnd debugging
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
+            "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card", // Mimic Card styling
             snapshot.isDragging && "shadow-xl opacity-80"
           )}
-          style={{ ...provided.draggableProps.style }}
+          style={{
+            ...provided.draggableProps.style, // This includes the transform for movement
+            touchAction: 'none',
+          }}
         >
-          <CardHeader className="p-3 pb-2">
-            <div className="flex justify-between items-start">
-              <CardTitle className="text-sm font-semibold leading-tight">{task.title}</CardTitle>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onEdit(task)}><Eye className="mr-2 h-4 w-4" /> View/Edit Task</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          {/* Simplified content for debugging drag */}
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="text-sm font-semibold leading-tight">{task.title}</h4>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(task)}><Eye className="mr-2 h-4 w-4" /> View/Edit Task</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{task.description}</p>}
+          {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
+          {task.priority && (<Badge variant={task.priority === 'Alta' ? 'destructive' : task.priority === 'Media' ? 'secondary' : 'outline'} className="text-xs mb-2">Prioridad: {task.priority}</Badge>)}
+          {task.tags && task.tags.length > 0 && (<div className="flex flex-wrap gap-1 mb-2">{task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>)}
+          {task.assignee && (
+            <div className="flex items-center gap-2 pt-2 border-t mt-2">
+                <Avatar className="h-6 w-6"><AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{task.assignee.avatarFallback}</AvatarFallback></Avatar>
+                <span className="text-xs text-muted-foreground">{task.assignee.name}</span>
             </div>
-            {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{task.description}</p>}
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
-            {task.priority && (<Badge variant={task.priority === 'Alta' ? 'destructive' : task.priority === 'Media' ? 'secondary' : 'outline'} className="text-xs mb-2">Prioridad: {task.priority}</Badge>)}
-            {task.tags && task.tags.length > 0 && (<div className="flex flex-wrap gap-1 mb-2">{task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>)}
-          </CardContent>
-          <CardFooter className="p-3 pt-0 flex justify-between items-center">
-            {task.assignee ? (<div className="flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{task.assignee.avatarFallback}</AvatarFallback></Avatar><span className="text-xs text-muted-foreground">{task.assignee.name}</span></div>) : <div />}
-          </CardFooter>
-        </Card>
+          )}
+        </div>
       )}
     </Draggable>
   );
 });
 TaskCard.displayName = 'TaskCard';
+
 
 interface TaskKanbanBoardProps {
   tasksByStatus: TasksByStatus;
@@ -109,7 +114,7 @@ interface TaskKanbanBoardProps {
   onDeleteTask: (taskId: string) => void;
 }
 
-const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, onDragEnd, onEditTask, onDeleteTask }) => {
+const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onDragEnd, onEditTask, onDeleteTask }) => {
   const [isClient, setIsClient] = useState(false);
   useEffect(() => { setIsClient(true); }, []);
 
@@ -124,19 +129,19 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, o
             {TASK_STATUSES.map((statusKey) => (
               <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
                 {(provided, snapshot) => (
-                  <div
+                  <div // Replaced Card with div for column
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={cn(
                         "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]", 
-                        snapshot.isDraggingOver && "bg-primary/10"
+                        snapshot.isDraggingOver && "bg-primary/10 border-primary" // Highlight when dragging over
                     )}
                   >
                     <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
                       <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
                       <Badge variant="secondary" className="text-xs">{tasksByStatus[statusKey]?.length || 0}</Badge>
                     </div>
-                    <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto"> 
+                    <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto"> {/* Scrollable content area */}
                       {tasksByStatus[statusKey]?.map((task, index) => (
                         <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onDelete={onDeleteTask} />
                       ))}
@@ -151,7 +156,7 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, o
         </div>
       </DragDropContext>
   );
-});
+};
 TaskKanbanBoard.displayName = 'TaskKanbanBoard';
 
 
@@ -210,7 +215,7 @@ export default function CrmTasksPage() {
     });
     toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added to ${statusToColumnTitle[newTaskStatus]}.` });
     resetAddTaskForm(); setIsAddTaskDialogOpen(false);
-  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast]);
+  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast, setTasksByStatus]);
 
   const openEditTaskDialog = useCallback((task: Task) => {
     setEditingTask(task);
@@ -234,29 +239,19 @@ export default function CrmTasksPage() {
 
     setTasksByStatus(prev => {
       const newTasksByStatus = { ...prev };
-      // Remove from old status list if status changed
-      if (editingTask.status !== updatedTask.status) {
-        newTasksByStatus[editingTask.status] = (newTasksByStatus[editingTask.status] || []).filter(t => t.id !== editingTask.id);
-      }
+      // Remove from old status list
+      newTasksByStatus[editingTask.status] = (newTasksByStatus[editingTask.status] || []).filter(t => t.id !== editingTask.id);
       
-      // Add/Update in new status list
-      const targetList = newTasksByStatus[updatedTask.status] || [];
-      const taskIndex = targetList.findIndex(t => t.id === updatedTask.id);
-      
-      if (editingTask.status === updatedTask.status && taskIndex > -1) { 
-        targetList[taskIndex] = updatedTask;
-      } else if (editingTask.status !== updatedTask.status) { 
-         targetList.push(updatedTask);
-      } else if (taskIndex === -1) { // Should not happen if status didn't change, but as a fallback
-        targetList.push(updatedTask);
-      }
-      newTasksByStatus[updatedTask.status] = [...targetList];
+      // Add to new status list
+      newTasksByStatus[updatedTask.status] = [...(newTasksByStatus[updatedTask.status] || []), updatedTask];
+      // Ensure tasks in the target list are sorted or handled as needed, for now just adding
+      // If order matters within columns, you'd need to splice it in at the correct index or re-sort.
       return newTasksByStatus;
     });
 
-    toast({ title: "Task Updated", description: `Task "${updatedTask.name}" updated.` });
+    toast({ title: "Task Updated", description: `Task "${updatedTask.title}" updated.` });
     setIsEditTaskDialogOpen(false); setEditingTask(null);
-  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast]);
+  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast, setTasksByStatus]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
     let taskToDelete: Task | undefined;
@@ -276,7 +271,7 @@ export default function CrmTasksPage() {
      if (taskToDelete) {
       toast({ title: "Task Deleted (Demo)", description: `Task "${taskToDelete.title}" removed.` });
     }
-  }, [toast]);
+  }, [toast, setTasksByStatus]);
   
   const onDragEndTasks = useCallback((result: DropResult) => {
     const { source, destination } = result;
@@ -289,33 +284,30 @@ export default function CrmTasksPage() {
 
     const sourceStatus = source.droppableId as TaskStatus;
     const destinationStatus = destination.droppableId as TaskStatus;
-    const taskId = result.draggableId;
-
+    
     setTasksByStatus((prevTasksByStatus) => {
-      const newTasksByStatus = { ...prevTasksByStatus };
+      const newTasksByStatus = JSON.parse(JSON.stringify(prevTasksByStatus)); // Deep copy
       const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
-      const destinationTasks = (sourceStatus === destinationStatus) 
-          ? sourceTasks 
-          : Array.from(newTasksByStatus[destinationStatus] || []);
-      
       const [movedTask] = sourceTasks.splice(source.index, 1);
 
       if (!movedTask) {
         console.warn("Could not find moved task in source list.");
-        return prevTasksByStatus; // Return previous state if task not found
+        return prevTasksByStatus;
       }
 
-      if (sourceStatus === destinationStatus) {
-        destinationTasks.splice(destination.index, 0, movedTask);
-        newTasksByStatus[destinationStatus] = destinationTasks;
-      } else {
-        movedTask.status = destinationStatus;
+      movedTask.status = destinationStatus; // Update status of the moved task
+
+      if (sourceStatus === destinationStatus) { // Moved within the same column
+        sourceTasks.splice(destination.index, 0, movedTask);
+        newTasksByStatus[destinationStatus] = sourceTasks;
+      } else { // Moved to a different column
+        const destinationTasks = Array.from(newTasksByStatus[destinationStatus] || []);
         destinationTasks.splice(destination.index, 0, movedTask);
         newTasksByStatus[sourceStatus] = sourceTasks;
         newTasksByStatus[destinationStatus] = destinationTasks;
       }
       
-      console.log(`Task ${movedTask.id} moved from ${sourceStatus} to ${destinationStatus}`);
+      console.log(`Task ${movedTask.id} moved from ${sourceStatus}[${source.index}] to ${destinationStatus}[${destination.index}]`);
       toast({ title: "Task Status Updated", description: `Task "${movedTask.title}" moved to ${statusToColumnTitle[destinationStatus]}.` });
       return newTasksByStatus;
     });
@@ -379,3 +371,4 @@ export default function CrmTasksPage() {
     </div>
   );
 }
+
