@@ -119,7 +119,7 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = React.memo(({ projectsBy
         <div className="flex-1 overflow-x-auto pb-4">
           <div className="flex gap-4 min-w-max h-full">
             {PROJECT_STATUSES.map((statusKey) => (
-              <Droppable key={statusKey} droppableId={statusKey} type="PROJECT" isDropDisabled={false} isCombineEnabled={false}>
+              <Droppable key={statusKey} droppableId={statusKey} type="PROJECT" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
                 {(provided, snapshot) => (
                   <div
                     ref={provided.innerRef}
@@ -275,35 +275,35 @@ export default function CrmProjectsPage() {
   }, [toast]);
 
   const onDragEndProjects = useCallback((result: DropResult) => {
-    const { source, destination, draggableId } = result;
+    const { source, destination } = result;
     if (!destination) return;
 
-    const startStatus = source.droppableId as ProjectStatus;
-    const endStatus = destination.droppableId as ProjectStatus;
+    const sourceStatus = source.droppableId as ProjectStatus;
+    const destinationStatus = destination.droppableId as ProjectStatus;
 
-    setProjectsByStatus(prevProjectsByStatus => {
-      const newProjectsByStatus = { ...prevProjectsByStatus };
-      const sourceProjects = Array.from(newProjectsByStatus[startStatus] || []);
-      const destinationProjects = (startStatus === endStatus) ? sourceProjects : Array.from(newProjectsByStatus[endStatus] || []);
-      
+    setProjectsByStatus((prevProjectsByStatus) => {
+      const sourceProjects = Array.from(prevProjectsByStatus[sourceStatus] || []);
       const [movedProject] = sourceProjects.splice(source.index, 1);
+
       if (!movedProject) return prevProjectsByStatus;
-
-      if (startStatus !== endStatus) {
-        movedProject.status = endStatus;
-      }
       
-      destinationProjects.splice(destination.index, 0, movedProject);
+      const newProjectsByStatus = { ...prevProjectsByStatus };
 
-      if (startStatus === endStatus) {
-        newProjectsByStatus[startStatus] = destinationProjects;
+      if (sourceStatus === destinationStatus) {
+        const destinationProjects = Array.from(newProjectsByStatus[destinationStatus] || []);
+        destinationProjects.splice(destination.index, 0, movedProject);
+        newProjectsByStatus[destinationStatus] = destinationProjects;
       } else {
-        newProjectsByStatus[startStatus] = sourceProjects;
-        newProjectsByStatus[endStatus] = destinationProjects;
+        movedProject.status = destinationStatus;
+        const destinationProjects = Array.from(newProjectsByStatus[destinationStatus] || []);
+        destinationProjects.splice(destination.index, 0, movedProject);
+        
+        newProjectsByStatus[sourceStatus] = sourceProjects;
+        newProjectsByStatus[destinationStatus] = destinationProjects;
       }
       return newProjectsByStatus;
     });
-    toast({ title: "Project Moved", description: `Project moved to ${projectStatusToColumnTitle[endStatus]}.` });
+    toast({ title: "Project Status Updated", description: `Project moved to ${projectStatusToColumnTitle[destinationStatus]}.` });
   }, [toast, setProjectsByStatus]); 
 
   return (
@@ -365,3 +365,4 @@ export default function CrmProjectsPage() {
     </div>
   );
 }
+

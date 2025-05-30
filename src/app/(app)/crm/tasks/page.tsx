@@ -122,7 +122,7 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, o
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max h-full">
           {TASK_STATUSES.map((statusKey) => (
-            <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false}>
+            <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
               {(provided, snapshot) => (
                 <div
                   ref={provided.innerRef}
@@ -266,7 +266,7 @@ export default function CrmTasksPage() {
         const taskIndex = list.findIndex(t => t.id === taskId);
         if (taskIndex > -1) {
           taskToDelete = list[taskIndex];
-          newTasksByStatus[status] = list.filter(p => p.id !== taskId); // Use p.id for project too
+          newTasksByStatus[status] = list.filter(p => p.id !== taskId);
           break;
         }
       }
@@ -278,38 +278,38 @@ export default function CrmTasksPage() {
   }, [toast]);
   
   const onDragEndTasks = useCallback((result: DropResult) => {
-    const { source, destination, draggableId } = result;
+    const { source, destination } = result;
+    if (!destination) return;
 
-    if (!destination) return; // Dropped outside a valid droppable
+    const sourceStatus = source.droppableId as TaskStatus;
+    const destinationStatus = destination.droppableId as TaskStatus;
 
-    const startStatus = source.droppableId as TaskStatus;
-    const endStatus = destination.droppableId as TaskStatus;
-
-    setTasksByStatus(prevTasksByStatus => {
-      const newTasksByStatus = { ...prevTasksByStatus };
-      const sourceTasks = Array.from(newTasksByStatus[startStatus] || []);
-      const destinationTasks = (startStatus === endStatus) ? sourceTasks : Array.from(newTasksByStatus[endStatus] || []);
-      
+    setTasksByStatus((prevTasksByStatus) => {
+      const sourceTasks = Array.from(prevTasksByStatus[sourceStatus] || []);
       const [movedTask] = sourceTasks.splice(source.index, 1);
-      if (!movedTask) return prevTasksByStatus; // Should not happen if draggableId is valid
-
-      // If moving to a different column, update the task's status
-      if (startStatus !== endStatus) {
-        movedTask.status = endStatus;
-      }
       
-      destinationTasks.splice(destination.index, 0, movedTask);
+      if (!movedTask) return prevTasksByStatus;
 
-      if (startStatus === endStatus) {
-        newTasksByStatus[startStatus] = destinationTasks;
+      const newTasksByStatus = { ...prevTasksByStatus };
+
+      if (sourceStatus === destinationStatus) {
+        // Reorder within the same column
+        const destinationTasks = Array.from(newTasksByStatus[destinationStatus] || []);
+        destinationTasks.splice(destination.index, 0, movedTask);
+        newTasksByStatus[destinationStatus] = destinationTasks;
       } else {
-        newTasksByStatus[startStatus] = sourceTasks;
-        newTasksByStatus[endStatus] = destinationTasks;
+        // Move to a different column
+        movedTask.status = destinationStatus;
+        const destinationTasks = Array.from(newTasksByStatus[destinationStatus] || []);
+        destinationTasks.splice(destination.index, 0, movedTask);
+        
+        newTasksByStatus[sourceStatus] = sourceTasks; // Update source column
+        newTasksByStatus[destinationStatus] = destinationTasks; // Update destination column
       }
       return newTasksByStatus;
     });
-    toast({ title: "Task Moved", description: `Task moved to ${statusToColumnTitle[endStatus]}.` });
-  }, [toast, setTasksByStatus]); // Include setTasksByStatus if it's from context or props
+    toast({ title: "Task Status Updated", description: `Task moved to ${statusToColumnTitle[destinationStatus]}.` });
+  }, [toast, setTasksByStatus]);
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -370,3 +370,4 @@ export default function CrmTasksPage() {
     </div>
   );
 }
+
