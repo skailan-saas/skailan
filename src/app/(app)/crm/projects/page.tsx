@@ -119,7 +119,7 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = React.memo(({ projectsBy
         <div className="flex-1 overflow-x-auto pb-4">
           <div className="flex gap-4 min-w-max h-full">
             {PROJECT_STATUSES.map((statusKey) => (
-              <Droppable key={statusKey} droppableId={statusKey} type="PROJECT" isDropDisabled={false}>
+              <Droppable key={statusKey} droppableId={statusKey} type="PROJECT" isDropDisabled={false} isCombineEnabled={false}>
                 {(provided, snapshot) => (
                   <div
                     ref={provided.innerRef}
@@ -235,18 +235,18 @@ export default function CrmProjectsPage() {
       if (editingProject.status !== updatedProject.status) {
         newProjectsByStatus[editingProject.status] = (newProjectsByStatus[editingProject.status] || []).filter(p => p.id !== editingProject.id);
       }
+      
       const targetList = newProjectsByStatus[updatedProject.status] || [];
       const projectIndex = targetList.findIndex(p => p.id === updatedProject.id);
       
-      if (editingProject.status === updatedProject.status) { // If status hasn't changed, update in place
+      if (editingProject.status === updatedProject.status) { 
         if (projectIndex > -1) {
             targetList[projectIndex] = updatedProject;
         }
-      } else { // If status changed, add to new list (already removed from old)
+      } else { 
          targetList.push(updatedProject);
       }
-      newProjectsByStatus[updatedProject.status] = [...targetList.sort((a,b) => (initialProjectsData.findIndex(p => p.id === a.id) - initialProjectsData.findIndex(p => p.id === b.id)))]; // Sort for consistent order
-
+      newProjectsByStatus[updatedProject.status] = [...targetList.sort((a,b) => (initialProjectsData.findIndex(p => p.id === a.id) - initialProjectsData.findIndex(p => p.id === b.id)))]; 
       return newProjectsByStatus;
     });
 
@@ -278,31 +278,33 @@ export default function CrmProjectsPage() {
     const { source, destination, draggableId } = result;
     if (!destination) return;
 
-    const sourceStatus = source.droppableId as ProjectStatus;
-    const destinationStatus = destination.droppableId as ProjectStatus;
+    const startStatus = source.droppableId as ProjectStatus;
+    const endStatus = destination.droppableId as ProjectStatus;
 
     setProjectsByStatus(prevProjectsByStatus => {
       const newProjectsByStatus = { ...prevProjectsByStatus };
-      const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
+      const sourceProjects = Array.from(newProjectsByStatus[startStatus] || []);
+      const destinationProjects = (startStatus === endStatus) ? sourceProjects : Array.from(newProjectsByStatus[endStatus] || []);
+      
       const [movedProject] = sourceProjects.splice(source.index, 1);
-
       if (!movedProject) return prevProjectsByStatus;
 
-      movedProject.status = destinationStatus;
+      if (startStatus !== endStatus) {
+        movedProject.status = endStatus;
+      }
+      
+      destinationProjects.splice(destination.index, 0, movedProject);
 
-      if (sourceStatus === destinationStatus) {
-        sourceProjects.splice(destination.index, 0, movedProject);
-        newProjectsByStatus[sourceStatus] = sourceProjects;
+      if (startStatus === endStatus) {
+        newProjectsByStatus[startStatus] = destinationProjects;
       } else {
-        const destinationProjects = Array.from(newProjectsByStatus[destinationStatus] || []);
-        destinationProjects.splice(destination.index, 0, movedProject);
-        newProjectsByStatus[sourceStatus] = sourceProjects;
-        newProjectsByStatus[destinationStatus] = destinationProjects;
+        newProjectsByStatus[startStatus] = sourceProjects;
+        newProjectsByStatus[endStatus] = destinationProjects;
       }
       return newProjectsByStatus;
     });
-    toast({ title: "Project Moved", description: `Project moved to ${projectStatusToColumnTitle[destinationStatus]}.` });
-  }, [toast]); 
+    toast({ title: "Project Moved", description: `Project moved to ${projectStatusToColumnTitle[endStatus]}.` });
+  }, [toast, setProjectsByStatus]); 
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -363,4 +365,3 @@ export default function CrmProjectsPage() {
     </div>
   );
 }
-

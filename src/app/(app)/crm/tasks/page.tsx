@@ -122,7 +122,7 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, o
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max h-full">
           {TASK_STATUSES.map((statusKey) => (
-            <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false}>
+            <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false}>
               {(provided, snapshot) => (
                 <div
                   ref={provided.innerRef}
@@ -153,6 +153,7 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, o
   );
 });
 TaskKanbanBoard.displayName = 'TaskKanbanBoard';
+
 
 export default function CrmTasksPage() {
   const { toast } = useToast();
@@ -231,22 +232,23 @@ export default function CrmTasksPage() {
 
     setTasksByStatus(prev => {
       const newTasksByStatus = { ...prev };
-      // Remove from old status list
+      // Remove from old status list if status changed
       if (editingTask.status !== updatedTask.status) {
         newTasksByStatus[editingTask.status] = (newTasksByStatus[editingTask.status] || []).filter(t => t.id !== editingTask.id);
       }
+      
       // Add/Update in new status list
       const targetList = newTasksByStatus[updatedTask.status] || [];
       const taskIndex = targetList.findIndex(t => t.id === updatedTask.id);
-
-      if (editingTask.status === updatedTask.status) { // If status hasn't changed, update in place
-        if (taskIndex > -1) {
-            targetList[taskIndex] = updatedTask;
-        }
-      } else { // If status changed, add to new list (already removed from old)
-         targetList.push(updatedTask);
+      
+      if (taskIndex > -1) { // Task already in target list (or status didn't change)
+        targetList[taskIndex] = updatedTask;
+      } else { // Task moved to a new status list
+        targetList.push(updatedTask);
       }
-      newTasksByStatus[updatedTask.status] = [...targetList.sort((a,b) => (initialTasksData.findIndex(t => t.id === a.id) - initialTasksData.findIndex(t => t.id === b.id)))]; // Sort for consistent order, or use a proper sort key
+      // Sort by original order or some other criteria if needed, for now just keep as is
+      // newTasksByStatus[updatedTask.status] = [...targetList.sort(...)]; 
+      newTasksByStatus[updatedTask.status] = [...targetList];
 
       return newTasksByStatus;
     });
@@ -264,13 +266,13 @@ export default function CrmTasksPage() {
         const taskIndex = list.findIndex(t => t.id === taskId);
         if (taskIndex > -1) {
           taskToDelete = list[taskIndex];
-          newTasksByStatus[status] = list.filter(t => t.id !== taskId);
+          newTasksByStatus[status] = list.filter(p => p.id !== taskId); // Use p.id for project too
           break;
         }
       }
       return newTasksByStatus;
     });
-    if (taskToDelete) {
+     if (taskToDelete) {
       toast({ title: "Task Deleted (Demo)", description: `Task "${taskToDelete.title}" removed.` });
     }
   }, [toast]);
@@ -278,33 +280,36 @@ export default function CrmTasksPage() {
   const onDragEndTasks = useCallback((result: DropResult) => {
     const { source, destination, draggableId } = result;
 
-    if (!destination) return;
+    if (!destination) return; // Dropped outside a valid droppable
 
-    const sourceStatus = source.droppableId as TaskStatus;
-    const destinationStatus = destination.droppableId as TaskStatus;
+    const startStatus = source.droppableId as TaskStatus;
+    const endStatus = destination.droppableId as TaskStatus;
 
-    setTasksByStatus((prevTasksByStatus) => {
+    setTasksByStatus(prevTasksByStatus => {
       const newTasksByStatus = { ...prevTasksByStatus };
-      const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
+      const sourceTasks = Array.from(newTasksByStatus[startStatus] || []);
+      const destinationTasks = (startStatus === endStatus) ? sourceTasks : Array.from(newTasksByStatus[endStatus] || []);
+      
       const [movedTask] = sourceTasks.splice(source.index, 1);
+      if (!movedTask) return prevTasksByStatus; // Should not happen if draggableId is valid
 
-      if (!movedTask) return prevTasksByStatus;
+      // If moving to a different column, update the task's status
+      if (startStatus !== endStatus) {
+        movedTask.status = endStatus;
+      }
+      
+      destinationTasks.splice(destination.index, 0, movedTask);
 
-      movedTask.status = destinationStatus;
-
-      if (sourceStatus === destinationStatus) {
-        sourceTasks.splice(destination.index, 0, movedTask);
-        newTasksByStatus[sourceStatus] = sourceTasks;
+      if (startStatus === endStatus) {
+        newTasksByStatus[startStatus] = destinationTasks;
       } else {
-        const destinationTasks = Array.from(newTasksByStatus[destinationStatus] || []);
-        destinationTasks.splice(destination.index, 0, movedTask);
-        newTasksByStatus[sourceStatus] = sourceTasks;
-        newTasksByStatus[destinationStatus] = destinationTasks;
+        newTasksByStatus[startStatus] = sourceTasks;
+        newTasksByStatus[endStatus] = destinationTasks;
       }
       return newTasksByStatus;
     });
-    toast({ title: "Task Moved", description: `Task moved to ${statusToColumnTitle[destinationStatus]}.` });
-  }, [toast]);
+    toast({ title: "Task Moved", description: `Task moved to ${statusToColumnTitle[endStatus]}.` });
+  }, [toast, setTasksByStatus]); // Include setTasksByStatus if it's from context or props
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -365,4 +370,3 @@ export default function CrmTasksPage() {
     </div>
   );
 }
-
