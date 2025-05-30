@@ -10,10 +10,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus } from "lucide-react";
+import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, type FormEvent, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { QuotePreview } from "@/components/crm/QuotePreview"; // Import the new component
 
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "CANCELED"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
@@ -33,14 +34,11 @@ const mockProducts: Product[] = [
   { id: "prod-5", name: "Graphic Design Package", price: 1200, type: "SERVICIO"},
 ];
 
-// Simplified Lead interface for quotes page
 interface Lead {
   id: string;
   name: string;
-  // Add other relevant lead fields if needed for display or logic later
 }
 
-// Mock leads for selection - in a real app, this would come from a shared store/API
 const mockLeads: Lead[] = [
     { id: "lead-1", name: "Alice W. (Wonderland Inc.)" },
     { id: "lead-2", name: "Bob T. (Builders Co.)" },
@@ -49,7 +47,7 @@ const mockLeads: Lead[] = [
 ];
 
 
-interface QuoteLineItem {
+export interface QuoteLineItem {
   id: string; 
   productId: string;
   productName: string;
@@ -58,7 +56,7 @@ interface QuoteLineItem {
   total: number;
 }
 
-interface Quote {
+export interface Quote {
   id: string;
   quoteNumber: string;
   leadName: string; 
@@ -107,16 +105,17 @@ export default function CrmQuotesPage() {
   const [isAddOrEditQuoteDialogOpen, setIsAddOrEditQuoteDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
 
-  // Form state for Add/Edit Dialog
-  const [currentLeadId, setCurrentLeadId] = useState<string>(""); // Changed from currentLeadName
+  const [currentLeadId, setCurrentLeadId] = useState<string>("");
   const [currentExpiryDate, setCurrentExpiryDate] = useState("");
   const [currentStatus, setCurrentStatus] = useState<QuoteStatus>("DRAFT");
   const [currentLineItems, setCurrentLineItems] = useState<QuoteLineItem[]>([]);
 
-  // State for adding a new line item
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [itemQuantity, setItemQuantity] = useState<number | string>(1);
   const [itemUnitPrice, setItemUnitPrice] = useState<number | string>("");
+
+  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
+  const [quoteToPreview, setQuoteToPreview] = useState<Quote | null>(null);
 
   const calculatedTotalAmount = useMemo(() => {
     return currentLineItems.reduce((sum, item) => sum + item.total, 0);
@@ -212,10 +211,6 @@ export default function CrmQuotesPage() {
   
   const openEditQuoteDialog = (quote: Quote) => {
     setEditingQuote(quote);
-    setCurrentLeadId(quote.leadId || "");
-    setCurrentExpiryDate(quote.expiryDate || "");
-    setCurrentStatus(quote.status);
-    setCurrentLineItems([...quote.lineItems]); 
     setIsAddOrEditQuoteDialogOpen(true);
   };
 
@@ -229,6 +224,15 @@ export default function CrmQuotesPage() {
     toast({ title: "Quote Deleted (Demo)", description: "Quote has been removed." });
   };
 
+  const openPreviewDialog = (quote: Quote) => {
+    setQuoteToPreview(quote);
+    setIsPreviewDialogOpen(true);
+  };
+
+  const handlePrintQuote = () => {
+    window.print();
+  };
+
   useEffect(() => {
     if (isAddOrEditQuoteDialogOpen && editingQuote) {
         setCurrentLeadId(editingQuote.leadId || "");
@@ -236,7 +240,6 @@ export default function CrmQuotesPage() {
         setCurrentStatus(editingQuote.status);
         setCurrentLineItems([...editingQuote.lineItems]);
     } else if (isAddOrEditQuoteDialogOpen && !editingQuote) {
-        // Reset for new quote if dialog is opened for add
         resetDialogForm();
     }
   }, [isAddOrEditQuoteDialogOpen, editingQuote]);
@@ -259,7 +262,7 @@ export default function CrmQuotesPage() {
               <PlusCircle className="mr-2 h-4 w-4" /> Create New Quote
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[725px]">
+          <DialogContent className="sm:max-w-[725px] md:max-w-3xl lg:max-w-4xl">
             <DialogHeader>
               <DialogTitle>{editingQuote ? `Edit Quote: ${editingQuote.quoteNumber}` : "Create New Quote"}</DialogTitle>
               <DialogDescription>Enter the details for the sales quote.</DialogDescription>
@@ -267,38 +270,40 @@ export default function CrmQuotesPage() {
             <form onSubmit={handleSaveQuote}>
               <ScrollArea className="max-h-[65vh] p-1">
                 <div className="grid gap-4 py-4 pr-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="currentLeadId" className="text-right col-span-1">Lead/Customer</Label>
-                    <Select value={currentLeadId} onValueChange={setCurrentLeadId}>
-                      <SelectTrigger id="currentLeadId" className="col-span-3">
-                        <SelectValue placeholder="Select a lead" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mockLeads.map(lead => (
-                          <SelectItem key={lead.id} value={lead.id}>{lead.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="currentExpiryDate" className="text-right col-span-1">Expiry Date</Label>
-                    <div className="col-span-3 relative">
-                      <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input id="currentExpiryDate" type="date" value={currentExpiryDate} onChange={(e) => setCurrentExpiryDate(e.target.value)} className="pl-10" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="currentLeadId">Lead/Customer</Label>
+                      <Select value={currentLeadId} onValueChange={setCurrentLeadId}>
+                        <SelectTrigger id="currentLeadId">
+                          <SelectValue placeholder="Select a lead" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {mockLeads.map(lead => (
+                            <SelectItem key={lead.id} value={lead.id}>{lead.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="currentExpiryDate">Expiry Date</Label>
+                      <div className="relative">
+                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input id="currentExpiryDate" type="date" value={currentExpiryDate} onChange={(e) => setCurrentExpiryDate(e.target.value)} className="pl-10" />
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="currentStatus" className="text-right col-span-1">Status</Label>
+                  <div>
+                    <Label htmlFor="currentStatus">Status</Label>
                     <Select value={currentStatus} onValueChange={(value: QuoteStatus) => setCurrentStatus(value)}>
-                      <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                       <SelectContent>{QUOTE_STATUSES.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
 
-                  <div className="col-span-4 space-y-3 pt-4 border-t mt-2">
-                    <h3 className="text-md font-semibold col-span-4">Line Items</h3>
+                  <div className="space-y-3 pt-4 border-t mt-2">
+                    <h3 className="text-md font-semibold">Line Items</h3>
                     <div className="grid grid-cols-12 items-end gap-2 p-2 border rounded-md bg-muted/30">
-                      <div className="col-span-5">
+                      <div className="col-span-12 sm:col-span-5">
                         <Label htmlFor="selectedProduct">Product/Service</Label>
                         <Select value={selectedProductId} onValueChange={handleProductSelectionChange}>
                           <SelectTrigger id="selectedProduct"><SelectValue placeholder="Select item" /></SelectTrigger>
@@ -307,15 +312,15 @@ export default function CrmQuotesPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-4 sm:col-span-2">
                         <Label htmlFor="itemQuantity">Qty</Label>
                         <Input id="itemQuantity" type="number" value={itemQuantity} onChange={e => setItemQuantity(e.target.value)} min="1" className="text-center"/>
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-8 sm:col-span-3">
                         <Label htmlFor="itemUnitPrice">Unit Price ($)</Label>
                         <Input id="itemUnitPrice" type="number" value={itemUnitPrice} onChange={e => setItemUnitPrice(e.target.value)} step="0.01" min="0" />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-12 sm:col-span-2">
                         <Button type="button" onClick={handleAddLineItem} className="w-full bg-primary/80 hover:bg-primary/70 text-primary-foreground">
                           <PackagePlus className="h-4 w-4 sm:mr-2"/> <span className="hidden sm:inline">Add</span>
                         </Button>
@@ -323,7 +328,7 @@ export default function CrmQuotesPage() {
                     </div>
                     
                     {currentLineItems.length > 0 && (
-                      <div className="col-span-4 mt-2">
+                      <div className="mt-2">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -352,7 +357,7 @@ export default function CrmQuotesPage() {
                         </Table>
                       </div>
                     )}
-                    <div className="col-span-4 text-right font-bold text-lg mt-4">
+                    <div className="text-right font-bold text-lg mt-4">
                       Total Quote Amount: ${calculatedTotalAmount.toFixed(2)}
                     </div>
                   </div>
@@ -428,9 +433,10 @@ export default function CrmQuotesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Eye className="mr-2 h-4 w-4" /> View/Edit Quote</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openPreviewDialog(quote)}><Eye className="mr-2 h-4 w-4" /> View/Preview Quote</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem>
                           <DropdownMenuItem><Send className="mr-2 h-4 w-4" /> Send Quote</DropdownMenuItem>
-                          <DropdownMenuItem><Download className="mr-2 h-4 w-4" /> Download PDF</DropdownMenuItem>
+                          {/* <DropdownMenuItem><Download className="mr-2 h-4 w-4" /> Download PDF</DropdownMenuItem> */}
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteQuote(quote.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Quote
                           </DropdownMenuItem>
@@ -453,6 +459,24 @@ export default function CrmQuotesPage() {
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* Quote Preview Dialog */}
+      <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
+        <DialogContent className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl p-0">
+          <ScrollArea className="max-h-[85vh]">
+            <QuotePreview quote={quoteToPreview} />
+          </ScrollArea>
+          <DialogFooter className="p-4 border-t bg-background sm:justify-start no-print">
+            <Button onClick={handlePrintQuote} variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Printer className="mr-2 h-4 w-4" /> Print / Save as PDF
+            </Button>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="text-xs text-muted-foreground text-center flex-shrink-0 py-2">
         Showing {quotes.length} of {quotes.length} quotes. Pagination controls will be added here.
       </div>

@@ -110,3 +110,44 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .quote-print-area, .quote-print-area * {
+    visibility: visible !important;
+  }
+  .quote-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: white !important; /* Ensure background is white for print */
+    color: black !important; /* Ensure text is black for print */
+  }
+  .no-print, .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  /* Ensure table borders are visible for print */
+  .quote-print-area table, .quote-print-area th, .quote-print-area td {
+    border: 1px solid #ccc !important; /* Light gray border */
+  }
+  .quote-print-area th, .quote-print-area td {
+    padding: 0.5rem !important; /* Adjust padding for print */
+  }
+  .quote-print-area h1, .quote-print-area h2, .quote-print-area h3, .quote-print-area h4, .quote-print-area p, .quote-print-area span, .quote-print-area div {
+    color: black !important; /* Ensure all text is black */
+  }
+  .quote-print-area .text-primary {
+      color: black !important; /* Override primary color for print if needed, or set specific print primary */
+  }
+  .quote-print-area .bg-primary {
+      background-color: transparent !important; /* Remove colored backgrounds */
+  }
+}
