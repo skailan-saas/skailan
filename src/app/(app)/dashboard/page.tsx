@@ -117,10 +117,10 @@ const initialMessages: Record<string, Message[]> = {
   ]
 };
 
-type StatusFilterOption = ConversationStatus | "all_active"; // "all_active" includes active, assigned, closed
 const CHANNELS: Channel[] = ["whatsapp", "messenger", "instagram", "web"];
+type StatusFilterOptionValue = ConversationStatus | "all_active";
 
-const STATUS_FILTER_OPTIONS: { value: StatusFilterOption; label: string }[] = [
+const STATUS_FILTER_OPTIONS: { value: StatusFilterOptionValue; label: string }[] = [
     { value: "all_active", label: "All (Active/Assigned/Closed)" },
     { value: "active", label: "Active" },
     { value: "assigned", label: "Assigned" },
@@ -137,7 +137,7 @@ export default function AgentWorkspacePage() {
   const [messages, setMessages] = useState<Message[]>(selectedConversationId ? initialMessages[selectedConversationId] : []);
   const [newMessage, setNewMessage] = useState("");
   const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilterOption>("all_active");
+  const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilterOptionValue>("all_active");
   const [selectedChannelFilter, setSelectedChannelFilter] = useState<Channel | "all">("all");
   const [contactDaysAgo, setContactDaysAgo] = useState<number | null>(null);
 
@@ -161,9 +161,7 @@ export default function AgentWorkspacePage() {
 
     if (activeStatusFilter === "all_active") {
       filtered = conversations.filter(c => c.status !== 'archived');
-    } else if (activeStatusFilter === "archived") {
-      filtered = conversations.filter(c => c.status === 'archived');
-    } else {
+    } else { // This covers "active", "assigned", "closed", "archived"
       filtered = conversations.filter(c => c.status === activeStatusFilter);
     }
 
@@ -276,7 +274,7 @@ export default function AgentWorkspacePage() {
         <Card className="flex flex-col rounded-none border-0 md:border-r h-full">
           <CardHeader className="p-4 space-y-3">
             <Input placeholder="Search conversations..." className="rounded-full" />
-             <Select value={selectedChannelFilter} onValueChange={(value) => setSelectedChannelFilter(value as Channel | "all")}>
+            <Select value={selectedChannelFilter} onValueChange={(value) => setSelectedChannelFilter(value as Channel | "all")}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Filter by channel" />
               </SelectTrigger>
@@ -289,7 +287,7 @@ export default function AgentWorkspacePage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={activeStatusFilter} onValueChange={(value) => setActiveStatusFilter(value as StatusFilterOption)}>
+            <Select value={activeStatusFilter} onValueChange={(value) => setActiveStatusFilter(value as StatusFilterOptionValue)}>
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
@@ -312,14 +310,17 @@ export default function AgentWorkspacePage() {
                 <Button
                   key={conv.id}
                   variant={selectedConversationId === conv.id ? "secondary" : "ghost"}
-                  className="w-full h-auto justify-start p-3 text-left overflow-hidden"
+                  className={cn(
+                    "w-full justify-start p-3 text-left overflow-hidden",
+                    "h-24" // Fixed height for the button
+                  )}
                   onClick={() => setSelectedConversationId(conv.id)}
                 >
                   <Avatar className="mr-3 h-10 w-10 flex-shrink-0" data-ai-hint={conv.dataAiHint || "avatar person"}>
                     <AvatarImage src={conv.avatarUrl} alt={conv.userName} />
                     <AvatarFallback>{conv.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 overflow-hidden">
+                  <div className="flex-1 overflow-hidden"> {/* This div wraps the text content */}
                     <div className="flex justify-between items-center">
                       <h3 className="font-semibold truncate">{conv.userName}</h3>
                       <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{conv.timestamp}</span>
@@ -330,7 +331,7 @@ export default function AgentWorkspacePage() {
                             {conv.channel}
                         </Badge>
                         {conv.status === "assigned" && conv.assignedAgentName && (
-                            <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0">To: {conv.assignedAgentName}</Badge>
+                            <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0 truncate">To: {conv.assignedAgentName}</Badge>
                         )}
                          {conv.status !== "assigned" && conv.status !== "active" && (
                            <Badge variant={conv.status === "closed" || conv.status === "archived" ? "secondary" : "outline"} className="text-xs capitalize flex-shrink-0">{conv.status}</Badge>
@@ -572,8 +573,3 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
-
-// Used to make ScrollArea take full height
-// import { ScrollArea } from "@/components/ui/scroll-area"; // Already imported
-// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Not used in this file
-
