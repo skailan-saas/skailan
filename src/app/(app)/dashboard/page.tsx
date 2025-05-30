@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Edit2, Mail, MessageSquare, MoreVertical, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Star, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { summarizeConversation, suggestResponse } from "@/ai/flows"; // Assuming these are set up
+import { summarizeConversation, suggestResponse } from "@/ai/flows"; 
 
 type Message = {
   id: string;
@@ -33,6 +33,7 @@ type Conversation = {
   userName: string;
   lastMessageSnippet: string;
   avatarUrl: string;
+  dataAiHint?: string; // Added for placeholder images
   unreadCount: number;
   timestamp: string;
   channel: "whatsapp" | "messenger" | "instagram" | "web";
@@ -78,7 +79,7 @@ const initialMessages: Record<string, Message[]> = {
       productName: "Wireless Headphones", 
       productDescription: "Noise-cancelling, 20hr battery.",
       productPrice: "$99.99",
-      imageUrl: "https://placehold.co/300x200.png", // data-ai-hint would be on the <Image />
+      imageUrl: "https://placehold.co/300x200.png",
     },
   ],
   "4": [

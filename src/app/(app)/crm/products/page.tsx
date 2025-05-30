@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -156,7 +155,7 @@ export default function CrmProductsPage() {
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold flex items-center"><Package className="mr-3 h-8 w-8 text-primary"/>Products & Services</h1>
+          <h1 className="text-3xl font-bold flex items-center"><Package className="mr-3 h-8 w-8 text-primary"/>Products &amp; Services</h1>
           <p className="text-muted-foreground">
             Manage your product and service catalog.
           </p>
@@ -275,7 +274,7 @@ export default function CrmProductsPage() {
       <Card className="shadow-lg flex-1 flex flex-col">
         <CardHeader className="border-b p-4">
            <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
-            <CardTitle className="text-lg">Product & Service List ({products.length})</CardTitle>
+            <CardTitle className="text-lg">Product &amp; Service List ({products.length})</CardTitle>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:flex-initial">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -358,6 +357,3 @@ export default function CrmProductsPage() {
     </div>
   );
 }
-    
-
-    

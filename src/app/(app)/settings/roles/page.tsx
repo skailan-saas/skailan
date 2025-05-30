@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
+import React, { useState, useEffect, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,15 +23,14 @@ type Role = {
   name: string;
   description: string;
   userCount?: number; // Optional, could be derived
-  // tenantId: string; // Add if roles become tenant-specific
 };
 
 type UserInTenant = {
   id: string; // Supabase auth user ID
-  name: string; // From user_metadata or profiles table
+  name: string; 
   email: string;
   role: string; // Role name
-  avatar?: string; // From user_metadata or profiles table
+  avatarUrl?: string; 
   dataAiHint?: string;
 };
 
@@ -43,7 +41,6 @@ type Permission = {
   description: string;
 };
 
-// Initial mock permissions - in a real app, these would be fetched or predefined
 const mockPermissions: Permission[] = [
     { id: "p1", category: "Conversations", name: "View all conversations", description: "Allows viewing conversations across all agents." },
     { id: "p2", category: "Conversations", name: "Assign conversations", description: "Allows assigning conversations to agents." },
@@ -56,20 +53,22 @@ const mockPermissions: Permission[] = [
     { id: "p9", category: "Settings", name: "Manage tenant settings", description: "Configure tenant-specific settings." },
 ];
 
-// Initial roles - these could be system-wide defaults or managed by a super-admin
-// Tenant admins would assign these roles to their users.
 const initialSystemRoles: Role[] = [
-  { id: "1", name: "Administrator", description: "Full access to tenant features and settings." },
-  { id: "2", name: "Agent Supervisor", description: "Manages agents and reviews conversations within the tenant." },
-  { id: "3", name: "Agent", description: "Handles customer conversations within the tenant." },
-  { id: "4", name: "Read-Only Analyst", description: "Views analytics and reports for the tenant." },
+  { id: "1", name: "Administrator", description: "Full access to tenant features and settings.", userCount: 1 },
+  { id: "2", name: "Agent Supervisor", description: "Manages agents and reviews conversations within the tenant.", userCount: 0 },
+  { id: "3", name: "Agent", description: "Handles customer conversations within the tenant.", userCount: 0 },
+  { id: "4", name: "Read-Only Analyst", description: "Views analytics and reports for the tenant.", userCount: 0 },
+];
+
+const initialUsers: UserInTenant[] = [
+    { id: "user-1", name: "Admin User", email: "admin@tenant.com", role: "Administrator", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "admin avatar"},
 ];
 
 
 export default function RolesPage() {
   const { toast } = useToast();
   const [roles, setRoles] = useState<Role[]>(initialSystemRoles);
-  const [users, setUsers] = useState<UserInTenant[]>([]); // To be fetched for the current tenant
+  const [users, setUsers] = useState<UserInTenant[]>(initialUsers); 
   const [selectedRole, setSelectedRole] = useState<Role | null>(roles[0] || null);
   
   const [isInviteUserOpen, setIsInviteUserOpen] = useState(false);
@@ -80,36 +79,30 @@ export default function RolesPage() {
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
 
-  // TODO: Fetch users for the current tenant
-  // useEffect(() => {
-  //   const fetchTenantUsers = async () => {
-  //     // 1. Get current user's tenant ID
-  //     // 2. Fetch users associated with that tenantId from your 'user_profiles' or similar table
-  //     //    (this table would store user's role within the tenant)
-  //     // setUsers(fetchedUsers);
-  //   };
-  //   fetchTenantUsers();
-  // }, []);
-
   const handleInviteUser = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inviteEmail || !inviteRole) {
         toast({ title: "Missing Information", description: "Please provide email and role.", variant: "destructive" });
         return;
     }
-    // In a real app, you'd get the tenant ID of the current admin user.
-    // For now, we'll simulate sending it in metadata.
-    // The actual user creation & linking to tenant/role happens on the backend (e.g., via Supabase Admin SDK or Triggers)
-    // This call is just an example of an invitation, you might need to use Supabase Admin API from a server action for full user creation.
     
-    // const { data, error } = await supabase.auth.admin.inviteUserByEmail(inviteEmail, {
-    //   data: { role_id: inviteRole, tenant_id: 'CURRENT_ADMIN_TENANT_ID' } 
-    //   // redirectTo: `${window.location.origin}/set-password` // Example redirect
-    // });
+    const selectedRoleDetails = roles.find(r => r.id === inviteRole);
+    if (!selectedRoleDetails) {
+        toast({ title: "Invalid Role", description: "Selected role not found.", variant: "destructive" });
+        return;
+    }
 
-    // For now, just a toast message as backend logic is needed.
-    toast({ title: "Simulated Invitation", description: `User ${inviteEmail} invited with role ID ${inviteRole}. Backend implementation needed.`});
-    console.log("Invite user:", { email: inviteEmail, roleId: inviteRole });
+    const newUser: UserInTenant = {
+        id: `user-${Date.now()}`,
+        name: inviteEmail.split('@')[0], // Placeholder name
+        email: inviteEmail,
+        role: selectedRoleDetails.name,
+        avatarUrl: `https://placehold.co/40x40.png`,
+        dataAiHint: "new user"
+    };
+    setUsers(prev => [...prev, newUser]);
+
+    toast({ title: "Simulated Invitation", description: `User ${inviteEmail} invited as ${selectedRoleDetails.name}. Backend implementation needed.`});
     setInviteEmail("");
     setInviteRole(roles[0]?.id || "");
     setIsInviteUserOpen(false);
@@ -122,10 +115,10 @@ export default function RolesPage() {
       return;
     }
     const newRole: Role = {
-      id: `role-${Date.now()}`, // Temporary ID generation
+      id: `role-${Date.now()}`, 
       name: newRoleName,
       description: newRoleDescription,
-      // tenantId: 'CURRENT_ADMIN_TENANT_ID' // Associate with current tenant
+      userCount: 0,
     };
     setRoles(prev => [...prev, newRole]);
     toast({ title: "Role Added", description: `Role "${newRoleName}" has been added.` });
@@ -139,7 +132,7 @@ export default function RolesPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-            <h1 className="text-3xl font-bold flex items-center"><UsersIcon className="mr-3 h-8 w-8 text-primary"/>Users, Roles & Permissions</h1>
+            <h1 className="text-3xl font-bold flex items-center"><UsersIcon className="mr-3 h-8 w-8 text-primary"/>Users, Roles &amp; Permissions</h1>
             <p className="text-muted-foreground">Manage user access and roles within your tenant.</p>
         </div>
         <div className="flex gap-2">
@@ -209,7 +202,7 @@ export default function RolesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1 shadow-lg">
           <CardHeader className="border-b p-4">
-            <CardTitle className="text-lg">Roles</CardTitle>
+            <CardTitle className="text-lg">Roles ({roles.length})</CardTitle>
             <CardDescription className="text-xs">Roles available in your tenant.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -227,16 +220,17 @@ export default function RolesPage() {
                             <div className="flex-1">
                                 <span className="font-medium block">{role.name}</span>
                                 <span className="text-xs text-muted-foreground block truncate">{role.description}</span>
-                                {/* <span className="text-xs text-muted-foreground">{role.userCount || 0} users</span> */}
+                                <span className="text-xs text-muted-foreground">
+                                    {(users.filter(u => u.role === role.name).length) || role.userCount || 0} users
+                                </span>
                             </div>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => {setSelectedRole(role); /* TODO: Open edit role dialog */}}><Edit className="mr-2 h-4 w-4" /> Edit Role Details</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setSelectedRole(role); /* TODO: Open edit role dialog */}}><Edit className="mr-2 h-4 w-4" /> Edit Role Details</DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => setSelectedRole(role)}><ShieldCheck className="mr-2 h-4 w-4" /> Edit Permissions</DropdownMenuItem>
-                                    {/* <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Delete Role</DropdownMenuItem> */}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
@@ -263,7 +257,7 @@ export default function RolesPage() {
                     <div className="space-y-2">
                     {permissionsInCategory.map(permission => (
                         <div key={permission.id} className="flex items-start p-3 border rounded-md hover:bg-muted/50">
-                            <Checkbox id={`perm-${permission.id}`} className="mr-3 mt-1" defaultChecked={Math.random() > 0.5} /> {/* TODO: Load checked state based on role's actual permissions */}
+                            <Checkbox id={`perm-${permission.id}`} className="mr-3 mt-1" defaultChecked={Math.random() > 0.5} /> 
                             <div className="grid gap-1.5 leading-none">
                                 <Label htmlFor={`perm-${permission.id}`} className="font-medium cursor-pointer">
                                 {permission.name}
@@ -290,7 +284,7 @@ export default function RolesPage() {
       <Card className="shadow-lg">
         <CardHeader className="border-b p-4 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-lg">Users in Tenant</CardTitle>
+            <CardTitle className="text-lg">Users in Tenant ({users.length})</CardTitle>
             <CardDescription className="text-xs">Manage users invited to this tenant and their roles.</CardDescription>
           </div>
           <div className="relative w-64">
@@ -322,8 +316,8 @@ export default function RolesPage() {
                 <TableRow key={user.id}>
                   <TableCell>
                     <Avatar className="h-9 w-9">
-                        <AvatarImage src={user.avatar || `https://placehold.co/40x40.png?text=${user.name[0] || 'U'}`} alt={user.name} data-ai-hint={user.dataAiHint || "avatar person"} />
-                        <AvatarFallback>{user.name.split(" ").map(n=>n[0]).join("") || user.email[0].toUpperCase()}</AvatarFallback>
+                        <AvatarImage src={user.avatarUrl || `https://placehold.co/40x40.png`} alt={user.name} data-ai-hint={user.dataAiHint || "avatar person"} />
+                        <AvatarFallback>{user.name ? user.name.split(" ").map(n=>n[0]).join("") : user.email[0].toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
                   <TableCell className="font-medium">{user.name || "N/A"}</TableCell>

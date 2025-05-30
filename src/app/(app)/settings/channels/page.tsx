@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle, AlertCircle, Zap, PlusCircle, Settings, MessageSquare, Globe, Smartphone, MoreHorizontal } from "lucide-react";
-import Image from 'next/image'; // Using next/image for external SVGs if needed or placehold.co
+import Image from 'next/image'; 
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
 
 // Define an interface for channel types
 interface ChannelConfig {
@@ -15,6 +16,7 @@ interface ChannelConfig {
   description: string;
   icon: React.ElementType | string; // Lucide icon component or path to an SVG/image
   iconType: 'lucide' | 'image';
+  dataAiHint?: string; // For placeholder image hints
   status: 'connected' | 'disconnected' | 'needs_attention';
   manageLink?: string;
   connectLink?: string;
@@ -25,7 +27,7 @@ const channelsData: ChannelConfig[] = [
     id: 'whatsapp',
     name: 'WhatsApp Business API',
     description: 'Connect your official WhatsApp Business account to manage conversations.',
-    icon: Smartphone, // Using a generic Smartphone for WhatsApp
+    icon: Smartphone, 
     iconType: 'lucide',
     status: 'disconnected',
     connectLink: '#',
@@ -34,7 +36,7 @@ const channelsData: ChannelConfig[] = [
     id: 'messenger',
     name: 'Facebook Messenger',
     description: 'Integrate with your Facebook Page Messenger for customer interactions.',
-    icon: MessageSquare, // Generic message icon
+    icon: MessageSquare, 
     iconType: 'lucide',
     status: 'connected',
     manageLink: '#',
@@ -43,7 +45,7 @@ const channelsData: ChannelConfig[] = [
     id: 'instagram',
     name: 'Instagram Direct',
     description: 'Manage Instagram Direct Messages from your business profile.',
-    icon: MessageSquare, // Generic message icon
+    icon: MessageSquare, 
     iconType: 'lucide',
     status: 'disconnected',
     connectLink: '#',
@@ -55,7 +57,7 @@ const channelsData: ChannelConfig[] = [
     icon: Globe,
     iconType: 'lucide',
     status: 'connected',
-    manageLink: '/settings/sdk', // Link to existing SDK page
+    manageLink: '/settings/sdk',
   },
   {
     id: 'api',
@@ -70,7 +72,7 @@ const channelsData: ChannelConfig[] = [
     id: 'telegram',
     name: 'Telegram Bot',
     description: 'Connect your Telegram Bot to interact with users on Telegram.',
-    icon: Smartphone, // Placeholder, consider a specific Telegram icon if available or an image
+    icon: Smartphone, 
     iconType: 'lucide',
     status: 'disconnected',
     connectLink: '#',
@@ -103,7 +105,7 @@ export default function ChannelConnectionsPage() {
               )}
               {channel.iconType === 'image' && typeof channel.icon === 'string' && (
                  <Avatar className="h-12 w-12 rounded-md">
-                    <AvatarImage src={channel.icon as string} alt={`${channel.name} icon`} data-ai-hint={`${channel.name} logo`}/>
+                    <AvatarImage src={channel.icon as string} alt={`${channel.name} icon`} data-ai-hint={channel.dataAiHint || "channel logo"}/>
                     <AvatarFallback>{channel.name.substring(0,2).toUpperCase()}</AvatarFallback>
                  </Avatar>
               )}
@@ -161,9 +163,3 @@ export default function ChannelConnectionsPage() {
     </div>
   );
 }
-
-// Minimal DropdownMenu components used above, ensure they are imported if not globally available
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-
-
-    

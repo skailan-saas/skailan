@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Bell, LogOut, Search, Settings, UserCircle } from "lucide-react";
@@ -37,19 +36,17 @@ export function AppHeader() {
         description: "You have been successfully logged out.",
       });
       router.push("/");
-      router.refresh(); // Ensures server components re-evaluate auth state
+      router.refresh(); 
     }
   };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
-      {/* SidebarTrigger now visible on all screen sizes */}
       <div>
         <SidebarTrigger />
       </div>
       
       <div className="hidden md:block">
-        {/* Placeholder for global search or breadcrumbs if Sidebar is variant="inset" or "floating" */}
       </div>
 
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">

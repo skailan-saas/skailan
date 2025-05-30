@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -104,7 +103,7 @@ export default function CrmLeadsPage() {
       source: newLeadSource,
       status: newLeadStatus,
       lastContacted: new Date().toISOString().split('T')[0],
-      dataAiHint: "person avatar" // generic hint for new leads
+      dataAiHint: "person avatar" 
     };
     setLeads(prevLeads => [newLeadToAdd, ...prevLeads]);
     toast({ title: "Lead Added", description: `${newLeadToAdd.name} has been added.` });
@@ -135,7 +134,7 @@ export default function CrmLeadsPage() {
       company: editFormLeadCompany || undefined,
       source: editFormLeadSource,
       status: editFormLeadStatus,
-      lastContacted: new Date().toISOString().split('T')[0], // Update last contacted date
+      lastContacted: new Date().toISOString().split('T')[0],
     };
 
     setLeads(prevLeads => prevLeads.map(l => l.id === editingLead.id ? updatedLead : l));
@@ -145,7 +144,6 @@ export default function CrmLeadsPage() {
   };
   
   const handleDeleteLead = (leadId: string) => {
-    // Placeholder for actual delete logic, e.g., API call
     setLeads(prevLeads => prevLeads.filter(lead => lead.id !== leadId));
     toast({ title: "Lead Deleted (Demo)", description: "Lead has been removed from the list." });
   };
@@ -315,7 +313,7 @@ export default function CrmLeadsPage() {
                   <TableRow key={lead.id}>
                     <TableCell>
                        <Avatar className="h-9 w-9">
-                        <AvatarImage src={`https://placehold.co/40x40.png?text=${lead.name[0]}`} alt={lead.name} data-ai-hint={lead.dataAiHint || "person avatar"} />
+                        <AvatarImage src={`https://placehold.co/40x40.png?text=${lead.name[0]}`} alt={lead.name} data-ai-hint={lead.dataAiHint || "avatar person"} />
                         <AvatarFallback>{lead.name.substring(0,2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                     </TableCell>
@@ -387,6 +385,3 @@ export default function CrmLeadsPage() {
     </div>
   );
 }
-    
-
-    

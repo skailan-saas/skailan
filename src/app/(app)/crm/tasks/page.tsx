@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
@@ -15,6 +14,7 @@ import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, Tag, Eye, Edi
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
 import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card"; // Added Card for TaskCard restoration
 
 const TASK_STATUSES = ["PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"] as const;
 type TaskStatus = typeof TASK_STATUSES[number];
@@ -63,7 +63,7 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
   return (
     <Draggable key={task.id} draggableId={String(task.id)} index={index}>
       {(provided, snapshot) => (
-        <div
+        <Card
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
@@ -77,8 +77,6 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
         >
           <div className="flex justify-between items-start mb-2">
             <h4 className="text-sm font-semibold leading-tight">{task.title}</h4>
-            {/* Temporarily removed DropdownMenu for debugging D&D */}
-            {/*
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -86,7 +84,6 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            */}
           </div>
           {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{task.description}</p>}
           {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
@@ -98,7 +95,7 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
                 <span className="text-xs text-muted-foreground">{task.assignee.name}</span>
             </div>
           )}
-        </div>
+        </Card>
       )}
     </Draggable>
   );
@@ -201,7 +198,7 @@ export default function CrmTasksPage() {
     const newTaskToAdd: Task = {
       id: `task-${Date.now()}`, title: newTaskTitle, description: newTaskDescription || undefined,
       status: newTaskStatus, dueDate: newTaskDueDate || undefined, priority: newTaskPriority || undefined,
-      assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${newTaskAssigneeName[0]}`, dataAiHint: "avatar person", avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
+      assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
       tags: newTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
     setTasksByStatus(prev => {
@@ -229,17 +226,19 @@ export default function CrmTasksPage() {
     const updatedTask: Task = {
       ...editingTask, title: editFormTaskTitle, description: editFormTaskDescription || undefined,
       status: editFormTaskStatus, dueDate: editFormTaskDueDate || undefined, priority: editFormTaskPriority || undefined,
-      assignee: editFormTaskAssigneeName ? { name: editFormTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${editFormTaskAssigneeName[0]}`, dataAiHint: "avatar person", avatarFallback: editFormTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
+      assignee: editFormTaskAssigneeName ? { name: editFormTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: editFormTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
       tags: editFormTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
 
     setTasksByStatus(prev => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prev));
+      const newTasksByStatus = JSON.parse(JSON.stringify(prev)); 
       const oldStatus = editingTask.status;
       const newStatus = updatedTask.status;
 
       newTasksByStatus[oldStatus] = (newTasksByStatus[oldStatus] || []).filter((t: Task) => t.id !== editingTask.id);
       newTasksByStatus[newStatus] = [...(newTasksByStatus[newStatus] || []), updatedTask];
+      // Sort tasks in the new column by some criteria if needed, e.g., by ID or title for consistency
+      newTasksByStatus[newStatus].sort((a, b) => a.id.localeCompare(b.id)); 
       return newTasksByStatus;
     });
 
@@ -280,34 +279,28 @@ export default function CrmTasksPage() {
     const destStatus = destination.droppableId as TaskStatus;
 
     setTasksByStatus(prevTasksByStatus => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prevTasksByStatus)); 
+      const newTasksByStatus = JSON.parse(JSON.stringify(prevTasksByStatus));
       const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
       const destTasks = sourceStatus === destStatus ? sourceTasks : Array.from(newTasksByStatus[destStatus] || []);
-
-      const taskToMove = sourceTasks.find(task => String(task.id) === draggableId);
       
-      if (!taskToMove) {
+      const taskIndexInSource = sourceTasks.findIndex(task => String(task.id) === draggableId);
+      if (taskIndexInSource === -1) {
         console.warn(`Could not find moved task with id ${draggableId} in source list ${sourceStatus}.`);
         return prevTasksByStatus; 
       }
       
-      // Remove from source list
-      const taskIndexInSource = sourceTasks.findIndex(task => String(task.id) === draggableId);
-      if (taskIndexInSource > -1) {
-        sourceTasks.splice(taskIndexInSource, 1);
-      }
-
+      const [movedTask] = sourceTasks.splice(taskIndexInSource, 1);
 
       if (sourceStatus === destStatus) {
-        destTasks.splice(destination.index, 0, taskToMove); // taskToMove still has its original status
+        destTasks.splice(destination.index, 0, movedTask);
         newTasksByStatus[sourceStatus] = destTasks;
-        toast({ title: "Task Reordered", description: `Task "${taskToMove.title}" reordered in ${statusToColumnTitle[sourceStatus]}.` });
+        toast({ title: "Task Reordered", description: `Task "${movedTask.title}" reordered in ${statusToColumnTitle[sourceStatus]}.` });
       } else {
-        const movedTaskCopy = { ...taskToMove, status: destStatus };
+        const movedTaskCopy = { ...movedTask, status: destStatus };
         destTasks.splice(destination.index, 0, movedTaskCopy);
         newTasksByStatus[sourceStatus] = sourceTasks;
         newTasksByStatus[destStatus] = destTasks;
-        toast({ title: "Task Status Updated", description: `Task "${taskToMove.title}" moved to ${statusToColumnTitle[destStatus]}.` });
+        toast({ title: "Task Status Updated", description: `Task "${movedTask.title}" moved to ${statusToColumnTitle[destStatus]}.` });
       }
       return newTasksByStatus;
     });
@@ -325,7 +318,7 @@ export default function CrmTasksPage() {
           <DialogContent className="sm:max-w-[625px]">
             <DialogHeader><DialogTitle>Add New Task</DialogTitle><DialogDescription>Enter task details.</DialogDescription></DialogHeader>
             <form onSubmit={handleAddTaskSubmit}>
-              <div className="max-h-[60vh] overflow-y-auto p-1">
+              <ScrollArea className="max-h-[60vh] p-1">
                 <div className="grid gap-4 py-4 pr-4">
                   <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskTitle" className="text-right col-span-1">Title</Label><Input id="newTaskTitle" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="e.g., Follow up with client" className="col-span-3" required /></div>
                   <div className="grid grid-cols-4 items-start gap-4"><Label htmlFor="newTaskDescription" className="text-right col-span-1 pt-2">Description</Label><Textarea id="newTaskDescription" value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} placeholder="Provide details..." className="col-span-3" rows={3}/></div>
@@ -335,7 +328,7 @@ export default function CrmTasksPage() {
                   <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskAssigneeName" className="text-right col-span-1">Assignee</Label><Input id="newTaskAssigneeName" value={newTaskAssigneeName} onChange={(e) => setNewTaskAssigneeName(e.target.value)} placeholder="e.g., John Doe" className="col-span-3" /></div>
                   <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskTags" className="text-right col-span-1">Tags</Label><Input id="newTaskTags" value={newTaskTags} onChange={(e) => setNewTaskTags(e.target.value)} placeholder="e.g., urgent, client_x" className="col-span-3" /><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p></div>
                 </div>
-              </div>
+              </ScrollArea>
               <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline" onClick={resetAddTaskForm}>Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Task</Button></DialogFooter>
             </form>
           </DialogContent>
@@ -346,7 +339,7 @@ export default function CrmTasksPage() {
         <DialogContent className="sm:max-w-[625px]">
           <DialogHeader><DialogTitle>Edit Task: {editingTask?.title}</DialogTitle><DialogDescription>Update task details.</DialogDescription></DialogHeader>
           <form onSubmit={handleEditTaskSubmit}>
-            <div className="max-h-[60vh] overflow-y-auto p-1">
+            <ScrollArea className="max-h-[60vh] p-1">
               <div className="grid gap-4 py-4 pr-4">
                 <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskTitle" className="text-right col-span-1">Title</Label><Input id="editFormTaskTitle" value={editFormTaskTitle} onChange={(e) => setEditFormTaskTitle(e.target.value)} className="col-span-3" required /></div>
                 <div className="grid grid-cols-4 items-start gap-4"><Label htmlFor="editFormTaskDescription" className="text-right col-span-1 pt-2">Description</Label><Textarea id="editFormTaskDescription" value={editFormTaskDescription} onChange={(e) => setEditFormTaskDescription(e.target.value)} className="col-span-3" rows={3}/></div>
@@ -356,7 +349,7 @@ export default function CrmTasksPage() {
                 <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskAssigneeName" className="text-right col-span-1">Assignee</Label><Input id="editFormTaskAssigneeName" value={editFormTaskAssigneeName} onChange={(e) => setEditFormTaskAssigneeName(e.target.value)} className="col-span-3" /></div>
                 <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskTags" className="text-right col-span-1">Tags</Label><Input id="editFormTaskTags" value={editFormTaskTags} onChange={(e) => setEditFormTaskTags(e.target.value)} className="col-span-3" /><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p></div>
               </div>
-            </div>
+            </ScrollArea>
             <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditTaskDialogOpen(false)}>Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button></DialogFooter>
           </form>
         </DialogContent>

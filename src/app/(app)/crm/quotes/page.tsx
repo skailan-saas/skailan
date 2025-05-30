@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,7 @@ import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, type FormEvent, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { QuotePreview } from "@/components/crm/QuotePreview"; // Import the new component
+import { QuotePreview } from "@/components/crm/QuotePreview"; 
 
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "CANCELED"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
@@ -191,7 +190,7 @@ export default function CrmQuotesPage() {
     };
 
     if (editingQuote) {
-      const updatedQuote: Quote = { ...editingQuote, ...quoteData, totalAmount: calculatedTotalAmount }; // Recalculate total for edit
+      const updatedQuote: Quote = { ...editingQuote, ...quoteData, totalAmount: calculatedTotalAmount }; 
       setQuotes(prevQuotes => prevQuotes.map(q => q.id === editingQuote.id ? updatedQuote : q));
       toast({ title: "Quote Updated", description: `Quote ${updatedQuote.quoteNumber} has been updated.` });
     } else {
@@ -214,7 +213,7 @@ export default function CrmQuotesPage() {
     setCurrentLeadId(quote.leadId || "");
     setCurrentExpiryDate(quote.expiryDate || "");
     setCurrentStatus(quote.status);
-    setCurrentLineItems([...quote.lineItems]); // Important: create a new array instance
+    setCurrentLineItems([...quote.lineItems]);
     setIsAddOrEditQuoteDialogOpen(true);
   };
 
@@ -239,15 +238,13 @@ export default function CrmQuotesPage() {
   };
 
   useEffect(() => {
-    // This effect handles pre-filling the edit dialog form
     if (isAddOrEditQuoteDialogOpen && editingQuote) {
         setCurrentLeadId(editingQuote.leadId || "");
         setCurrentExpiryDate(editingQuote.expiryDate || "");
         setCurrentStatus(editingQuote.status);
-        setCurrentLineItems([...editingQuote.lineItems]); // Ensure a new array instance for line items
+        setCurrentLineItems([...editingQuote.lineItems]); 
     } else if (!isAddOrEditQuoteDialogOpen) {
-        // Reset form when dialog closes and not in edit mode (e.g. after adding a new quote)
-        // resetDialogForm(); // Resetting here might be too aggressive if opening for add immediately after closing edit
+        // resetDialogForm(); // Resetting here causes issues when opening edit dialog
     }
   }, [isAddOrEditQuoteDialogOpen, editingQuote]);
 
@@ -261,7 +258,7 @@ export default function CrmQuotesPage() {
           </p>
         </div>
         <Dialog open={isAddOrEditQuoteDialogOpen} onOpenChange={(isOpen) => {
-          if (!isOpen) resetDialogForm(); // Reset form if dialog is closed by any means
+          if (!isOpen) resetDialogForm(); 
           setIsAddOrEditQuoteDialogOpen(isOpen);
         }}>
           <DialogTrigger asChild>
@@ -443,7 +440,6 @@ export default function CrmQuotesPage() {
                           <DropdownMenuItem onClick={() => openPreviewDialog(quote)}><Eye className="mr-2 h-4 w-4" /> View/Preview Quote</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem>
                           <DropdownMenuItem><Send className="mr-2 h-4 w-4" /> Send Quote</DropdownMenuItem>
-                          {/* <DropdownMenuItem><Download className="mr-2 h-4 w-4" /> Download PDF</DropdownMenuItem> */}
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteQuote(quote.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Quote
                           </DropdownMenuItem>
@@ -470,11 +466,11 @@ export default function CrmQuotesPage() {
       {/* Quote Preview Dialog */}
       <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
         <DialogContent className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl p-0">
-          <DialogHeader className="p-4 pb-0 no-print"> {/* Added no-print here */}
+          <DialogHeader className="p-4 pb-0 no-print">
             <DialogTitle>Quote Preview: {quoteToPreview?.quoteNumber}</DialogTitle>
              <DialogDescription>Review the quote details before printing or sending.</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[75vh] print:max-h-full print:overflow-visible"> {/* Adjusted max-h for preview */}
+          <ScrollArea className="max-h-[75vh] print:max-h-full print:overflow-visible"> 
             <QuotePreview quote={quoteToPreview} />
           </ScrollArea>
           <DialogFooter className="p-4 border-t bg-background sm:justify-start no-print">
@@ -494,5 +490,3 @@ export default function CrmQuotesPage() {
     </div>
   );
 }
-    
-

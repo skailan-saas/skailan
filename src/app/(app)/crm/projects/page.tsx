@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
@@ -16,6 +15,8 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from '@/components/ui/scroll-area'; // Ensure ScrollArea is imported
+import { Card, CardContent } from "@/components/ui/card"; // Added Card for ProjectCard restoration
 
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
 type ProjectStatus = typeof PROJECT_STATUSES[number];
@@ -56,9 +57,9 @@ interface ProjectCardProps {
 
 const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, onDelete }) => {
   return (
-    <Draggable key={project.id} draggableId={String(project.id)} index={index}>
+    <Draggable key={String(project.id)} draggableId={String(project.id)} index={index}>
       {(provided, snapshot) => (
-        <div
+        <Card
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
@@ -72,8 +73,6 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
         >
           <div className="flex justify-between items-start mb-2">
             <h4 className="text-sm font-semibold leading-tight">{project.name}</h4>
-            {/* Temporarily removed DropdownMenu for debugging D&D */}
-            {/*
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -81,7 +80,6 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(project.id)}><Trash2 className="mr-2 h-4 w-4"/> Delete Project</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            */}
           </div>
           {project.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{project.description}</p>}
           {project.clientName && <p className="text-xs text-muted-foreground mb-1">Cliente: <span className="font-medium text-foreground">{project.clientName}</span></p>}
@@ -98,7 +96,7 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
                 <Progress value={project.progress} className="h-2" />
             </div>
           )}
-        </div>
+        </Card>
       )}
     </Draggable>
   );
@@ -199,7 +197,7 @@ export default function CrmProjectsPage() {
     e.preventDefault();
     const progressValue = parseInt(String(newProjectProgress), 10);
     if (isNaN(progressValue) || progressValue < 0 || progressValue > 100) { toast({ title: "Invalid Progress", description: "Progress must be 0-100.", variant: "destructive" }); return; }
-    const teamMembers: ProjectTeamMember[] = newProjectTeam.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png?text=${name[0]}`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
+    const teamMembers: ProjectTeamMember[] = newProjectTeam.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
     const newProjectToAdd: Project = {
       id: `proj-${Date.now()}`, name: newProjectName, description: newProjectDescription || undefined,
       status: newProjectStatus, clientName: newProjectClientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
@@ -228,7 +226,7 @@ export default function CrmProjectsPage() {
     if (!editingProject) return;
     const progressValue = parseInt(String(editFormProjectProgress), 10);
     if (isNaN(progressValue) || progressValue < 0 || progressValue > 100) { toast({ title: "Invalid Progress", description: "Progress must be 0-100.", variant: "destructive" }); return; }
-    const teamMembers: ProjectTeamMember[] = editFormProjectTeam.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png?text=${name[0]}`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
+    const teamMembers: ProjectTeamMember[] = editFormProjectTeam.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
 
     const updatedProject: Project = {
       ...editingProject, name: editFormProjectName, description: editFormProjectDescription || undefined,
@@ -243,6 +241,7 @@ export default function CrmProjectsPage() {
 
       newProjectsByStatus[oldStatus] = (newProjectsByStatus[oldStatus] || []).filter((p: Project) => p.id !== editingProject.id);
       newProjectsByStatus[newStatus] = [...(newProjectsByStatus[newStatus] || []), updatedProject];
+      newProjectsByStatus[newStatus].sort((a,b) => a.id.localeCompare(b.id));
       return newProjectsByStatus;
     });
 
@@ -287,29 +286,23 @@ export default function CrmProjectsPage() {
       const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
       const destProjects = sourceStatus === destStatus ? sourceProjects : Array.from(newProjectsByStatus[destStatus] || []);
 
-      const projectToMove = sourceProjects.find(project => String(project.id) === draggableId);
-
-      if (!projectToMove) {
+      const projectIndexInSource = sourceProjects.findIndex(project => String(project.id) === draggableId);
+      if (projectIndexInSource === -1) {
           console.warn(`Could not find moved project with id ${draggableId} in source list ${sourceStatus}.`);
           return prevProjectsByStatus;
       }
-
-      // Remove from source list
-      const projectIndexInSource = sourceProjects.findIndex(project => String(project.id) === draggableId);
-      if (projectIndexInSource > -1) {
-          sourceProjects.splice(projectIndexInSource, 1);
-      }
+      const [movedProject] = sourceProjects.splice(projectIndexInSource, 1);
       
       if (sourceStatus === destStatus) {
-          destProjects.splice(destination.index, 0, projectToMove);
+          destProjects.splice(destination.index, 0, movedProject);
           newProjectsByStatus[sourceStatus] = destProjects;
-          toast({ title: "Project Reordered", description: `Project "${projectToMove.name}" reordered in ${projectStatusToColumnTitle[sourceStatus]}.` });
+          toast({ title: "Project Reordered", description: `Project "${movedProject.name}" reordered in ${projectStatusToColumnTitle[sourceStatus]}.` });
       } else {
-          const movedProjectCopy = { ...projectToMove, status: destStatus };
+          const movedProjectCopy = { ...movedProject, status: destStatus };
           destProjects.splice(destination.index, 0, movedProjectCopy);
           newProjectsByStatus[sourceStatus] = sourceProjects;
           newProjectsByStatus[destStatus] = destProjects;
-          toast({ title: "Project Status Updated", description: `Project "${projectToMove.name}" moved to ${projectStatusToColumnTitle[destStatus]}.` });
+          toast({ title: "Project Status Updated", description: `Project "${movedProject.name}" moved to ${projectStatusToColumnTitle[destStatus]}.` });
       }
       return newProjectsByStatus;
     });
@@ -327,7 +320,7 @@ export default function CrmProjectsPage() {
           <DialogContent className="sm:max-w-[625px]">
             <DialogHeader><DialogTitle>Add New Project</DialogTitle><DialogDescription>Enter project details.</DialogDescription></DialogHeader>
             <form onSubmit={handleAddProjectSubmit}>
-              <div className="max-h-[60vh] overflow-y-auto p-1">
+              <ScrollArea className="max-h-[60vh] overflow-y-auto p-1">
                 <div className="grid gap-4 py-4 pr-4">
                   <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectName" className="text-right col-span-1">Name</Label><Input id="newProjectName" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="e.g., Q4 Campaign" className="col-span-3" required /></div>
                   <div className="grid grid-cols-4 items-start gap-4"><Label htmlFor="newProjectDescription" className="text-right col-span-1 pt-2">Description</Label><Textarea id="newProjectDescription" value={newProjectDescription} onChange={(e) => setNewProjectDescription(e.target.value)} placeholder="Describe project scope" className="col-span-3" rows={3}/></div>
@@ -337,7 +330,7 @@ export default function CrmProjectsPage() {
                   <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectProgress" className="text-right col-span-1">Progress (%)</Label><Input id="newProjectProgress" type="number" value={newProjectProgress} onChange={(e) => setNewProjectProgress(e.target.value)} placeholder="0-100" className="col-span-3" min="0" max="100"/></div>
                   <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectDeadline" className="text-right col-span-1">Deadline</Label><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="newProjectDeadline" type="date" value={newProjectDeadline} onChange={(e) => setNewProjectDeadline(e.target.value)} className="pl-10" /></div></div>
                 </div>
-              </div>
+              </ScrollArea>
               <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline" onClick={resetAddProjectForm}>Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Project</Button></DialogFooter>
             </form>
           </DialogContent>
@@ -348,7 +341,7 @@ export default function CrmProjectsPage() {
         <DialogContent className="sm:max-w-[625px]">
           <DialogHeader><DialogTitle>Edit Project: {editingProject?.name}</DialogTitle><DialogDescription>Update project details.</DialogDescription></DialogHeader>
           <form onSubmit={handleEditProjectSubmit}>
-            <div className="max-h-[60vh] overflow-y-auto p-1">
+            <ScrollArea className="max-h-[60vh] overflow-y-auto p-1">
               <div className="grid gap-4 py-4 pr-4">
                 <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectName" className="text-right col-span-1">Name</Label><Input id="editFormProjectName" value={editFormProjectName} onChange={(e) => setEditFormProjectName(e.target.value)} className="col-span-3" required /></div>
                 <div className="grid grid-cols-4 items-start gap-4"><Label htmlFor="editFormProjectDescription" className="text-right col-span-1 pt-2">Description</Label><Textarea id="editFormProjectDescription" value={editFormProjectDescription} onChange={(e) => setEditFormProjectDescription(e.target.value)} className="col-span-3" rows={3}/></div>
@@ -358,7 +351,7 @@ export default function CrmProjectsPage() {
                 <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectProgress" className="text-right col-span-1">Progress (%)</Label><Input id="editFormProjectProgress" type="number" value={editFormProjectProgress} onChange={(e) => setEditFormProjectProgress(e.target.value)} className="col-span-3" min="0" max="100"/></div>
                 <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectDeadline" className="text-right col-span-1">Deadline</Label><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="editFormProjectDeadline" type="date" value={editFormProjectDeadline} onChange={(e) => setEditFormProjectDeadline(e.target.value)} className="pl-10" /></div></div>
               </div>
-            </div>
+            </ScrollArea>
             <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditProjectDialogOpen(false)}>Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button></DialogFooter>
           </form>
         </DialogContent>

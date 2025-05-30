@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -153,10 +152,12 @@ body {
   }
 }
 
-/* Custom utility class for react-beautiful-dnd draggable items */
+/* Custom utility class for react-beautiful-dnd draggable items - REMOVED as D&D is paused/changed */
+/*
 .rbd-draggable-card {
-  user-select: none; /* Standard property */
-  -webkit-user-select: none; /* Safari */
-  -moz-user-select: none; /* Firefox */
-  -ms-user-select: none; /* IE10+/Edge */
+  user-select: none; 
+  -webkit-user-select: none; 
+  -moz-user-select: none; 
+  -ms-user-select: none; 
 }
+*/
