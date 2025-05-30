@@ -16,6 +16,7 @@ import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
 import { summarizeConversation, suggestResponse } from "@/ai/flows"; 
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 type MessageType = "text" | "image" | "product" | "interactive";
 type MessageSender = "user" | "agent" | "system";
@@ -32,6 +33,7 @@ type Message = {
   productDescription?: string;
   buttons?: { label: string; payload: string }[];
   listItems?: { title: string; description?: string; payload: string }[];
+  dataAiHint?: string;
 };
 
 type ConversationStatus = "active" | "assigned" | "closed" | "archived";
@@ -344,7 +346,7 @@ export default function AgentWorkspacePage() {
                   <div className={`max-w-[70%] p-3 rounded-xl ${msg.sender === "agent" ? "bg-primary text-primary-foreground rounded-br-none" : "bg-card border rounded-bl-none"}`}>
                     {msg.type === "text" && <p className="text-sm">{msg.content}</p>}
                     {msg.type === "image" && msg.imageUrl && (
-                      <Image src={msg.imageUrl} alt="Sent image" width={200} height={150} className="rounded-md" data-ai-hint="chat image" />
+                      <Image src={msg.imageUrl} alt="Sent image" width={200} height={150} className="rounded-md" data-ai-hint={msg.dataAiHint || "chat image"} />
                     )}
                     {msg.type === "product" && (
                       <div className="space-y-1">
@@ -354,14 +356,27 @@ export default function AgentWorkspacePage() {
                         <p className="font-bold">{msg.productPrice}</p>
                       </div>
                     )}
-                     {msg.type === "interactive" && msg.buttons && (
-                      <div className="space-y-2 mt-2">
+                    {msg.type === "interactive" && msg.buttons && (
+                      <div className="mt-1"> {/* Container for interactive message content + buttons */}
                         {msg.content && <p className="text-sm mb-2">{msg.content}</p>}
-                        {msg.buttons.map(btn => (
-                          <Button key={btn.payload} variant="outline" size="sm" className="w-full bg-card hover:bg-accent/20">
-                            {btn.label}
-                          </Button>
-                        ))}
+                        <div className="flex flex-col gap-2 pt-1"> {/* Container for buttons only */}
+                          {msg.buttons.map(btn => (
+                            <Button
+                              key={btn.payload}
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                "w-full justify-start text-left px-3 py-2 h-auto rounded-md", // Base styling for buttons
+                                msg.sender === "agent"
+                                  ? "bg-white text-primary border-primary/50 hover:bg-primary/10" // Agent's buttons
+                                  : "bg-muted/50 hover:bg-muted" // User's buttons (if any)
+                              )}
+                              onClick={() => console.log("Button clicked:", btn.payload)} // Placeholder action
+                            >
+                              {btn.label}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
                     )}
                     <p className={`text-xs mt-1 ${msg.sender === "agent" ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left"}`}>{msg.timestamp}</p>
