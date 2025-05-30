@@ -1,8 +1,7 @@
-
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  url       = env("DATABASE_URL") // Uses connection pooling
+  directUrl = env("DIRECT_URL") // Used for migrations
 }
 
 generator client {
@@ -10,63 +9,76 @@ generator client {
 }
 
 model Tenant {
-  id                String   @id @default(cuid())
-  name              String
-  subdomain         String   @unique
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  users             User[]
-  channels          Channel[]
-  flows             Flow[]
-  leads             Lead[]
-  conversations     Conversation[]
-  sdkConfiguration  SdkConfiguration?
+  id          String    @id @default(cuid())
+  name        String
+  subdomain   String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  users       User[]
+  channels    Channel[]
+  flows       Flow[]
+  leads       Lead[]
+  sdkConfig   SdkConfiguration?
+  products    Product[] // Relation to Product
+  quotes      Quote[] // Relation to Quote
+  tasks       Task[] // Relation to Task
+  projects    Project[] // Relation to Project
 }
 
 model User {
-  id                      String          @id @default(cuid()) // This ID is for your app's user profiles
-  supabaseAuthUserId      String?         @unique // To link with Supabase auth.users.id if needed later
-  email                   String          @unique
-  name                    String?
-  avatarUrl               String?
-  createdAt               DateTime        @default(now())
-  updatedAt               DateTime        @updatedAt
-  tenantId                String
-  tenant                  Tenant          @relation(fields: [tenantId], references: [id])
-  roleId                  String?
-  role                    Role?           @relation(fields: [roleId], references: [id])
-  assignedConversations   Conversation[]  @relation("AgentConversations")
-  assignedLeads           Lead[]          @relation("AgentLeads")
+  id             String    @id // Supabase auth.users.id
+  email          String?   @unique // Supabase auth.users.email
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  roleId         String?
+  role           Role?     @relation(fields: [roleId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  assignedTasks  Task[]    @relation("AssignedTasks") // Tasks assigned to this user
+  conversations  Conversation[] // Agent handling conversations
+
+  // raw_user_meta_data from Supabase can store full_name, avatar_url, etc.
+  // Example: UserProfile model if you need more structured public user data
+  // profile UserProfile?
 }
 
+// Example UserProfile if you need more fields than auth.users provides publicly
+// model UserProfile {
+//   id        String  @id // Should match User.id
+//   user      User    @relation(fields: [id], references: [id])
+//   fullName  String?
+//   avatarUrl String?
+//   // other profile fields
+// }
+
 model Role {
-  id          String            @id @default(cuid())
-  name        String            @unique // e.g., "ADMINISTRATOR", "AGENT_SUPERVISOR", "AGENT"
-  description String?
-  users       User[]
-  permissions RolePermission[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id                String             @id @default(cuid())
+  name              String             @unique // e.g., Administrator, Agent Supervisor, Agent
+  description       String?
+  // tenantId String // If roles are tenant-specific beyond assignment
+  // tenant Tenant @relation(fields: [tenantId], references: [id])
+  users             User[]
+  permissions       RolePermission[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model Permission {
-  id          String            @id @default(cuid())
-  action      String            // e.g., "manage", "read", "create", "delete"
-  subject     String            // e.g., "User", "Conversation", "Flow", "Settings"
+  id          String             @id @default(cuid())
+  name        String             @unique // e.g., view_all_conversations, manage_leads
   description String?
+  category    String?            // e.g., Conversations, CRM, Settings
   roles       RolePermission[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  @@unique([action, subject])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 }
 
 model RolePermission {
   roleId       String
   permissionId String
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  assignedAt   DateTime   @default(now())
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  createdAt    DateTime   @default(now())
 
   @@id([roleId, permissionId])
 }
@@ -77,55 +89,54 @@ enum ChannelType {
   INSTAGRAM
   WEBCHAT
   API
-  TELEGRAM // Added Telegram as another common channel
+  TELEGRAM
 }
 
 model Channel {
-  id            String          @id @default(cuid())
-  name          String          // User-friendly name, e.g., "Support WhatsApp Line"
-  type          ChannelType
-  credentials   Json?           // Store API keys, tokens, specific config per channel type
-  isEnabled     Boolean         @default(true)
-  tenantId      String
-  tenant        Tenant          @relation(fields: [tenantId], references: [id])
+  id          String      @id @default(cuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  type        ChannelType
+  name        String // User-defined name for this channel instance
+  credentials Json? // Store API keys, tokens, etc.
+  isEnabled   Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   conversations Conversation[]
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
 }
 
 enum ConversationStatus {
   OPEN
-  PENDING // Waiting for agent or customer
+  PENDING
   RESOLVED
   CLOSED
-  BOT_HANDLING // When a flow is active
+  BOT // Handled by bot
+  AGENT // Needs agent attention or is with an agent
 }
 
 model Conversation {
-  id                String              @id @default(cuid())
-  tenantId          String
-  tenant            Tenant              @relation(fields: [tenantId], references: [id])
-  channelId         String
-  channel           Channel             @relation(fields: [channelId], references: [id])
-  customerId        String?             // Platform-specific ID of the customer (e.g., phone number, user_id)
-  customerName      String?
-  customerAvatarUrl String?
-  assignedAgentId   String?
-  agent             User?               @relation("AgentConversations", fields: [assignedAgentId], references: [id])
-  status            ConversationStatus  @default(OPEN)
-  lastMessageAt     DateTime?           // Timestamp of the last message, useful for sorting
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  messages          Message[]
-  tags              String[]            @default([]) // For PostgreSQL, use Json for other DBs if needed
-  // Could add summary, priority, etc.
+  id            String             @id @default(cuid())
+  tenantId      String
+  tenant        Tenant             @relation(fields: [tenantId], references: [id])
+  channelId     String
+  channel       Channel            @relation(fields: [channelId], references: [id])
+  externalId    String?            @unique // ID from the external channel (e.g., WhatsApp chat ID)
+  status        ConversationStatus @default(OPEN)
+  assignedToId  String?            // User ID of the agent
+  assignedTo    User?              @relation(fields: [assignedToId], references: [id])
+  lastMessageAt DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  messages      Message[]
+  leadId        String?
+  lead          Lead?              @relation(fields: [leadId], references: [id])
 }
 
 enum MessageSenderType {
-  CUSTOMER // End-user interacting with the business
-  AGENT    // Human agent from the business
-  BOT      // Automated flow/bot
-  SYSTEM   // System messages, e.g., "Conversation started"
+  USER // End-user/Customer
+  AGENT
+  BOT
+  SYSTEM
 }
 
 enum MessageType {
@@ -137,33 +148,29 @@ enum MessageType {
   LOCATION
   CONTACT
   STICKER
+  TEMPLATE
   INTERACTIVE_BUTTONS
   INTERACTIVE_LIST
   PRODUCT_SINGLE
   PRODUCT_LIST
-  TEMPLATE // For WhatsApp HMTs, etc.
-  UNSUPPORTED // Fallback for unknown message types
 }
 
 model Message {
-  id                 String            @id @default(cuid())
-  conversationId     String
-  conversation       Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  senderType         MessageSenderType
-  senderId           String?           // If CUSTOMER, their platform ID. If AGENT/BOT, the User.id.
-  content            String?           // Text content of the message
-  type               MessageType       @default(TEXT)
-  mediaUrl           String?           // URL for image, video, audio, file
-  mediaMimeType      String?
-  interactivePayload Json?             // For buttons, lists, product messages (structure depends on type)
-  templateName       String?           // If type is TEMPLATE
-  templateParams     Json?             // If type is TEMPLATE
-  timestamp          DateTime          @default(now()) // When the message was sent/received by Conecta Hub
-  platformMessageId  String?           @unique // ID of the message from the original platform (e.g., WhatsApp message ID)
-  deliveredAt        DateTime?
-  readAt             DateTime?
-  isDeleted          Boolean           @default(false) // Soft delete
-  metadata           Json?             // Any other platform-specific metadata
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   Conversation      @relation(fields: [conversationId], references: [id])
+  externalId     String?           @unique // Message ID from the external channel
+  senderType     MessageSenderType
+  senderId       String?           // Could be user_id, bot_id, or external contact ID
+  content        String?           // Text content
+  type           MessageType       @default(TEXT)
+  mediaUrl       String?           // URL for image, video, audio, file
+  mediaMimeType  String?
+  payload        Json?             // For interactive messages, product data, etc.
+  timestamp      DateTime          @default(now())
+  isRead         Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 }
 
 enum FlowStatus {
@@ -173,74 +180,162 @@ enum FlowStatus {
 }
 
 model Flow {
-  id            String     @id @default(cuid())
-  name          String
-  description   String?
-  configuration Json       // The JSON structure defining the flow nodes and transitions
-  status        FlowStatus @default(DRAFT)
-  tenantId      String
-  tenant        Tenant     @relation(fields: [tenantId], references: [id])
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  // Could add versioning, trigger types, etc.
+  id             String     @id @default(cuid())
+  tenantId       String
+  tenant         Tenant     @relation(fields: [tenantId], references: [id])
+  name           String
+  description    String?
+  configuration  Json? // Stores the ReactFlow nodes and edges, or other config
+  status         FlowStatus @default(DRAFT)
+  lastModifiedBy String? // User ID
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }
 
 model Lead {
-  id            String   @id @default(cuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
-  name          String?
-  email         String?
-  phone         String?
-  status        String?  // e.g., "New", "Contacted", "Qualified", "Unqualified", "Converted"
-  source        String?  // e.g., "Web Chat", "WhatsApp", "Manual Entry"
-  score         Int?
-  assignedToId  String?
-  assignedTo    User?    @relation("AgentLeads", fields: [assignedToId], references: [id])
-  notes         String?  @db.Text // For longer notes
-  customFields  Json?    // For flexible custom data
-  lastContactedAt DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([tenantId])
-  @@index([email])
-  @@index([phone])
+  id               String         @id @default(cuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  name             String
+  email            String?        @unique
+  phone            String?
+  company          String?
+  status           String?        // e.g., New, Contacted, Qualified, Lost, Won
+  source           String?        // e.g., Web Form, Chat, Referral
+  assignedToId     String?        // User ID of the agent/salesperson
+  // assignedTo    User?          @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  conversations    Conversation[]
+  quotes           Quote[]        // Relation to Quote
+  tasks            Task[]         // Relation to Task (tasks related to this lead)
+  projects         Project[]      // Relation to Project (projects originating from this lead)
 }
 
 model SdkConfiguration {
-  id                      String    @id @default(cuid())
-  tenantId                String    @unique
-  tenant                  Tenant    @relation(fields: [tenantId], references: [id])
-  primaryColor            String?   @default("#29ABE2")
-  widgetPosition          String?   @default("bottom-right") // "bottom-left"
-  showGreeting            Boolean   @default(true)
-  welcomeMessage          String?   @default("Hi there! 👋 How can we help you today?")
-  defaultFlowId           String?   // ID of a Flow to launch by default
-  // defaultFlow          Flow?     @relation(fields: [defaultFlowId], references: [id]) // Optional: explicit relation if needed
-  proactiveChatEnabled    Boolean   @default(false)
-  proactiveDelaySeconds   Int?      @default(10)
-  customCss               String?   @db.Text
-  allowedDomains          String[]  @default([]) // Domains where the widget can be embedded
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  id                  String   @id @default(cuid())
+  tenantId            String   @unique
+  tenant              Tenant   @relation(fields: [tenantId], references: [id])
+  primaryColor        String?  @default("#29ABE2")
+  widgetPosition      String?  @default("bottom-right") // e.g., bottom-right, bottom-left
+  showGreeting        Boolean? @default(true)
+  welcomeMessage      String?  @default("Hi there! 👋 How can we help you today?")
+  defaultFlowId       String?  // ID of the Flow to start
+  enableProactiveChat Boolean? @default(false)
+  proactiveDelay      Int?     @default(10) // seconds
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
-// Example for how auth.users table from Supabase Auth could be referenced
-// if you choose to have a public profiles table that mirrors it.
-// model UserProfile {
-//   id         String @id @default(uuid()) // Must match auth.users.id
-//   email      String @unique
-//   name       String?
-//   avatar_url String?
-//   tenant_id  String? // Could be nullable if users can exist without a tenant initially
-//   tenant     Tenant? @relation(fields: [tenant_id], references: [id])
-//   created_at DateTime @default(now())
-//   updated_at DateTime @updatedAt
-// }
+// CRM Specific Models
 
-// You would then set up a trigger in Supabase to sync data from auth.users to UserProfile.
-// For now, the User model above is intended to be the primary user table for your app's logic.
-// The supabaseAuthUserId field on User can be used to link to the auth.users table if needed.
+enum ProductType {
+  PRODUCTO
+  SERVICIO
+}
 
-    
+model Product {
+  id          String      @id @default(cuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  name        String
+  description String?
+  price       Decimal     @db.Decimal(10, 2)
+  type        ProductType
+  sku         String?     @unique // Stock Keeping Unit, if applicable
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  quoteItems  QuoteItem[]
+}
+
+enum QuoteStatus {
+  BORRADOR
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  ANULADA
+}
+
+model Quote {
+  id          String      @id @default(cuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  leadId      String
+  lead        Lead        @relation(fields: [leadId], references: [id])
+  quoteNumber String      @unique // e.g., COT-2024-001
+  status      QuoteStatus @default(BORRADOR)
+  issueDate   DateTime    @default(now())
+  expiryDate  DateTime?
+  subtotal    Decimal     @default(0) @db.Decimal(10, 2)
+  tax         Decimal     @default(0) @db.Decimal(10, 2)
+  total       Decimal     @default(0) @db.Decimal(10, 2)
+  notes       String?
+  terms       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       QuoteItem[]
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id])
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  description String   // Can be copied from product or customized
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2) // Price at the time of quote
+  totalPrice  Decimal  @db.Decimal(10, 2) // quantity * unitPrice
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum TaskStatus {
+  PENDIENTE
+  EN_PROGRESO
+  COMPLETADA
+  ARCHIVADA
+}
+
+model Task {
+  id               String     @id @default(cuid())
+  tenantId         String
+  tenant           Tenant     @relation(fields: [tenantId], references: [id])
+  title            String
+  description      String?
+  status           TaskStatus @default(PENDIENTE)
+  dueDate          DateTime?
+  assignedToUserId String?
+  assignedToUser   User?      @relation("AssignedTasks", fields: [assignedToUserId], references: [id])
+  relatedLeadId    String?
+  relatedLead      Lead?      @relation(fields: [relatedLeadId], references: [id])
+  relatedProjectId String?
+  relatedProject   Project?   @relation(fields: [relatedProjectId], references: [id])
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+enum ProjectStatus {
+  PLANIFICACION
+  ACTIVO
+  COMPLETADO
+  EN_ESPERA
+  CANCELADO
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  name        String
+  description String?
+  status      ProjectStatus @default(PLANIFICACION)
+  startDate   DateTime?
+  endDate     DateTime?
+  leadId      String?       // Optional: if project originated from a lead
+  lead        Lead?         @relation(fields: [leadId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  tasks       Task[]        // Tasks related to this project
+}

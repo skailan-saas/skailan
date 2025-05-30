@@ -14,6 +14,10 @@ import {
   FileText,
   Zap, 
   UserCircle,
+  Package, // For Products/Services
+  FileText as QuoteIcon, // Explicitly alias for Quotes if FileText is used elsewhere
+  ClipboardCheck, // For Tasks
+  Briefcase, // For Projects
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -29,6 +33,14 @@ const mainNavItems = [
   { href: "/dashboard", label: "Agent Workspace", icon: LayoutDashboard },
   { href: "/flows", label: "Flow Builder", icon: GitFork },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+];
+
+const crmNavItems = [
+  { href: "/crm/leads", label: "Leads", icon: Users },
+  { href: "/crm/products", label: "Products & Services", icon: Package },
+  { href: "/crm/quotes", label: "Quotes", icon: QuoteIcon },
+  { href: "/crm/tasks", label: "Tasks", icon: ClipboardCheck },
+  { href: "/crm/projects", label: "Projects", icon: Briefcase },
 ];
 
 const settingsNavItems = [
@@ -49,15 +61,15 @@ export function AppSidebarNav() {
   const { state: sidebarState } = useSidebar();
   const isCollapsed = sidebarState === "collapsed";
 
-  const renderNavItems = (items: typeof mainNavItems) =>
+  const renderNavItems = (items: {href: string, label: string, icon: React.ElementType}[]) =>
     items.map((item) => (
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
           asChild
-          isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/settings/profile" && item.href !== "/dashboard" && item.href !== "/flows" && item.href !== "/analytics") || (pathname === "/settings" && item.href === "/settings/profile")}
+          isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics", "/settings/profile"].includes(item.href) )}
           tooltip={item.label}
           className={cn(
-            (pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/settings/profile" && item.href !== "/dashboard" && item.href !== "/flows" && item.href !== "/analytics") || (pathname === "/settings" && item.href === "/settings/profile") )&& "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+             (pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics", "/settings/profile"].includes(item.href) )) && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
           )}
         >
           <Link href={item.href}>
@@ -75,6 +87,11 @@ export function AppSidebarNav() {
         <SidebarMenu>{renderNavItems(mainNavItems)}</SidebarMenu>
       </SidebarGroup>
 
+      <SidebarGroup>
+         {sidebarState === "expanded" && <SidebarGroupLabel>CRM</SidebarGroupLabel>}
+        <SidebarMenu>{renderNavItems(crmNavItems)}</SidebarMenu>
+      </SidebarGroup>
+      
       <SidebarGroup>
          {sidebarState === "expanded" && <SidebarGroupLabel>Settings</SidebarGroupLabel>}
         <SidebarMenu>{renderNavItems(settingsNavItems)}</SidebarMenu>
