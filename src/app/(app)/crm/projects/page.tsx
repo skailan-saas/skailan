@@ -54,9 +54,9 @@ interface ProjectCardProps {
   onDelete: (projectId: string) => void;
 }
 
-const ProjectCard: FC<ProjectCardProps> = ({ project, index, onEdit, onDelete }) => {
+const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, onDelete }) => {
   return (
-    <Draggable draggableId={String(project.id)} index={index}>
+    <Draggable key={project.id} draggableId={String(project.id)} index={index}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -72,7 +72,7 @@ const ProjectCard: FC<ProjectCardProps> = ({ project, index, onEdit, onDelete })
         >
           <div className="flex justify-between items-start mb-2">
             <h4 className="text-sm font-semibold leading-tight">{project.name}</h4>
-            {/* Temporarily remove DropdownMenu for debugging D&D */}
+            {/* Temporarily removed DropdownMenu for debugging D&D */}
             {/*
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
@@ -102,7 +102,7 @@ const ProjectCard: FC<ProjectCardProps> = ({ project, index, onEdit, onDelete })
       )}
     </Draggable>
   );
-};
+});
 ProjectCard.displayName = 'ProjectCard';
 
 interface ProjectKanbanBoardProps {
@@ -131,20 +131,20 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projectsByStatus, onD
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={cn(
-                        "w-[320px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]", 
+                        "w-[320px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]",
                         snapshot.isDraggingOver && "bg-primary/10 border-primary"
                     )}
                   >
                     <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
                       <h3 className="text-md font-semibold">{projectStatusToColumnTitle[statusKey]}</h3>
-                      <Badge variant="secondary" className="text-xs">{projectsByStatus[statusKey]?.length || 0}</Badge>
+                      <Badge variant="secondary" className="text-xs">{(projectsByStatus[statusKey] || []).length}</Badge>
                     </div>
-                    <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto"> 
-                      {projectsByStatus[statusKey]?.map((project, index) => (
+                    <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto">
+                      {(projectsByStatus[statusKey] || []).map((project, index) => (
                         <ProjectCard key={project.id} project={project} index={index} onEdit={onEditProject} onDelete={onDeleteProject} />
                       ))}
                       {provided.placeholder}
-                      {(projectsByStatus[statusKey]?.length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay proyectos en este estado.</p>)}
+                      {(!projectsByStatus[statusKey] || projectsByStatus[statusKey].length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay proyectos en este estado.</p>)}
                     </div>
                   </div>
                 )}
@@ -212,7 +212,7 @@ export default function CrmProjectsPage() {
     });
     toast({ title: "Project Added", description: `Project "${newProjectToAdd.name}" added.` });
     resetAddProjectForm(); setIsAddProjectDialogOpen(false);
-  }, [newProjectName, newProjectDescription, newProjectStatus, newProjectClientName, newProjectTeam, newProjectProgress, newProjectDeadline, resetAddProjectForm, toast, setProjectsByStatus]);
+  }, [newProjectName, newProjectDescription, newProjectStatus, newProjectClientName, newProjectTeam, newProjectProgress, newProjectDeadline, resetAddProjectForm, toast]);
 
   const openEditProjectDialog = useCallback((project: Project) => {
     setEditingProject(project);
@@ -229,7 +229,7 @@ export default function CrmProjectsPage() {
     const progressValue = parseInt(String(editFormProjectProgress), 10);
     if (isNaN(progressValue) || progressValue < 0 || progressValue > 100) { toast({ title: "Invalid Progress", description: "Progress must be 0-100.", variant: "destructive" }); return; }
     const teamMembers: ProjectTeamMember[] = editFormProjectTeam.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png?text=${name[0]}`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
-    
+
     const updatedProject: Project = {
       ...editingProject, name: editFormProjectName, description: editFormProjectDescription || undefined,
       status: editFormProjectStatus, clientName: editFormProjectClientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
@@ -237,7 +237,7 @@ export default function CrmProjectsPage() {
     };
 
     setProjectsByStatus(prev => {
-      const newProjectsByStatus = JSON.parse(JSON.stringify(prev)); // Deep copy
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prev)); 
       const oldStatus = editingProject.status;
       const newStatus = updatedProject.status;
 
@@ -248,7 +248,7 @@ export default function CrmProjectsPage() {
 
     toast({ title: "Project Updated", description: `Project "${updatedProject.name}" updated.` });
     setIsEditProjectDialogOpen(false); setEditingProject(null);
-  }, [editingProject, editFormProjectName, editFormProjectDescription, editFormProjectStatus, editFormProjectClientName, editFormProjectTeam, editFormProjectProgress, editFormProjectDeadline, toast, setProjectsByStatus]);
+  }, [editingProject, editFormProjectName, editFormProjectDescription, editFormProjectStatus, editFormProjectClientName, editFormProjectTeam, editFormProjectProgress, editFormProjectDeadline, toast]);
 
   const handleDeleteProject = useCallback((projectId: string) => {
     let projectToDelete: Project | undefined;
@@ -268,11 +268,11 @@ export default function CrmProjectsPage() {
      if (projectToDelete) {
       toast({ title: "Project Deleted (Demo)", description: `Project "${projectToDelete.name}" removed.` });
     }
-  }, [toast, setProjectsByStatus]);
+  }, [toast]);
 
   const onDragEndProjects = useCallback((result: DropResult) => {
-    const { source, destination } = result;
-    console.log("DragEnd Result Projects:", JSON.parse(JSON.stringify(result)));
+    const { source, destination, draggableId } = result;
+    console.log("DragEnd Projects:", JSON.parse(JSON.stringify(result)));
 
     if (!destination) {
       console.log("No destination, drag cancelled or invalid.");
@@ -281,38 +281,39 @@ export default function CrmProjectsPage() {
 
     const sourceStatus = source.droppableId as ProjectStatus;
     const destStatus = destination.droppableId as ProjectStatus;
-    
-    if (sourceStatus === destStatus) {
-      const items = Array.from(projectsByStatus[sourceStatus] || []);
-      const [reorderedItem] = items.splice(source.index, 1);
-      items.splice(destination.index, 0, reorderedItem);
 
-      setProjectsByStatus(prev => ({
-        ...prev,
-        [sourceStatus]: items,
-      }));
-      toast({ title: "Project Reordered", description: `Project "${reorderedItem.name}" reordered in ${projectStatusToColumnTitle[sourceStatus]}.` });
-    } else {
-      const sourceProjects = Array.from(projectsByStatus[sourceStatus] || []);
-      const destProjects = Array.from(projectsByStatus[destStatus] || []);
-      const [movedProject] = sourceProjects.splice(source.index, 1);
-      
-      if(!movedProject) {
-        console.warn("Could not find moved project in source list.");
-        return;
+    setProjectsByStatus(prevProjectsByStatus => {
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prevProjectsByStatus));
+      const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
+      const destProjects = sourceStatus === destStatus ? sourceProjects : Array.from(newProjectsByStatus[destStatus] || []);
+
+      const projectToMove = sourceProjects.find(project => String(project.id) === draggableId);
+
+      if (!projectToMove) {
+          console.warn(`Could not find moved project with id ${draggableId} in source list ${sourceStatus}.`);
+          return prevProjectsByStatus;
       }
 
-      const movedProjectCopy = { ...movedProject, status: destStatus };
-      destProjects.splice(destination.index, 0, movedProjectCopy);
-
-      setProjectsByStatus(prev => ({
-        ...prev,
-        [sourceStatus]: sourceProjects,
-        [destStatus]: destProjects,
-      }));
-      toast({ title: "Project Status Updated", description: `Project "${movedProject.name}" moved to ${projectStatusToColumnTitle[destStatus]}.` });
-    }
-  }, [projectsByStatus, toast, setProjectsByStatus]); 
+      // Remove from source list
+      const projectIndexInSource = sourceProjects.findIndex(project => String(project.id) === draggableId);
+      if (projectIndexInSource > -1) {
+          sourceProjects.splice(projectIndexInSource, 1);
+      }
+      
+      if (sourceStatus === destStatus) {
+          destProjects.splice(destination.index, 0, projectToMove);
+          newProjectsByStatus[sourceStatus] = destProjects;
+          toast({ title: "Project Reordered", description: `Project "${projectToMove.name}" reordered in ${projectStatusToColumnTitle[sourceStatus]}.` });
+      } else {
+          const movedProjectCopy = { ...projectToMove, status: destStatus };
+          destProjects.splice(destination.index, 0, movedProjectCopy);
+          newProjectsByStatus[sourceStatus] = sourceProjects;
+          newProjectsByStatus[destStatus] = destProjects;
+          toast({ title: "Project Status Updated", description: `Project "${projectToMove.name}" moved to ${projectStatusToColumnTitle[destStatus]}.` });
+      }
+      return newProjectsByStatus;
+    });
+  }, [toast, setProjectsByStatus]);
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -362,12 +363,12 @@ export default function CrmProjectsPage() {
           </form>
         </DialogContent>
       </Dialog>
-      
-      <ProjectKanbanBoard 
+
+      <ProjectKanbanBoard
           projectsByStatus={projectsByStatus}
           onDragEnd={onDragEndProjects}
-          onEditProject={openEditProjectDialog} 
-          onDeleteProject={handleDeleteProject} 
+          onEditProject={openEditProjectDialog}
+          onDeleteProject={handleDeleteProject}
       />
     </div>
   );
