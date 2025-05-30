@@ -10,9 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-// Removed Tabs import as it's no longer used for status filter
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit2, Mail, MessageSquare, MoreVertical, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Star, Trash2, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
+import { Edit2, Mail, MessageSquare, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Star, Trash2, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
 import { summarizeConversation, suggestResponse } from "@/ai/flows";
@@ -146,10 +145,10 @@ export default function AgentWorkspacePage() {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
       setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
-      setContactDaysAgo(Math.floor(Math.random() * 5) + 1); // Generate on client
+      setContactDaysAgo(Math.floor(Math.random() * 5) + 1); 
     } else {
       setMessages([]);
-      setContactDaysAgo(null); // Clear when no conversation is selected
+      setContactDaysAgo(null); 
     }
   }, [selectedConversationId]);
 
@@ -255,7 +254,6 @@ export default function AgentWorkspacePage() {
     toast({ title: "Conversation Archived" });
     const nextConv = conversations.find(c => c.id !== selectedConversationId && c.status !== 'archived');
     setSelectedConversationId(nextConv?.id || null);
-    // If the current filter was the status of the conversation we just archived, reset to "all"
     if (activeStatusFilter === oldStatus && activeStatusFilter !== "all" && activeStatusFilter !== "archived") {
         setActiveStatusFilter("all");
     }
@@ -263,9 +261,9 @@ export default function AgentWorkspacePage() {
 
   const handleUnarchiveAction = () => {
     if (!selectedConversationId || selectedConversation?.status !== "archived") return;
-    updateConversationStatus(selectedConversationId, "active", ""); // Or its previous status if stored
+    updateConversationStatus(selectedConversationId, "active", ""); 
     toast({ title: "Conversation Unarchived" });
-    setActiveStatusFilter("all"); // Switch to "all" view to see the unarchived conversation
+    setActiveStatusFilter("all"); 
   };
 
 
@@ -276,31 +274,29 @@ export default function AgentWorkspacePage() {
         <Card className="flex flex-col rounded-none border-0 md:border-r h-full">
           <CardHeader className="p-4 space-y-3">
             <Input placeholder="Search conversations..." className="rounded-full" />
-            <div className="flex flex-col sm:flex-row gap-2">
-                <Select value={activeStatusFilter} onValueChange={(value) => setActiveStatusFilter(value as StatusFilterOption)}>
-                    <SelectTrigger className="w-full sm:flex-1">
-                        <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {STATUS_FILTER_OPTIONS.map(opt => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                <Select value={selectedChannelFilter} onValueChange={(value) => setSelectedChannelFilter(value as Channel | "all")}>
-                <SelectTrigger className="w-full sm:flex-1">
-                    <SelectValue placeholder="Filter by channel" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Channels</SelectItem>
-                    {CHANNELS.map(channel => (
-                    <SelectItem key={channel} value={channel} className="capitalize">
-                        {channel.charAt(0).toUpperCase() + channel.slice(1)}
-                    </SelectItem>
-                    ))}
-                </SelectContent>
-                </Select>
-            </div>
+            <Select value={selectedChannelFilter} onValueChange={(value) => setSelectedChannelFilter(value as Channel | "all")}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filter by channel" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Channels</SelectItem>
+                {CHANNELS.map(channel => (
+                  <SelectItem key={channel} value={channel} className="capitalize">
+                    {channel.charAt(0).toUpperCase() + channel.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={activeStatusFilter} onValueChange={(value) => setActiveStatusFilter(value as StatusFilterOption)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_FILTER_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardHeader>
           <ScrollArea className="flex-1">
             <div className="space-y-1 p-2">
