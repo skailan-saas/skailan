@@ -3,8 +3,6 @@
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-// Removed Card import as we replace it with a div for debugging
-// import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -61,26 +59,26 @@ interface TaskCardProps {
   onDelete: (taskId: string) => void;
 }
 
-const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete }) => {
+const TaskCard: FC<TaskCardProps> = ({ task, index, onEdit, onDelete }) => {
   return (
-    <Draggable draggableId={task.id} index={index}>
+    <Draggable draggableId={String(task.id)} index={index}>
       {(provided, snapshot) => (
-        <div // Replaced Card with div for dnd debugging
+        <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
+          style={{
+            ...provided.draggableProps.style,
+          }}
           className={cn(
-            "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card", // Mimic Card styling
+            "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
             snapshot.isDragging && "shadow-xl opacity-80"
           )}
-          style={{
-            ...provided.draggableProps.style, // This includes the transform for movement
-            touchAction: 'none',
-          }}
         >
-          {/* Simplified content for debugging drag */}
           <div className="flex justify-between items-start mb-2">
             <h4 className="text-sm font-semibold leading-tight">{task.title}</h4>
+            {/* Temporarily remove DropdownMenu for debugging D&D */}
+            {/* 
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -88,6 +86,7 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            */}
           </div>
           {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{task.description}</p>}
           {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
@@ -103,9 +102,8 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
       )}
     </Draggable>
   );
-});
-TaskCard.displayName = 'TaskCard';
-
+};
+TaskCard.displayName = 'TaskCard'; // Added for React.memo if re-introduced
 
 interface TaskKanbanBoardProps {
   tasksByStatus: TasksByStatus;
@@ -129,19 +127,19 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onDragEnd, o
             {TASK_STATUSES.map((statusKey) => (
               <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
                 {(provided, snapshot) => (
-                  <div // Replaced Card with div for column
+                  <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={cn(
                         "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]", 
-                        snapshot.isDraggingOver && "bg-primary/10 border-primary" // Highlight when dragging over
+                        snapshot.isDraggingOver && "bg-primary/10 border-primary"
                     )}
                   >
                     <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
                       <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
                       <Badge variant="secondary" className="text-xs">{tasksByStatus[statusKey]?.length || 0}</Badge>
                     </div>
-                    <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto"> {/* Scrollable content area */}
+                    <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto"> 
                       {tasksByStatus[statusKey]?.map((task, index) => (
                         <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onDelete={onDeleteTask} />
                       ))}
@@ -176,7 +174,6 @@ export default function CrmTasksPage() {
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  // Form state for adding
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>("PENDIENTE");
@@ -185,7 +182,6 @@ export default function CrmTasksPage() {
   const [newTaskAssigneeName, setNewTaskAssigneeName] = useState("");
   const [newTaskTags, setNewTaskTags] = useState("");
 
-  // Form state for editing
   const [editFormTaskTitle, setEditFormTaskTitle] = useState("");
   const [editFormTaskDescription, setEditFormTaskDescription] = useState("");
   const [editFormTaskStatus, setEditFormTaskStatus] = useState<TaskStatus>("PENDIENTE");
@@ -238,14 +234,16 @@ export default function CrmTasksPage() {
     };
 
     setTasksByStatus(prev => {
-      const newTasksByStatus = { ...prev };
+      const newTasksByStatus = JSON.parse(JSON.stringify(prev)); // Deep copy for safety
+      const oldStatus = editingTask.status;
+      const newStatus = updatedTask.status;
+
       // Remove from old status list
-      newTasksByStatus[editingTask.status] = (newTasksByStatus[editingTask.status] || []).filter(t => t.id !== editingTask.id);
+      newTasksByStatus[oldStatus] = (newTasksByStatus[oldStatus] || []).filter((t: Task) => t.id !== editingTask.id);
       
       // Add to new status list
-      newTasksByStatus[updatedTask.status] = [...(newTasksByStatus[updatedTask.status] || []), updatedTask];
-      // Ensure tasks in the target list are sorted or handled as needed, for now just adding
-      // If order matters within columns, you'd need to splice it in at the correct index or re-sort.
+      newTasksByStatus[newStatus] = [...(newTasksByStatus[newStatus] || []), updatedTask];
+      
       return newTasksByStatus;
     });
 
@@ -256,13 +254,13 @@ export default function CrmTasksPage() {
   const handleDeleteTask = useCallback((taskId: string) => {
     let taskToDelete: Task | undefined;
     setTasksByStatus(prev => {
-      const newTasksByStatus = { ...prev };
+      const newTasksByStatus = JSON.parse(JSON.stringify(prev));
       for (const status of TASK_STATUSES) {
         const list = newTasksByStatus[status] || [];
-        const taskIndex = list.findIndex(t => t.id === taskId);
+        const taskIndex = list.findIndex((t: Task) => t.id === taskId);
         if (taskIndex > -1) {
           taskToDelete = list[taskIndex];
-          newTasksByStatus[status] = list.filter(p => p.id !== taskId);
+          newTasksByStatus[status] = list.filter((p: Task) => p.id !== taskId);
           break;
         }
       }
@@ -275,7 +273,7 @@ export default function CrmTasksPage() {
   
   const onDragEndTasks = useCallback((result: DropResult) => {
     const { source, destination } = result;
-    console.log("DragEnd Result:", JSON.parse(JSON.stringify(result)));
+    console.log("DragEnd Result Tasks:", JSON.parse(JSON.stringify(result)));
 
     if (!destination) {
       console.log("No destination, drag cancelled or invalid.");
@@ -283,35 +281,41 @@ export default function CrmTasksPage() {
     }
 
     const sourceStatus = source.droppableId as TaskStatus;
-    const destinationStatus = destination.droppableId as TaskStatus;
-    
-    setTasksByStatus((prevTasksByStatus) => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prevTasksByStatus)); // Deep copy
-      const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
+    const destStatus = destination.droppableId as TaskStatus;
+
+    if (sourceStatus === destStatus) {
+      // Reordering in the same column
+      const items = Array.from(tasksByStatus[sourceStatus] || []);
+      const [reorderedItem] = items.splice(source.index, 1);
+      items.splice(destination.index, 0, reorderedItem);
+
+      setTasksByStatus(prev => ({
+        ...prev,
+        [sourceStatus]: items,
+      }));
+      toast({ title: "Task Reordered", description: `Task "${reorderedItem.title}" reordered in ${statusToColumnTitle[sourceStatus]}.` });
+    } else {
+      // Moving to a different column
+      const sourceTasks = Array.from(tasksByStatus[sourceStatus] || []);
+      const destTasks = Array.from(tasksByStatus[destStatus] || []);
       const [movedTask] = sourceTasks.splice(source.index, 1);
 
       if (!movedTask) {
         console.warn("Could not find moved task in source list.");
-        return prevTasksByStatus;
-      }
-
-      movedTask.status = destinationStatus; // Update status of the moved task
-
-      if (sourceStatus === destinationStatus) { // Moved within the same column
-        sourceTasks.splice(destination.index, 0, movedTask);
-        newTasksByStatus[destinationStatus] = sourceTasks;
-      } else { // Moved to a different column
-        const destinationTasks = Array.from(newTasksByStatus[destinationStatus] || []);
-        destinationTasks.splice(destination.index, 0, movedTask);
-        newTasksByStatus[sourceStatus] = sourceTasks;
-        newTasksByStatus[destinationStatus] = destinationTasks;
+        return;
       }
       
-      console.log(`Task ${movedTask.id} moved from ${sourceStatus}[${source.index}] to ${destinationStatus}[${destination.index}]`);
-      toast({ title: "Task Status Updated", description: `Task "${movedTask.title}" moved to ${statusToColumnTitle[destinationStatus]}.` });
-      return newTasksByStatus;
-    });
-  }, [toast, setTasksByStatus]);
+      const movedTaskCopy = { ...movedTask, status: destStatus };
+      destTasks.splice(destination.index, 0, movedTaskCopy);
+
+      setTasksByStatus(prev => ({
+        ...prev,
+        [sourceStatus]: sourceTasks,
+        [destStatus]: destTasks,
+      }));
+      toast({ title: "Task Status Updated", description: `Task "${movedTask.title}" moved to ${statusToColumnTitle[destStatus]}.` });
+    }
+  }, [tasksByStatus, toast, setTasksByStatus]); 
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -371,4 +375,3 @@ export default function CrmTasksPage() {
     </div>
   );
 }
-

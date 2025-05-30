@@ -3,8 +3,6 @@
 
 import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-// Removed Card import as we replace it with a div for debugging
-// import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -56,26 +54,26 @@ interface ProjectCardProps {
   onDelete: (projectId: string) => void;
 }
 
-const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, onDelete }) => {
+const ProjectCard: FC<ProjectCardProps> = ({ project, index, onEdit, onDelete }) => {
   return (
-    <Draggable draggableId={project.id} index={index}>
+    <Draggable draggableId={String(project.id)} index={index}>
       {(provided, snapshot) => (
-        <div // Replaced Card with div for dnd debugging
+        <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
+          style={{
+            ...provided.draggableProps.style,
+          }}
           className={cn(
-            "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card", // Mimic Card styling
+            "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
             snapshot.isDragging && "shadow-xl opacity-80"
           )}
-          style={{
-            ...provided.draggableProps.style, // This includes the transform for movement
-            touchAction: 'none',
-          }}
         >
-          {/* Simplified content for debugging drag */}
           <div className="flex justify-between items-start mb-2">
             <h4 className="text-sm font-semibold leading-tight">{project.name}</h4>
+            {/* Temporarily remove DropdownMenu for debugging D&D */}
+            {/*
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -83,6 +81,7 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(project.id)}><Trash2 className="mr-2 h-4 w-4"/> Delete Project</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            */}
           </div>
           {project.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{project.description}</p>}
           {project.clientName && <p className="text-xs text-muted-foreground mb-1">Cliente: <span className="font-medium text-foreground">{project.clientName}</span></p>}
@@ -103,7 +102,7 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
       )}
     </Draggable>
   );
-});
+};
 ProjectCard.displayName = 'ProjectCard';
 
 interface ProjectKanbanBoardProps {
@@ -128,7 +127,7 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projectsByStatus, onD
             {PROJECT_STATUSES.map((statusKey) => (
               <Droppable key={statusKey} droppableId={statusKey} type="PROJECT" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
                 {(provided, snapshot) => (
-                  <div // Replaced Card with div for column
+                  <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={cn(
@@ -175,7 +174,6 @@ export default function CrmProjectsPage() {
   const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
-  // Form state for adding
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [newProjectStatus, setNewProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
@@ -184,7 +182,6 @@ export default function CrmProjectsPage() {
   const [newProjectProgress, setNewProjectProgress] = useState<number | string>(0);
   const [newProjectDeadline, setNewProjectDeadline] = useState("");
 
-  // Form state for editing
   const [editFormProjectName, setEditFormProjectName] = useState("");
   const [editFormProjectDescription, setEditFormProjectDescription] = useState("");
   const [editFormProjectStatus, setEditFormProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
@@ -240,9 +237,12 @@ export default function CrmProjectsPage() {
     };
 
     setProjectsByStatus(prev => {
-      const newProjectsByStatus = { ...prev };
-      newProjectsByStatus[editingProject.status] = (newProjectsByStatus[editingProject.status] || []).filter(p => p.id !== editingProject.id);
-      newProjectsByStatus[updatedProject.status] = [...(newProjectsByStatus[updatedProject.status] || []), updatedProject];
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prev)); // Deep copy
+      const oldStatus = editingProject.status;
+      const newStatus = updatedProject.status;
+
+      newProjectsByStatus[oldStatus] = (newProjectsByStatus[oldStatus] || []).filter((p: Project) => p.id !== editingProject.id);
+      newProjectsByStatus[newStatus] = [...(newProjectsByStatus[newStatus] || []), updatedProject];
       return newProjectsByStatus;
     });
 
@@ -253,13 +253,13 @@ export default function CrmProjectsPage() {
   const handleDeleteProject = useCallback((projectId: string) => {
     let projectToDelete: Project | undefined;
     setProjectsByStatus(prev => {
-      const newProjectsByStatus = { ...prev };
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prev));
       for (const status of PROJECT_STATUSES) {
         const list = newProjectsByStatus[status] || [];
-        const projectIndex = list.findIndex(p => p.id === projectId);
+        const projectIndex = list.findIndex((p: Project) => p.id === projectId);
         if (projectIndex > -1) {
           projectToDelete = list[projectIndex];
-          newProjectsByStatus[status] = list.filter(p => p.id !== projectId);
+          newProjectsByStatus[status] = list.filter((p:Project) => p.id !== projectId);
           break;
         }
       }
@@ -280,35 +280,39 @@ export default function CrmProjectsPage() {
     }
 
     const sourceStatus = source.droppableId as ProjectStatus;
-    const destinationStatus = destination.droppableId as ProjectStatus;
+    const destStatus = destination.droppableId as ProjectStatus;
     
-    setProjectsByStatus((prevProjectsByStatus) => {
-      const newProjectsByStatus = JSON.parse(JSON.stringify(prevProjectsByStatus));
-      const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
+    if (sourceStatus === destStatus) {
+      const items = Array.from(projectsByStatus[sourceStatus] || []);
+      const [reorderedItem] = items.splice(source.index, 1);
+      items.splice(destination.index, 0, reorderedItem);
+
+      setProjectsByStatus(prev => ({
+        ...prev,
+        [sourceStatus]: items,
+      }));
+      toast({ title: "Project Reordered", description: `Project "${reorderedItem.name}" reordered in ${projectStatusToColumnTitle[sourceStatus]}.` });
+    } else {
+      const sourceProjects = Array.from(projectsByStatus[sourceStatus] || []);
+      const destProjects = Array.from(projectsByStatus[destStatus] || []);
       const [movedProject] = sourceProjects.splice(source.index, 1);
-
-      if (!movedProject) {
+      
+      if(!movedProject) {
         console.warn("Could not find moved project in source list.");
-        return prevProjectsByStatus;
+        return;
       }
-      
-      movedProject.status = destinationStatus;
 
-      if (sourceStatus === destinationStatus) {
-        sourceProjects.splice(destination.index, 0, movedProject);
-        newProjectsByStatus[destinationStatus] = sourceProjects;
-      } else {
-        const destinationProjects = Array.from(newProjectsByStatus[destinationStatus] || []);
-        destinationProjects.splice(destination.index, 0, movedProject);
-        newProjectsByStatus[sourceStatus] = sourceProjects;
-        newProjectsByStatus[destinationStatus] = destinationProjects;
-      }
-      
-      console.log(`Project ${movedProject.id} moved from ${sourceStatus}[${source.index}] to ${destinationStatus}[${destination.index}]`);
-      toast({ title: "Project Status Updated", description: `Project "${movedProject.name}" moved to ${projectStatusToColumnTitle[destinationStatus]}.` });
-      return newProjectsByStatus;
-    });
-  }, [toast, setProjectsByStatus]); 
+      const movedProjectCopy = { ...movedProject, status: destStatus };
+      destProjects.splice(destination.index, 0, movedProjectCopy);
+
+      setProjectsByStatus(prev => ({
+        ...prev,
+        [sourceStatus]: sourceProjects,
+        [destStatus]: destProjects,
+      }));
+      toast({ title: "Project Status Updated", description: `Project "${movedProject.name}" moved to ${projectStatusToColumnTitle[destStatus]}.` });
+    }
+  }, [projectsByStatus, toast, setProjectsByStatus]); 
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -368,4 +372,3 @@ export default function CrmProjectsPage() {
     </div>
   );
 }
-
