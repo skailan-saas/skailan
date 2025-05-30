@@ -69,7 +69,7 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow",
+            "rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
             snapshot.isDragging && "shadow-xl opacity-80"
           )}
           style={{ ...provided.draggableProps.style }}
@@ -118,38 +118,38 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, o
   }
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <div className="flex-1 overflow-x-auto pb-4">
-        <div className="flex gap-4 min-w-max h-full">
-          {TASK_STATUSES.map((statusKey) => (
-            <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
-              {(provided, snapshot) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  className={cn(
-                    "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]",
-                    snapshot.isDraggingOver && "bg-primary/10"
-                  )}
-                >
-                  <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
-                    <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
-                    <Badge variant="secondary" className="text-xs">{tasksByStatus[statusKey]?.length || 0}</Badge>
+     <DragDropContext onDragEnd={onDragEnd}>
+        <div className="flex-1 overflow-x-auto pb-4">
+          <div className="flex gap-4 min-w-max h-full">
+            {TASK_STATUSES.map((statusKey) => (
+              <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={cn(
+                        "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]", 
+                        snapshot.isDraggingOver && "bg-primary/10"
+                    )}
+                  >
+                    <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
+                      <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
+                      <Badge variant="secondary" className="text-xs">{tasksByStatus[statusKey]?.length || 0}</Badge>
+                    </div>
+                    <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto"> 
+                      {tasksByStatus[statusKey]?.map((task, index) => (
+                        <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onDelete={onDeleteTask} />
+                      ))}
+                      {provided.placeholder}
+                      {(tasksByStatus[statusKey]?.length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
+                    </div>
                   </div>
-                  <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto">
-                    {tasksByStatus[statusKey]?.map((task, index) => (
-                      <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onDelete={onDeleteTask} />
-                    ))}
-                    {provided.placeholder}
-                    {(tasksByStatus[statusKey]?.length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
-                  </div>
-                </div>
-              )}
-            </Droppable>
-          ))}
+                )}
+              </Droppable>
+            ))}
+          </div>
         </div>
-      </div>
-    </DragDropContext>
+      </DragDropContext>
   );
 });
 TaskKanbanBoard.displayName = 'TaskKanbanBoard';
@@ -171,6 +171,7 @@ export default function CrmTasksPage() {
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  // Form state for adding
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>("PENDIENTE");
@@ -179,6 +180,7 @@ export default function CrmTasksPage() {
   const [newTaskAssigneeName, setNewTaskAssigneeName] = useState("");
   const [newTaskTags, setNewTaskTags] = useState("");
 
+  // Form state for editing
   const [editFormTaskTitle, setEditFormTaskTitle] = useState("");
   const [editFormTaskDescription, setEditFormTaskDescription] = useState("");
   const [editFormTaskStatus, setEditFormTaskStatus] = useState<TaskStatus>("PENDIENTE");
@@ -241,19 +243,18 @@ export default function CrmTasksPage() {
       const targetList = newTasksByStatus[updatedTask.status] || [];
       const taskIndex = targetList.findIndex(t => t.id === updatedTask.id);
       
-      if (taskIndex > -1) { // Task already in target list (or status didn't change)
+      if (editingTask.status === updatedTask.status && taskIndex > -1) { 
         targetList[taskIndex] = updatedTask;
-      } else { // Task moved to a new status list
+      } else if (editingTask.status !== updatedTask.status) { 
+         targetList.push(updatedTask);
+      } else if (taskIndex === -1) { // Should not happen if status didn't change, but as a fallback
         targetList.push(updatedTask);
       }
-      // Sort by original order or some other criteria if needed, for now just keep as is
-      // newTasksByStatus[updatedTask.status] = [...targetList.sort(...)]; 
       newTasksByStatus[updatedTask.status] = [...targetList];
-
       return newTasksByStatus;
     });
 
-    toast({ title: "Task Updated", description: `Task "${updatedTask.title}" updated.` });
+    toast({ title: "Task Updated", description: `Task "${updatedTask.name}" updated.` });
     setIsEditTaskDialogOpen(false); setEditingTask(null);
   }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast]);
 
@@ -279,36 +280,45 @@ export default function CrmTasksPage() {
   
   const onDragEndTasks = useCallback((result: DropResult) => {
     const { source, destination } = result;
-    if (!destination) return;
+    console.log("DragEnd Result:", JSON.parse(JSON.stringify(result)));
+
+    if (!destination) {
+      console.log("No destination, drag cancelled or invalid.");
+      return;
+    }
 
     const sourceStatus = source.droppableId as TaskStatus;
     const destinationStatus = destination.droppableId as TaskStatus;
+    const taskId = result.draggableId;
 
     setTasksByStatus((prevTasksByStatus) => {
-      const sourceTasks = Array.from(prevTasksByStatus[sourceStatus] || []);
-      const [movedTask] = sourceTasks.splice(source.index, 1);
-      
-      if (!movedTask) return prevTasksByStatus;
-
       const newTasksByStatus = { ...prevTasksByStatus };
+      const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
+      const destinationTasks = (sourceStatus === destinationStatus) 
+          ? sourceTasks 
+          : Array.from(newTasksByStatus[destinationStatus] || []);
+      
+      const [movedTask] = sourceTasks.splice(source.index, 1);
+
+      if (!movedTask) {
+        console.warn("Could not find moved task in source list.");
+        return prevTasksByStatus; // Return previous state if task not found
+      }
 
       if (sourceStatus === destinationStatus) {
-        // Reorder within the same column
-        const destinationTasks = Array.from(newTasksByStatus[destinationStatus] || []);
         destinationTasks.splice(destination.index, 0, movedTask);
         newTasksByStatus[destinationStatus] = destinationTasks;
       } else {
-        // Move to a different column
         movedTask.status = destinationStatus;
-        const destinationTasks = Array.from(newTasksByStatus[destinationStatus] || []);
         destinationTasks.splice(destination.index, 0, movedTask);
-        
-        newTasksByStatus[sourceStatus] = sourceTasks; // Update source column
-        newTasksByStatus[destinationStatus] = destinationTasks; // Update destination column
+        newTasksByStatus[sourceStatus] = sourceTasks;
+        newTasksByStatus[destinationStatus] = destinationTasks;
       }
+      
+      console.log(`Task ${movedTask.id} moved from ${sourceStatus} to ${destinationStatus}`);
+      toast({ title: "Task Status Updated", description: `Task "${movedTask.title}" moved to ${statusToColumnTitle[destinationStatus]}.` });
       return newTasksByStatus;
     });
-    toast({ title: "Task Status Updated", description: `Task moved to ${statusToColumnTitle[destinationStatus]}.` });
   }, [toast, setTasksByStatus]);
 
   return (
@@ -359,7 +369,6 @@ export default function CrmTasksPage() {
           </form>
         </DialogContent>
       </Dialog>
-      <p className="text-sm text-muted-foreground flex-shrink-0">Arrastra las tareas entre columnas para cambiar su estado.</p>
       
       <TaskKanbanBoard 
           tasksByStatus={tasksByStatus}
@@ -370,4 +379,3 @@ export default function CrmTasksPage() {
     </div>
   );
 }
-

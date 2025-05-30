@@ -64,7 +64,7 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow",
+            "rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
             snapshot.isDragging && "shadow-xl opacity-80"
           )}
           style={{ ...provided.draggableProps.style }}
@@ -168,6 +168,7 @@ export default function CrmProjectsPage() {
   const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
+  // Form state for adding
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [newProjectStatus, setNewProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
@@ -176,6 +177,7 @@ export default function CrmProjectsPage() {
   const [newProjectProgress, setNewProjectProgress] = useState<number | string>(0);
   const [newProjectDeadline, setNewProjectDeadline] = useState("");
 
+  // Form state for editing
   const [editFormProjectName, setEditFormProjectName] = useState("");
   const [editFormProjectDescription, setEditFormProjectDescription] = useState("");
   const [editFormProjectStatus, setEditFormProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
@@ -232,21 +234,23 @@ export default function CrmProjectsPage() {
 
     setProjectsByStatus(prev => {
       const newProjectsByStatus = { ...prev };
+      // Remove from old status list if status changed
       if (editingProject.status !== updatedProject.status) {
         newProjectsByStatus[editingProject.status] = (newProjectsByStatus[editingProject.status] || []).filter(p => p.id !== editingProject.id);
       }
       
+      // Add/Update in new status list
       const targetList = newProjectsByStatus[updatedProject.status] || [];
       const projectIndex = targetList.findIndex(p => p.id === updatedProject.id);
       
-      if (editingProject.status === updatedProject.status) { 
-        if (projectIndex > -1) {
-            targetList[projectIndex] = updatedProject;
-        }
-      } else { 
+      if (editingProject.status === updatedProject.status && projectIndex > -1) { 
+        targetList[projectIndex] = updatedProject;
+      } else if (editingProject.status !== updatedProject.status) {
+         targetList.push(updatedProject);
+      } else if (projectIndex === -1) { // Should not happen if status didn't change, but as fallback
          targetList.push(updatedProject);
       }
-      newProjectsByStatus[updatedProject.status] = [...targetList.sort((a,b) => (initialProjectsData.findIndex(p => p.id === a.id) - initialProjectsData.findIndex(p => p.id === b.id)))]; 
+      newProjectsByStatus[updatedProject.status] = [...targetList];
       return newProjectsByStatus;
     });
 
@@ -276,34 +280,46 @@ export default function CrmProjectsPage() {
 
   const onDragEndProjects = useCallback((result: DropResult) => {
     const { source, destination } = result;
-    if (!destination) return;
+    console.log("DragEnd Result:", JSON.parse(JSON.stringify(result)));
+
+    if (!destination) {
+      console.log("No destination, drag cancelled or invalid.");
+      return;
+    }
 
     const sourceStatus = source.droppableId as ProjectStatus;
     const destinationStatus = destination.droppableId as ProjectStatus;
+    const projectId = result.draggableId;
 
     setProjectsByStatus((prevProjectsByStatus) => {
-      const sourceProjects = Array.from(prevProjectsByStatus[sourceStatus] || []);
+      const newProjectsByStatus = { ...prevProjectsByStatus };
+      const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
+      const destinationProjects = (sourceStatus === destinationStatus) 
+          ? sourceProjects 
+          : Array.from(newProjectsByStatus[destinationStatus] || []);
+      
       const [movedProject] = sourceProjects.splice(source.index, 1);
 
-      if (!movedProject) return prevProjectsByStatus;
-      
-      const newProjectsByStatus = { ...prevProjectsByStatus };
+      if (!movedProject) {
+        console.warn("Could not find moved project in source list.");
+        return prevProjectsByStatus; // Return previous state if project not found
+      }
 
       if (sourceStatus === destinationStatus) {
-        const destinationProjects = Array.from(newProjectsByStatus[destinationStatus] || []);
         destinationProjects.splice(destination.index, 0, movedProject);
         newProjectsByStatus[destinationStatus] = destinationProjects;
       } else {
         movedProject.status = destinationStatus;
-        const destinationProjects = Array.from(newProjectsByStatus[destinationStatus] || []);
         destinationProjects.splice(destination.index, 0, movedProject);
         
         newProjectsByStatus[sourceStatus] = sourceProjects;
         newProjectsByStatus[destinationStatus] = destinationProjects;
       }
+      
+      console.log(`Project ${movedProject.id} moved from ${sourceStatus} to ${destinationStatus}`);
+      toast({ title: "Project Status Updated", description: `Project "${movedProject.name}" moved to ${projectStatusToColumnTitle[destinationStatus]}.` });
       return newProjectsByStatus;
     });
-    toast({ title: "Project Status Updated", description: `Project moved to ${projectStatusToColumnTitle[destinationStatus]}.` });
   }, [toast, setProjectsByStatus]); 
 
   return (
@@ -354,7 +370,6 @@ export default function CrmProjectsPage() {
           </form>
         </DialogContent>
       </Dialog>
-      <p className="text-sm text-muted-foreground flex-shrink-0">Arrastra los proyectos entre columnas para cambiar su estado.</p>
       
       <ProjectKanbanBoard 
           projectsByStatus={projectsByStatus}
@@ -365,4 +380,3 @@ export default function CrmProjectsPage() {
     </div>
   );
 }
-

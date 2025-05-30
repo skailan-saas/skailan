@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -150,4 +151,12 @@ body {
   .quote-print-area .bg-primary {
       background-color: transparent !important; /* Remove colored backgrounds */
   }
+}
+
+/* Custom utility class for react-beautiful-dnd draggable items */
+.rbd-draggable-card {
+  user-select: none; /* Standard property */
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+/Edge */
 }
