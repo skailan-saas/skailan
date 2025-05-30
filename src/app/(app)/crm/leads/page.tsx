@@ -9,19 +9,25 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { PlusCircle, Users, Search, Filter, MoreHorizontal, Edit, Trash2, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useState, type FormEvent } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 // Based on Prisma LeadStatus enum
 const LEAD_STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "LOST", "UNQUALIFIED"] as const;
 type LeadStatus = typeof LEAD_STATUSES[number];
+const LEAD_SOURCES = ["WhatsApp", "Web Chat", "Messenger", "Instagram", "Manual", "Referral"] as const;
+type LeadSource = typeof LEAD_SOURCES[number];
 
 interface Lead {
   id: string;
   name: string;
   email: string;
   phone?: string;
-  source: "WhatsApp" | "Web Chat" | "Messenger" | "Instagram" | "Manual" | "Referral";
+  source: LeadSource;
   status: LeadStatus;
   assignedTo?: { name: string; avatarUrl: string; avatarFallback: string; dataAiHint?: string };
   lastContacted?: string;
@@ -88,6 +94,46 @@ const initialLeads: Lead[] = [
 ];
 
 export default function CrmLeadsPage() {
+  const { toast } = useToast();
+  const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const [isAddLeadDialogOpen, setIsAddLeadDialogOpen] = useState(false);
+
+  // Form state for adding a new lead
+  const [newLeadName, setNewLeadName] = useState("");
+  const [newLeadEmail, setNewLeadEmail] = useState("");
+  const [newLeadPhone, setNewLeadPhone] = useState("");
+  const [newLeadCompany, setNewLeadCompany] = useState("");
+  const [newLeadSource, setNewLeadSource] = useState<LeadSource>("Manual");
+  const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>("NEW");
+
+  const resetAddLeadForm = () => {
+    setNewLeadName("");
+    setNewLeadEmail("");
+    setNewLeadPhone("");
+    setNewLeadCompany("");
+    setNewLeadSource("Manual");
+    setNewLeadStatus("NEW");
+  };
+
+  const handleAddLeadSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const newLead: Omit<Lead, "id" | "assignedTo" | "lastContacted" | "dataAiHint"> = {
+      name: newLeadName,
+      email: newLeadEmail,
+      phone: newLeadPhone || undefined,
+      company: newLeadCompany || undefined,
+      source: newLeadSource,
+      status: newLeadStatus,
+    };
+    // In a real app, you would send this to your backend to create the lead
+    console.log("New Lead Data:", newLead); 
+    // Add to local state for demo purposes
+    setLeads(prevLeads => [...prevLeads, { ...newLead, id: `lead-${Date.now()}`, lastContacted: new Date().toISOString().split('T')[0] }]);
+    toast({ title: "Lead Added (Demo)", description: `${newLead.name} has been added to the list.` });
+    resetAddLeadForm();
+    setIsAddLeadDialogOpen(false);
+  };
+
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
@@ -97,15 +143,71 @@ export default function CrmLeadsPage() {
             View, track, and manage all your customer leads.
           </p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Lead
-        </Button>
+        <Dialog open={isAddLeadDialogOpen} onOpenChange={setIsAddLeadDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setIsAddLeadDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Add New Lead
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[525px]">
+            <DialogHeader>
+              <DialogTitle>Add New Lead</DialogTitle>
+              <DialogDescription>Enter the details for the new lead.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddLeadSubmit}>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="leadName" className="text-right col-span-1">Full Name</Label>
+                  <Input id="leadName" value={newLeadName} onChange={(e) => setNewLeadName(e.target.value)} placeholder="e.g., John Doe" className="col-span-3" required />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="leadEmail" className="text-right col-span-1">Email</Label>
+                  <Input id="leadEmail" type="email" value={newLeadEmail} onChange={(e) => setNewLeadEmail(e.target.value)} placeholder="e.g., john@example.com" className="col-span-3" required />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="leadPhone" className="text-right col-span-1">Phone</Label>
+                  <Input id="leadPhone" value={newLeadPhone} onChange={(e) => setNewLeadPhone(e.target.value)} placeholder="e.g., 555-1234" className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="leadCompany" className="text-right col-span-1">Company</Label>
+                  <Input id="leadCompany" value={newLeadCompany} onChange={(e) => setNewLeadCompany(e.target.value)} placeholder="e.g., Acme Corp" className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="leadSource" className="text-right col-span-1">Source</Label>
+                  <Select value={newLeadSource} onValueChange={(value: LeadSource) => setNewLeadSource(value)}>
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select lead source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LEAD_SOURCES.map(source => <SelectItem key={source} value={source}>{source}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="leadStatus" className="text-right col-span-1">Status</Label>
+                  <Select value={newLeadStatus} onValueChange={(value: LeadStatus) => setNewLeadStatus(value)}>
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select lead status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LEAD_STATUSES.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddLeadForm}>Cancel</Button></DialogClose>
+                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Lead</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="shadow-lg flex-1 flex flex-col">
         <CardHeader className="border-b p-4">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
-            <CardTitle className="text-lg">All Leads</CardTitle>
+            <CardTitle className="text-lg">All Leads ({leads.length})</CardTitle>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:flex-initial">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -135,7 +237,7 @@ export default function CrmLeadsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {initialLeads.map((lead) => (
+                {leads.map((lead) => (
                   <TableRow key={lead.id}>
                     <TableCell>
                        <Avatar className="h-9 w-9">
@@ -193,7 +295,7 @@ export default function CrmLeadsPage() {
                 ))}
               </TableBody>
             </Table>
-             {initialLeads.length === 0 && (
+             {leads.length === 0 && (
                 <div className="text-center py-20">
                     <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-xl font-semibold text-foreground">No Leads Found</h3>
@@ -206,7 +308,7 @@ export default function CrmLeadsPage() {
         </CardContent>
       </Card>
       <div className="text-xs text-muted-foreground text-center flex-shrink-0 py-2">
-        Pagination and advanced filtering controls will be added here.
+        Showing {leads.length} of {leads.length} leads. Pagination and advanced filtering controls will be added here.
       </div>
     </div>
   );
