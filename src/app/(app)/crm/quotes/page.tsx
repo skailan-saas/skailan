@@ -48,7 +48,7 @@ const mockLeads: Lead[] = [
 
 
 export interface QuoteLineItem {
-  id: string; 
+  id: string;
   productId: string;
   productName: string;
   quantity: number;
@@ -59,13 +59,13 @@ export interface QuoteLineItem {
 export interface Quote {
   id: string;
   quoteNumber: string;
-  leadName: string; 
+  leadName: string;
   leadId?: string;
   dateCreated: string;
   expiryDate?: string;
   status: QuoteStatus;
   lineItems: QuoteLineItem[];
-  totalAmount: number; 
+  totalAmount: number;
 }
 
 const initialQuotesData: Quote[] = [
@@ -190,11 +190,11 @@ export default function CrmQuotesPage() {
       totalAmount: calculatedTotalAmount,
     };
 
-    if (editingQuote) { 
-      const updatedQuote: Quote = { ...editingQuote, ...quoteData };
+    if (editingQuote) {
+      const updatedQuote: Quote = { ...editingQuote, ...quoteData, totalAmount: calculatedTotalAmount }; // Recalculate total for edit
       setQuotes(prevQuotes => prevQuotes.map(q => q.id === editingQuote.id ? updatedQuote : q));
       toast({ title: "Quote Updated", description: `Quote ${updatedQuote.quoteNumber} has been updated.` });
-    } else { 
+    } else {
       const newQuoteToAdd: Quote = {
         id: `quote-${Date.now()}`,
         quoteNumber: `QT-${new Date().getFullYear()}-${String(quotes.length + 1).padStart(3, '0')}`,
@@ -204,21 +204,26 @@ export default function CrmQuotesPage() {
       setQuotes(prevQuotes => [newQuoteToAdd, ...prevQuotes]);
       toast({ title: "Quote Added", description: `Quote for ${newQuoteToAdd.leadName} has been added.` });
     }
-    
+
     resetDialogForm();
     setIsAddOrEditQuoteDialogOpen(false);
   };
-  
+
   const openEditQuoteDialog = (quote: Quote) => {
     setEditingQuote(quote);
+    setCurrentLeadId(quote.leadId || "");
+    setCurrentExpiryDate(quote.expiryDate || "");
+    setCurrentStatus(quote.status);
+    setCurrentLineItems([...quote.lineItems]); // Important: create a new array instance
     setIsAddOrEditQuoteDialogOpen(true);
   };
+
 
   const openAddQuoteDialog = () => {
     resetDialogForm();
     setIsAddOrEditQuoteDialogOpen(true);
   };
-  
+
   const handleDeleteQuote = (quoteId: string) => {
     setQuotes(prevQuotes => prevQuotes.filter(quote => quote.id !== quoteId));
     toast({ title: "Quote Deleted (Demo)", description: "Quote has been removed." });
@@ -234,13 +239,15 @@ export default function CrmQuotesPage() {
   };
 
   useEffect(() => {
+    // This effect handles pre-filling the edit dialog form
     if (isAddOrEditQuoteDialogOpen && editingQuote) {
         setCurrentLeadId(editingQuote.leadId || "");
         setCurrentExpiryDate(editingQuote.expiryDate || "");
         setCurrentStatus(editingQuote.status);
-        setCurrentLineItems([...editingQuote.lineItems]);
-    } else if (isAddOrEditQuoteDialogOpen && !editingQuote) {
-        resetDialogForm();
+        setCurrentLineItems([...editingQuote.lineItems]); // Ensure a new array instance for line items
+    } else if (!isAddOrEditQuoteDialogOpen) {
+        // Reset form when dialog closes and not in edit mode (e.g. after adding a new quote)
+        // resetDialogForm(); // Resetting here might be too aggressive if opening for add immediately after closing edit
     }
   }, [isAddOrEditQuoteDialogOpen, editingQuote]);
 
@@ -254,7 +261,7 @@ export default function CrmQuotesPage() {
           </p>
         </div>
         <Dialog open={isAddOrEditQuoteDialogOpen} onOpenChange={(isOpen) => {
-          if (!isOpen) resetDialogForm();
+          if (!isOpen) resetDialogForm(); // Reset form if dialog is closed by any means
           setIsAddOrEditQuoteDialogOpen(isOpen);
         }}>
           <DialogTrigger asChild>
@@ -326,7 +333,7 @@ export default function CrmQuotesPage() {
                         </Button>
                       </div>
                     </div>
-                    
+
                     {currentLineItems.length > 0 && (
                       <div className="mt-2">
                         <Table>
@@ -373,7 +380,7 @@ export default function CrmQuotesPage() {
           </DialogContent>
         </Dialog>
       </div>
-      
+
       <Card className="shadow-lg flex-1 flex flex-col">
         <CardHeader className="border-b p-4">
            <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
@@ -412,11 +419,11 @@ export default function CrmQuotesPage() {
                     <TableCell className="hidden md:table-cell">{quote.dateCreated}</TableCell>
                     <TableCell className="hidden lg:table-cell">{quote.expiryDate || "N/A"}</TableCell>
                     <TableCell>
-                      <Badge 
+                      <Badge
                         variant={
-                            quote.status === "ACCEPTED" ? "default" : 
+                            quote.status === "ACCEPTED" ? "default" :
                             quote.status === "SENT" ? "secondary" :
-                            quote.status === "REJECTED" || quote.status === "CANCELED" ? "destructive" : 
+                            quote.status === "REJECTED" || quote.status === "CANCELED" ? "destructive" :
                             "outline"
                         }
                         className={quote.status === "ACCEPTED" ? "bg-green-600 text-white" : ""}
@@ -463,7 +470,11 @@ export default function CrmQuotesPage() {
       {/* Quote Preview Dialog */}
       <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
         <DialogContent className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl p-0">
-          <ScrollArea className="max-h-[85vh]">
+          <DialogHeader className="p-4 pb-0 no-print"> {/* Added no-print here */}
+            <DialogTitle>Quote Preview: {quoteToPreview?.quoteNumber}</DialogTitle>
+             <DialogDescription>Review the quote details before printing or sending.</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[75vh] print:max-h-full print:overflow-visible"> {/* Adjusted max-h for preview */}
             <QuotePreview quote={quoteToPreview} />
           </ScrollArea>
           <DialogFooter className="p-4 border-t bg-background sm:justify-start no-print">
@@ -484,3 +495,4 @@ export default function CrmQuotesPage() {
   );
 }
     
+
