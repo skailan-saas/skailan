@@ -54,13 +54,13 @@ type Conversation = {
 };
 
 const initialConversations: Conversation[] = [
-  { id: "1", userName: "Alice Wonderland", lastMessageSnippet: "Thanks for your help!", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female avatar", unreadCount: 0, timestamp: "10:30 AM", channel: "whatsapp", tags: ["vip", "order_issue"], status: "closed", assignedAgentName: "Agent Smith" },
-  { id: "2", userName: "Bob The Builder", lastMessageSnippet: "Can I get a quote for...", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "male avatar", unreadCount: 2, timestamp: "11:15 AM", channel: "messenger", status: "active" },
-  { id: "3", userName: "Charlie Brown", lastMessageSnippet: "Is this item in stock?", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "person avatar", unreadCount: 0, timestamp: "09:00 AM", channel: "instagram", tags: ["new_lead"], status: "assigned", assignedAgentName: "Jane Doe" },
-  { id: "4", userName: "Diana Prince", lastMessageSnippet: "My order hasn't arrived.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", unreadCount: 1, timestamp: "Yesterday", channel: "web", tags: ["urgent"], status: "active" },
-  { id: "5", userName: "Edward Scissorhands", lastMessageSnippet: "Need help with pruning.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "goth man", unreadCount: 0, timestamp: "2 days ago", channel: "whatsapp", status: "archived" },
-  { id: "6", userName: "Fiona Gallagher", lastMessageSnippet: "Issue with web login", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman red hair", unreadCount: 3, timestamp: "11:30 AM", channel: "web", status: "active" },
-  { id: "7", userName: "Gomez Addams", lastMessageSnippet: "Enquiry about new features", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "man suit", unreadCount: 0, timestamp: "10:00 AM", channel: "messenger", status: "assigned", assignedAgentName: "Agent Smith" },
+  { id: "1", userName: "Alice Wonderland", lastMessageSnippet: "Thanks for your help! It was a very complicated issue but your support team managed to resolve it quickly.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female avatar", unreadCount: 0, timestamp: "10:30 AM", channel: "whatsapp", tags: ["vip", "order_issue"], status: "closed", assignedAgentName: "Agent Smith" },
+  { id: "2", userName: "Bob The Builder", lastMessageSnippet: "Can I get a quote for building a full e-commerce platform with custom integrations?", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "male avatar", unreadCount: 2, timestamp: "11:15 AM", channel: "messenger", status: "active" },
+  { id: "3", userName: "Charlie Brown", lastMessageSnippet: "Is this item in stock? I need it urgently for a special occasion.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "person avatar", unreadCount: 0, timestamp: "09:00 AM", channel: "instagram", tags: ["new_lead"], status: "assigned", assignedAgentName: "Jane Doe" },
+  { id: "4", userName: "Diana Prince", lastMessageSnippet: "My order hasn't arrived and the tracking number isn't working.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", unreadCount: 1, timestamp: "Yesterday", channel: "web", tags: ["urgent"], status: "active" },
+  { id: "5", userName: "Edward Scissorhands", lastMessageSnippet: "Need help with pruning my extensive topiary collection. It's quite a delicate job.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "goth man", unreadCount: 0, timestamp: "2 days ago", channel: "whatsapp", status: "archived" },
+  { id: "6", userName: "Fiona Gallagher", lastMessageSnippet: "Issue with web login, I keep getting an error message about invalid credentials.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman red hair", unreadCount: 3, timestamp: "11:30 AM", channel: "web", status: "active" },
+  { id: "7", userName: "Gomez Addams", lastMessageSnippet: "Enquiry about new AI features advertised on your website. Cara mia is very interested.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "man suit", unreadCount: 0, timestamp: "10:00 AM", channel: "messenger", status: "assigned", assignedAgentName: "Agent Smith" },
 ];
 
 const initialMessages: Record<string, Message[]> = {
@@ -68,13 +68,13 @@ const initialMessages: Record<string, Message[]> = {
     { id: "m1-1", sender: "user", content: "Hi, I have an issue with my recent order.", timestamp: "10:25 AM", type: "text" },
     { id: "m1-2", sender: "agent", content: "Hello Alice, I'm sorry to hear that. Can you please provide your order number?", timestamp: "10:26 AM", type: "text" },
     { id: "m1-3", sender: "user", content: "Sure, it's #12345.", timestamp: "10:27 AM", type: "text" },
-    { id: "m1-4", sender: "agent", content: "Thanks for your help!", timestamp: "10:30 AM", type: "text" },
+    { id: "m1-4", sender: "agent", content: "Thanks for your help! It was a very complicated issue but your support team managed to resolve it quickly.", timestamp: "10:30 AM", type: "text" },
   ],
   "2": [
     { id: "m2-1", sender: "user", content: "Hello, I'd like to inquire about your services.", timestamp: "11:10 AM", type: "text" },
-    { id: "m2-2", sender: "user", content: "Can I get a quote for building a website?", timestamp: "11:15 AM", type: "text" },
+    { id: "m2-2", sender: "user", content: "Can I get a quote for building a full e-commerce platform with custom integrations?", timestamp: "11:15 AM", type: "text" },
     { id: "m2-3", sender: "agent", content: "Hi Bob! We can certainly help with that. What kind of website are you looking for?", timestamp: "11:16 AM", type: "text" },
-    { id: "m2-4", sender: "user", content: "An e-commerce site.", timestamp: "11:18 AM", type: "text" },
+    { id: "m2-4", sender: "user", content: "An e-commerce site for selling artisanal tools.", timestamp: "11:18 AM", type: "text" },
     {
       id: "m2-5",
       sender: "agent",
@@ -85,7 +85,7 @@ const initialMessages: Record<string, Message[]> = {
     },
   ],
    "3": [
-    { id: "m3-1", sender: "user", content: "Is this item in stock?", timestamp: "09:00 AM", type: "text" },
+    { id: "m3-1", sender: "user", content: "Is this item in stock? I need it urgently for a special occasion.", timestamp: "09:00 AM", type: "text" },
     {
       id: "m3-2",
       sender: "agent",
@@ -100,10 +100,10 @@ const initialMessages: Record<string, Message[]> = {
     },
   ],
   "4": [
-     { id: "m4-1", sender: "user", content: "My order hasn't arrived.", timestamp: "Yesterday", type: "text" },
+     { id: "m4-1", sender: "user", content: "My order hasn't arrived and the tracking number isn't working.", timestamp: "Yesterday", type: "text" },
   ],
   "5": [
-    { id: "m5-1", sender: "user", content: "Need help with pruning.", timestamp: "2 days ago", type: "text" },
+    { id: "m5-1", sender: "user", content: "Need help with pruning my extensive topiary collection. It's quite a delicate job.", timestamp: "2 days ago", type: "text" },
     { id: "m5-2", sender: "agent", content: "Certainly, Edward. What seems to be the trouble with your topiary?", timestamp: "2 days ago", type: "text" },
   ],
   "6": [
@@ -112,7 +112,7 @@ const initialMessages: Record<string, Message[]> = {
     { id: "m6-3", sender: "agent", content: "Hi Fiona, let me help you with that. Could you try resetting your password?", timestamp: "11:30 AM", type: "text" },
   ],
   "7": [
-    { id: "m7-1", sender: "user", content: "Hello, I was wondering about the new AI features advertised.", timestamp: "09:55 AM", type: "text" },
+    { id: "m7-1", sender: "user", content: "Hello, I was wondering about the new AI features advertised on your website. Cara mia is very interested.", timestamp: "09:55 AM", type: "text" },
     { id: "m7-2", sender: "agent", content: "Good morning Gomez! Our new AI features include automated summarization and response suggestions. How can I help you explore them?", timestamp: "10:00 AM", type: "text" },
   ]
 };
@@ -145,6 +145,7 @@ export default function AgentWorkspacePage() {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
       setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
+      // Generate random days ago only when conversation changes
       setContactDaysAgo(Math.floor(Math.random() * 5) + 1); 
     } else {
       setMessages([]);
@@ -157,20 +158,20 @@ export default function AgentWorkspacePage() {
   }, [conversations, selectedConversationId]);
 
   const displayedConversations = useMemo(() => {
-    let filteredByStatus = conversations;
+    let filtered = conversations;
 
     if (activeStatusFilter === "all") {
-      filteredByStatus = conversations.filter(c => c.status !== 'archived');
+      filtered = conversations.filter(c => c.status !== 'archived');
     } else if (activeStatusFilter === "archived") {
-      filteredByStatus = conversations.filter(c => c.status === 'archived');
+      filtered = conversations.filter(c => c.status === 'archived');
     } else {
-      filteredByStatus = conversations.filter(c => c.status === activeStatusFilter);
+      filtered = conversations.filter(c => c.status === activeStatusFilter);
     }
 
-    if (selectedChannelFilter === "all") {
-      return filteredByStatus;
+    if (selectedChannelFilter !== "all") {
+      filtered = filtered.filter(c => c.channel === selectedChannelFilter);
     }
-    return filteredByStatus.filter(c => c.channel === selectedChannelFilter);
+    return filtered;
 
   }, [conversations, activeStatusFilter, selectedChannelFilter]);
 
@@ -225,7 +226,7 @@ export default function AgentWorkspacePage() {
     setConversations(prev => prev.map(conv => {
       if (conv.id === id) {
         const updatedConv = { ...conv, status };
-        if (agentName !== undefined) {
+        if (agentName !== undefined) { // Allows clearing agentName by passing empty string or null
           updatedConv.assignedAgentName = agentName || undefined;
         }
         return updatedConv;
@@ -236,6 +237,7 @@ export default function AgentWorkspacePage() {
 
   const handleAssignAction = () => {
     if (!selectedConversationId) return;
+    // In a real app, this would open a dialog to select an agent
     const demoAgent = "Agent Demo";
     updateConversationStatus(selectedConversationId, "assigned", demoAgent);
     toast({ title: "Conversation Assigned", description: `Assigned to ${demoAgent}.` });
@@ -252,8 +254,12 @@ export default function AgentWorkspacePage() {
     const oldStatus = selectedConversation?.status;
     updateConversationStatus(selectedConversationId, "archived");
     toast({ title: "Conversation Archived" });
+    // Optionally, select the next conversation
     const nextConv = conversations.find(c => c.id !== selectedConversationId && c.status !== 'archived');
     setSelectedConversationId(nextConv?.id || null);
+
+    // If the current filter was for the status that just got archived (and it's not 'all' or 'archived'),
+    // switch to a more general filter to avoid an empty list if that was the last item.
     if (activeStatusFilter === oldStatus && activeStatusFilter !== "all" && activeStatusFilter !== "archived") {
         setActiveStatusFilter("all");
     }
@@ -261,9 +267,11 @@ export default function AgentWorkspacePage() {
 
   const handleUnarchiveAction = () => {
     if (!selectedConversationId || selectedConversation?.status !== "archived") return;
+    // When unarchiving, set to 'active' and clear agent. 
+    // Or, restore its previous status if stored, for now 'active' is fine.
     updateConversationStatus(selectedConversationId, "active", ""); 
     toast({ title: "Conversation Unarchived" });
-    setActiveStatusFilter("all"); 
+    setActiveStatusFilter("all"); // Switch to 'all' to see the unarchived item
   };
 
 
@@ -288,14 +296,14 @@ export default function AgentWorkspacePage() {
               </SelectContent>
             </Select>
             <Select value={activeStatusFilter} onValueChange={(value) => setActiveStatusFilter(value as StatusFilterOption)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_FILTER_OPTIONS.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
+                <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                    {STATUS_FILTER_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                </SelectContent>
             </Select>
           </CardHeader>
           <ScrollArea className="flex-1">
@@ -313,27 +321,30 @@ export default function AgentWorkspacePage() {
                   className="w-full h-auto justify-start p-3 text-left"
                   onClick={() => setSelectedConversationId(conv.id)}
                 >
-                  <Avatar className="mr-3 h-10 w-10" data-ai-hint={conv.dataAiHint || "avatar person"}>
+                  <Avatar className="mr-3 h-10 w-10 flex-shrink-0" data-ai-hint={conv.dataAiHint || "avatar person"}>
                     <AvatarImage src={conv.avatarUrl} alt={conv.userName} />
                     <AvatarFallback>{conv.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 overflow-hidden">
                     <div className="flex justify-between items-center">
-                      <h3 className="font-semibold truncate">{conv.userName}</h3>
-                      <span className="text-xs text-muted-foreground">{conv.timestamp}</span>
+                      <h3 className="font-semibold">{conv.userName}</h3>
+                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{conv.timestamp}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">{conv.lastMessageSnippet}</p>
-                     <div className="flex items-center justify-between mt-1">
+                    <p className="text-sm text-muted-foreground">{conv.lastMessageSnippet}</p>
+                     <div className="flex items-center justify-between mt-1 flex-wrap gap-1">
                         <Badge variant="outline" className="text-xs capitalize">
                             {conv.channel}
                         </Badge>
                         {conv.status === "assigned" && conv.assignedAgentName && (
-                            <Badge variant="outline" className="text-xs">Asignada a: {conv.assignedAgentName}</Badge>
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">To: {conv.assignedAgentName}</Badge>
+                        )}
+                         {conv.status !== "assigned" && conv.status !== "active" && (
+                           <Badge variant={conv.status === "closed" || conv.status === "archived" ? "secondary" : "outline"} className="text-xs capitalize">{conv.status}</Badge>
                         )}
                     </div>
                   </div>
                   {conv.unreadCount > 0 && conv.status !== "archived" && (
-                    <Badge variant="default" className="ml-2 bg-primary text-primary-foreground">{conv.unreadCount}</Badge>
+                    <Badge variant="default" className="ml-2 bg-primary text-primary-foreground self-start mt-1">{conv.unreadCount}</Badge>
                   )}
                 </Button>
               ))}
@@ -374,7 +385,7 @@ export default function AgentWorkspacePage() {
                 )}
                  {selectedConversation.status === "archived" && (
                     <Tooltip>
-                      <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={handleUnarchiveAction}><ArchiveIcon className="h-5 w-5 text-green-600" /></Button></TooltipTrigger>
+                      <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={handleUnarchiveAction}><ArchiveIcon className="h-5 w-5 text-primary" /></Button></TooltipTrigger>
                       <TooltipContent><p>Desarchivar Conversación</p></TooltipContent>
                     </Tooltip>
                  )}
@@ -404,7 +415,7 @@ export default function AgentWorkspacePage() {
                         <p className="font-bold">{msg.productPrice}</p>
                       </div>
                     )}
-                    {msg.type === "interactive" && msg.buttons && (
+                     {msg.type === "interactive" && msg.buttons && (
                        <div className="mt-1">
                         {msg.content && <p className="text-sm mb-2">{msg.content}</p>}
                         <div className="flex flex-col gap-2 pt-1">
@@ -417,7 +428,7 @@ export default function AgentWorkspacePage() {
                                 "w-full justify-start text-left px-3 py-2 h-auto rounded-md",
                                 msg.sender === "agent"
                                   ? "bg-white text-primary border-primary/50 hover:bg-primary/10"
-                                  : "bg-muted/50 hover:bg-muted"
+                                  : "bg-muted/50 hover:bg-muted" // Style for user-sent buttons if ever needed
                               )}
                               onClick={() => console.log("Button clicked:", btn.payload)}
                             >
@@ -567,3 +578,4 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
+
