@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -10,9 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Bot, ChevronDown, ChevronRight, Edit3, PlusCircle, ToyBrick, HelpCircle, GitMerge, Share2, Upload, Download, FileText, Trash2, MessageCircle, X, ImageIcon, Plus, Settings, Sparkles } from "lucide-react";
-import { useState, useCallback, useEffect, useRef, type FC } from "react";
+import React, { useState, useCallback, useEffect, useRef, type FC } from "react";
 import ReactFlow, {
   Controls,
   Background,
@@ -60,7 +58,7 @@ const initialEdgesData: Edge[] = [
 const initialFlowsData: FlowListItem[] = [
   { id: "1", name: "Welcome Flow", description: "Greets new users and offers initial options.", lastModified: "2024-07-28", status: "Published", icon: Bot, nodes: [...initialNodesData], edges: [...initialEdgesData] },
   { id: "2", name: "Sales Inquiry", description: "Handles product questions and lead generation.", lastModified: "2024-07-25", status: "Draft", icon: ToyBrick, nodes: [{id: 'sales-start', type: 'input', data: {label: 'Sales Start'}, position: {x: 100, y: 50}}, {id: 'sales-q1', type: 'text', data: {label: 'Question 1', messageText: 'What product are you interested in?'}, position: {x:100, y:150}}], edges: [{id: 'e-sales-start-q1', source: 'sales-start', target: 'sales-q1'}] },
-  { id: "3", name: "Support Request", description: "Guides users through troubleshooting steps.", lastModified: "2024-07-22", status: "Published", icon: HelpCircle, nodes: [], edges: [] },
+  { id: "3", name: "Support Request", description: "Guides users through troubleshooting steps.", lastModified: "2024-07-22", status: "Published", icon: HelpCircle, nodes: [{id: 'support-start', type: 'input', data: {label: 'Support Start'}, position: {x:50,y:50}}], edges: [] },
   { id: "4", name: "Feedback Collection", description: "Gathers user feedback post-interaction.", lastModified: "2024-07-20", status: "Archived", icon: GitMerge, nodes: [{id: 'feedback-start', type: 'input', data: {label: 'Feedback Start'}, position: {x:50, y:50}}], edges: [] },
 ];
 
@@ -81,7 +79,7 @@ interface FlowBuilderCanvasProps {
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
   onNodeClick?: (event: React.MouseEvent, node: Node) => void;
-  nodeTypes?: NodeTypes; // Assuming you might define custom nodes later
+  nodeTypes?: NodeTypes;
 }
 
 function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect, onNodeClick, nodeTypes }: FlowBuilderCanvasProps) {
@@ -94,7 +92,7 @@ function FlowBuilderCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConne
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
-        nodeTypes={nodeTypes} // Pass nodeTypes here
+        nodeTypes={nodeTypes}
         fitView
       >
         <Controls />
@@ -113,19 +111,20 @@ export default function FlowsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedConfig, setGeneratedConfig] = useState<string | null>(null);
 
-  const [mockFlows, setMockFlows] = useState<FlowListItem[]>(initialFlowsData);
-  const [selectedFlow, setSelectedFlow] = useState<FlowListItem | null>(mockFlows[0] || null);
+  const [flows, setFlows] = useState<FlowListItem[]>(initialFlowsData);
+  const [selectedFlow, setSelectedFlow] = useState<FlowListItem | null>(flows[0] || null);
   
   const [nodes, setNodes, onNodesChange] = useNodesState(selectedFlow?.nodes || initialNodesData);
   const [edges, setEdges, onEdgesChange] = useEdgesState(selectedFlow?.edges || initialEdgesData);
   const [selectedNodeForEdit, setSelectedNodeForEdit] = useState<Node | null>(null);
   
-  const [isEditFlowDialogOpen, setIsEditFlowDialogOpen] = useState(false);
-  const [flowToEdit, setFlowToEdit] = useState<FlowListItem | null>(null);
+  const [isEditFlowDetailsDialogOpen, setIsEditFlowDetailsDialogOpen] = useState(false);
+  const [flowToEditDetails, setFlowToEditDetails] = useState<FlowListItem | null>(null);
   const [editFlowName, setEditFlowName] = useState("");
   const [editFlowDescription, setEditFlowDescription] = useState("");
 
   const [isDeleteFlowConfirmOpen, setIsDeleteFlowConfirmOpen] = useState(false);
+  const [flowToDelete, setFlowToDelete] = useState<FlowListItem | null>(null);
   
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
@@ -136,30 +135,27 @@ export default function FlowsPage() {
   }, []);
 
   useEffect(() => {
-    if (flowToEdit) {
-      setEditFlowName(flowToEdit.name);
-      setEditFlowDescription(flowToEdit.description);
+    if (flowToEditDetails) {
+      setEditFlowName(flowToEditDetails.name);
+      setEditFlowDescription(flowToEditDetails.description);
     }
-  }, [flowToEdit]);
+  }, [flowToEditDetails]);
 
-  // Load nodes and edges when selectedFlow changes
   useEffect(() => {
     if (selectedFlow) {
       setNodes(selectedFlow.nodes || []);
       setEdges(selectedFlow.edges || []);
-      setSelectedNodeForEdit(null); // Clear node editor when flow changes
+      setSelectedNodeForEdit(null); 
     } else {
-      // No flow selected, clear canvas or set to a default state
-      setNodes(initialNodesData); // Or an empty array: []
-      setEdges(initialEdgesData); // Or an empty array: []
+      setNodes(initialNodesData); 
+      setEdges(initialEdgesData);
       setSelectedNodeForEdit(null);
     }
   }, [selectedFlow, setNodes, setEdges]);
 
-  // Save nodes and edges back to mockFlows when they change for the selected flow
   useEffect(() => {
     if (selectedFlow) {
-      setMockFlows(prevFlows =>
+      setFlows(prevFlows =>
         prevFlows.map(flow =>
           flow.id === selectedFlow.id
             ? { ...flow, nodes: nodes, edges: edges, lastModified: new Date().toISOString().split('T')[0] }
@@ -167,7 +163,7 @@ export default function FlowsPage() {
         )
       );
     }
-  }, [nodes, edges, selectedFlow]); // Removed setMockFlows from deps as it's a setter from useState
+  }, [nodes, edges, selectedFlow?.id]); // Only run if selectedFlow.id changes, or nodes/edges
 
   const onConnect: OnConnect = useCallback(
     (connection) => setEdges((eds) => addEdge(connection, eds)),
@@ -202,20 +198,19 @@ export default function FlowsPage() {
     }
     let parsedNodes: Node[] = [];
     let parsedEdges: Edge[] = [];
-    const flowName = flowPrompt.substring(0,30) || "New AI Flow";
+    const flowName = flowPrompt.substring(0,30).trim() || "New AI Flow";
     const flowDesc = flowPrompt || "Flow generated by AI";
 
     try {
         const parsed = JSON.parse(generatedConfig);
-        // Basic validation - you might need more sophisticated parsing based on your AI output structure
         if (Array.isArray(parsed.nodes)) parsedNodes = parsed.nodes;
         if (Array.isArray(parsed.edges)) parsedEdges = parsed.edges;
+        if (parsedNodes.length === 0) throw new Error("Parsed nodes array is empty.");
     } catch (e) {
         console.error("Error parsing generated flow config:", e);
-        toast({ title: "Parsing Error", description: "Could not parse the generated flow configuration.", variant: "destructive"});
-        // Fallback to default if parsing fails
-        parsedNodes = [...initialNodesData];
-        parsedEdges = [...initialEdgesData];
+        toast({ title: "Parsing Error", description: "Could not parse. Using default flow structure.", variant: "destructive"});
+        parsedNodes = [...initialNodesData.map(n => ({...n, id: `${n.id}-${Date.now()}`}))]; // Make IDs unique
+        parsedEdges = [...initialEdgesData.map(e => ({...e, id: `${e.id}-${Date.now()}`}))]; // Make IDs unique
     }
     
     const newFlowId = `flow-${Date.now()}`;
@@ -225,13 +220,13 @@ export default function FlowsPage() {
       description: flowDesc,
       lastModified: new Date().toISOString().split('T')[0],
       status: "Draft",
-      icon: Bot, // Default icon
+      icon: Bot,
       nodes: parsedNodes,
       edges: parsedEdges,
     };
 
-    setMockFlows(prevFlows => [...prevFlows, newFlow]);
-    setSelectedFlow(newFlow); // Select the newly created flow
+    setFlows(prevFlows => [newFlow, ...prevFlows]);
+    setSelectedFlow(newFlow);
     setFlowPrompt("");
     setGeneratedConfig(null);
     toast({ title: "New Flow Created", description: `Flow "${newFlow.name}" added and selected.`});
@@ -244,7 +239,7 @@ export default function FlowsPage() {
         return;
     }
     nodeIdCounter++;
-    const newNodeId = `node_${selectedFlow.id}_${nodeIdCounter}`; // Make ID unique per flow as well
+    const newNodeId = `node_${selectedFlow.id}_${nodeIdCounter}`;
     const currentNodesCount = nodes.length;
     const newPosition = { x: (currentNodesCount % 5) * 150 + 50, y: Math.floor(currentNodesCount / 5) * 120 + 50 };
     
@@ -289,7 +284,7 @@ export default function FlowsPage() {
       data: newNodeData,
     };
     setNodes((nds) => nds.concat(newNode));
-    setSelectedNodeForEdit(null); // Close editor after adding node
+    setSelectedNodeForEdit(null);
   };
 
   const handleNodeEditorClose = () => {
@@ -306,7 +301,6 @@ export default function FlowsPage() {
           : node
       )
     );
-    // Also update selectedNodeForEdit to reflect changes immediately in the editor
     setSelectedNodeForEdit(prev => prev ? ({...prev, data: updatedNodeData }) : null);
   };
 
@@ -340,41 +334,41 @@ export default function FlowsPage() {
     toast({ title: "Node Deleted", description: `Node ${nodeIdToDelete} and its connections have been removed.`});
   };
 
-  const handleOpenEditFlowDialog = (flow: FlowListItem) => {
-    setFlowToEdit(flow);
-    setIsEditFlowDialogOpen(true);
+  const handleOpenEditFlowDetailsDialog = (flow: FlowListItem) => {
+    setFlowToEditDetails(flow);
+    setIsEditFlowDetailsDialogOpen(true);
   };
 
   const handleSaveFlowDetails = () => {
-    if (!flowToEdit) return;
-    const updatedFlows = mockFlows.map(f => 
-      f.id === flowToEdit.id ? { ...f, name: editFlowName, description: editFlowDescription, lastModified: new Date().toISOString().split('T')[0] } : f
+    if (!flowToEditDetails) return;
+    const updatedFlows = flows.map(f => 
+      f.id === flowToEditDetails.id ? { ...f, name: editFlowName, description: editFlowDescription, lastModified: new Date().toISOString().split('T')[0] } : f
     );
-    setMockFlows(updatedFlows);
-    if (selectedFlow && selectedFlow.id === flowToEdit.id) {
-      setSelectedFlow(updatedFlows.find(f => f.id === flowToEdit.id) || null);
+    setFlows(updatedFlows);
+    if (selectedFlow && selectedFlow.id === flowToEditDetails.id) {
+      setSelectedFlow(updatedFlows.find(f => f.id === flowToEditDetails.id) || null);
     }
-    setIsEditFlowDialogOpen(false);
-    setFlowToEdit(null);
+    setIsEditFlowDetailsDialogOpen(false);
+    setFlowToEditDetails(null);
     toast({ title: "Flow Details Updated", description: `Details for "${editFlowName}" saved.`});
+  };
+  
+  const triggerDeleteFlowConfirmation = (flow: FlowListItem) => {
+    setFlowToDelete(flow);
+    setIsDeleteFlowConfirmOpen(true);
   };
 
   const handleConfirmDeleteFlow = () => {
-    if (!selectedFlow) return;
-    const flowNameToDelete = selectedFlow.name;
-    setMockFlows(prevFlows => prevFlows.filter(f => f.id !== selectedFlow.id));
+    if (!flowToDelete) return;
+    const flowNameToDelete = flowToDelete.name;
+    const updatedFlows = flows.filter(f => f.id !== flowToDelete.id);
+    setFlows(updatedFlows);
     
-    // Select the first flow in the list, or null if no flows remain
-    const remainingFlows = mockFlows.filter(f => f.id !== selectedFlow.id);
-    setSelectedFlow(remainingFlows.length > 0 ? remainingFlows[0] : null);
-    
-    // If no flows remain, reset canvas, otherwise it will be updated by useEffect on selectedFlow change
-    if (remainingFlows.length === 0) {
-        setNodes(initialNodesData); 
-        setEdges(initialEdgesData);
+    if (selectedFlow && selectedFlow.id === flowToDelete.id) {
+      setSelectedFlow(updatedFlows.length > 0 ? updatedFlows[0] : null);
     }
-    setSelectedNodeForEdit(null);
-
+    
+    setFlowToDelete(null);
     setIsDeleteFlowConfirmOpen(false);
     toast({ title: "Flow Deleted", description: `Flow "${flowNameToDelete}" has been deleted.`});
   };
@@ -448,15 +442,12 @@ export default function FlowsPage() {
           <ScrollArea className="flex-1">
             <CardContent className="p-0">
               <div className="p-2 space-y-1">
-                {mockFlows.map((flow) => (
+                {flows.map((flow) => (
                   <Button
                     key={flow.id}
                     variant={selectedFlow?.id === flow.id ? "secondary" : "ghost"}
                     className="w-full h-auto justify-start p-3 text-left"
-                    onClick={() => {
-                        setSelectedFlow(flow);
-                        // Nodes/edges will be set by useEffect watching selectedFlow
-                    }}
+                    onClick={() => setSelectedFlow(flow)}
                     asChild
                   >
                     <div className="flex items-start gap-3 cursor-pointer w-full">
@@ -466,7 +457,7 @@ export default function FlowsPage() {
                         <p className="text-xs text-muted-foreground truncate">{flow.description}</p>
                         <p className="text-xs text-muted-foreground">Last modified: {flow.lastModified} - <span className={flow.status === 'Published' ? 'text-green-600' : flow.status === 'Draft' ? 'text-yellow-600' : 'text-muted-foreground'}>{flow.status}</span></p>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 self-center" onClick={(e) => {e.stopPropagation(); handleOpenEditFlowDialog(flow);}}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 self-center" onClick={(e) => {e.stopPropagation(); handleOpenEditFlowDetailsDialog(flow);}}>
                         <Edit3 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -493,18 +484,20 @@ export default function FlowsPage() {
                  <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={!selectedFlow}><PlusCircle className="mr-2 h-4 w-4"/> Save & Publish</Button>
                  <AlertDialog open={isDeleteFlowConfirmOpen} onOpenChange={setIsDeleteFlowConfirmOpen}>
                     <AlertDialogTrigger asChild>
-                        <Button variant="destructive" disabled={!selectedFlow}><Trash2 className="mr-2 h-4 w-4"/> Delete Flow</Button>
+                        <Button variant="destructive" disabled={!selectedFlow} onClick={() => selectedFlow && triggerDeleteFlowConfirmation(selectedFlow)}>
+                            <Trash2 className="mr-2 h-4 w-4"/> Delete Flow
+                        </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Are you sure you want to delete this flow?</AlertDialogTitle>
                         <AlertDialogDescription>
                           This action cannot be undone. This will permanently delete the flow
-                          "{selectedFlow?.name}".
+                          "{flowToDelete?.name || 'this flow'}".
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel onClick={() => setFlowToDelete(null)}>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={handleConfirmDeleteFlow} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                           Delete Flow
                         </AlertDialogAction>
@@ -521,7 +514,6 @@ export default function FlowsPage() {
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onNodeClick={onNodeClickHandler}
-                // nodeTypes={customNodeTypes} // For future custom node components
              />
           </div>
         </div>
@@ -550,10 +542,9 @@ export default function FlowsPage() {
                         className="mt-1 h-8"
                     />
                   </div>
-                  <Separator />
                   
                   {selectedNodeForEdit.type === 'text' && (
-                    <div>
+                    <div className="mt-2 pt-2 border-t">
                       <Label htmlFor="nodeMessageText">Message Text</Label>
                       <Textarea
                         id="nodeMessageText"
@@ -567,7 +558,7 @@ export default function FlowsPage() {
                   )}
 
                   {selectedNodeForEdit.type === 'image' && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 mt-2 pt-2 border-t">
                       <div>
                         <Label htmlFor="nodeImageUrl">Image URL</Label>
                         <Input 
@@ -592,7 +583,7 @@ export default function FlowsPage() {
                   )}
 
                   {selectedNodeForEdit.type === 'buttons' && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 mt-2 pt-2 border-t">
                       <div>
                         <Label htmlFor="buttonsNodeMessageText">Message Text (Optional)</Label>
                         <Textarea
@@ -642,7 +633,7 @@ export default function FlowsPage() {
                   )}
                   
                   {selectedNodeForEdit.type === 'userInput' && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 mt-2 pt-2 border-t">
                       <div>
                         <Label htmlFor="userInputPromptText">Prompt Text</Label>
                         <Textarea
@@ -669,7 +660,7 @@ export default function FlowsPage() {
                   )}
 
                   {selectedNodeForEdit.type === 'condition' && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 mt-2 pt-2 border-t">
                        <div>
                         <Label htmlFor="conditionVariable">Variable Name</Label>
                         <Input 
@@ -697,8 +688,8 @@ export default function FlowsPage() {
                                 <SelectItem value="ends_with">Ends With</SelectItem>
                                 <SelectItem value="is_set">Is Set (Exists)</SelectItem>
                                 <SelectItem value="is_not_set">Is Not Set</SelectItem>
-                                <SelectItem value="greater_than">Greater Than</SelectItem>
-                                <SelectItem value="less_than">Less Than</SelectItem>
+                                <SelectItem value="greater_than">Greater Than (Numeric)</SelectItem>
+                                <SelectItem value="less_than">Less Than (Numeric)</SelectItem>
                             </SelectContent>
                         </Select>
                       </div>
@@ -716,7 +707,7 @@ export default function FlowsPage() {
                   )}
 
                   {selectedNodeForEdit.type === 'action' && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 mt-2 pt-2 border-t">
                        <div>
                         <Label htmlFor="actionType">Action Type</Label>
                         <Select
@@ -732,6 +723,7 @@ export default function FlowsPage() {
                                 <SelectItem value="assign_agent">Assign to Agent</SelectItem>
                                 <SelectItem value="add_tag">Add Tag</SelectItem>
                                 <SelectItem value="send_email">Send Email</SelectItem>
+                                <SelectItem value="end_flow">End Flow</SelectItem>
                             </SelectContent>
                         </Select>
                       </div>
@@ -750,7 +742,7 @@ export default function FlowsPage() {
                   )}
 
                   {selectedNodeForEdit.type === 'carousel' && (
-                    <div>
+                    <div className="mt-2 pt-2 border-t">
                       <Label htmlFor="nodeCarouselConfig">Carousel Configuration (JSON)</Label>
                       <Textarea
                         id="nodeCarouselConfig"
@@ -764,18 +756,19 @@ export default function FlowsPage() {
                     </div>
                   )}
 
-                  {![ 'input', 'output', 'text', 'image', 'buttons', 'userInput', 'condition', 'action', 'carousel'].includes(selectedNodeForEdit.type || 'default') && (
-                     <div className="pt-2">
-                        <p className="text-xs text-muted-foreground">Type: {selectedNodeForEdit.type || 'default'}</p>
+                  {(selectedNodeForEdit.type === 'input' || selectedNodeForEdit.type === 'output') && (
+                     <div className="mt-2 pt-2 border-t">
                         <p className="text-xs text-muted-foreground mt-2">
-                            Specific editing options for this custom node type ('{selectedNodeForEdit.type}') are not yet implemented.
+                            Input and Output nodes typically only require a label for identification.
                         </p>
                     </div>
                   )}
-                   {(selectedNodeForEdit.type === 'input' || selectedNodeForEdit.type === 'output') && (
-                     <div className="pt-2">
+
+                  {![ 'input', 'output', 'text', 'image', 'buttons', 'userInput', 'condition', 'action', 'carousel'].includes(selectedNodeForEdit.type || 'default') && (
+                     <div className="mt-2 pt-2 border-t">
+                        <p className="text-xs text-muted-foreground">Type: {selectedNodeForEdit.type || 'default'}</p>
                         <p className="text-xs text-muted-foreground mt-2">
-                            Input and Output nodes typically only require a label for identification.
+                            Specific editing options for this node type ('{selectedNodeForEdit.type}') are not yet implemented.
                         </p>
                     </div>
                   )}
@@ -821,24 +814,23 @@ export default function FlowsPage() {
         </Card>
       </div>
 
-      {/* Edit Flow Details Dialog */}
-      <Dialog open={isEditFlowDialogOpen} onOpenChange={setIsEditFlowDialogOpen}>
+      <Dialog open={isEditFlowDetailsDialogOpen} onOpenChange={setIsEditFlowDetailsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Flow Details: {flowToEdit?.name}</DialogTitle>
+            <DialogTitle>Edit Flow Details: {flowToEditDetails?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="editFlowName">Flow Name</Label>
-              <Input id="editFlowName" value={editFlowName} onChange={(e) => setEditFlowName(e.target.value)} />
+              <Label htmlFor="editFlowNameInput">Flow Name</Label>
+              <Input id="editFlowNameInput" value={editFlowName} onChange={(e) => setEditFlowName(e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="editFlowDescription">Description</Label>
-              <Textarea id="editFlowDescription" value={editFlowDescription} onChange={(e) => setEditFlowDescription(e.target.value)} />
+              <Label htmlFor="editFlowDescriptionInput">Description</Label>
+              <Textarea id="editFlowDescriptionInput" value={editFlowDescription} onChange={(e) => setEditFlowDescription(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditFlowDialogOpen(false)}>Cancel</Button>
+            <DialogClose asChild><Button variant="outline" onClick={() => setIsEditFlowDetailsDialogOpen(false)}>Cancel</Button></DialogClose>
             <Button onClick={handleSaveFlowDetails}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
@@ -848,3 +840,4 @@ export default function FlowsPage() {
     </ReactFlowProvider>
   );
 }
+

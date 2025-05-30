@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,6 +80,9 @@ export default function RolesPage() {
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
 
+  const [isRemoveUserConfirmOpen, setIsRemoveUserConfirmOpen] = useState(false);
+  const [userToRemove, setUserToRemove] = useState<UserInTenant | null>(null);
+
   const handleInviteUser = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inviteEmail || !inviteRole) {
@@ -125,6 +129,19 @@ export default function RolesPage() {
     setNewRoleName("");
     setNewRoleDescription("");
     setIsAddRoleOpen(false);
+  };
+
+  const triggerRemoveUserConfirmation = (user: UserInTenant) => {
+    setUserToRemove(user);
+    setIsRemoveUserConfirmOpen(true);
+  };
+
+  const confirmRemoveUser = () => {
+    if (!userToRemove) return;
+    setUsers(prevUsers => prevUsers.filter(u => u.id !== userToRemove.id));
+    toast({ title: "User Removed (Demo)", description: `User ${userToRemove.email} removed from tenant.` });
+    setUserToRemove(null);
+    setIsRemoveUserConfirmOpen(false);
   };
 
   return (
@@ -330,7 +347,9 @@ export default function RolesPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Change Role</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Remove from Tenant</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => triggerRemoveUserConfirmation(user)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Remove from Tenant
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -341,7 +360,29 @@ export default function RolesPage() {
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* Remove User Confirmation Dialog */}
+      <AlertDialog open={isRemoveUserConfirmOpen} onOpenChange={setIsRemoveUserConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to remove this user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will remove user{" "}
+              <strong>{userToRemove?.email}</strong> from the tenant. They will
+              lose access.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setUserToRemove(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveUser} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              Remove User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
     </ScrollArea>
   );
 }
+
