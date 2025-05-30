@@ -16,7 +16,7 @@ import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, GripVertical, Eye,
 import { useState, type FC, type FormEvent, useEffect } from "react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
@@ -143,6 +143,7 @@ export default function CrmProjectsPage() {
   const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
+  // Form state for adding project
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [newProjectStatus, setNewProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
@@ -151,6 +152,7 @@ export default function CrmProjectsPage() {
   const [newProjectProgress, setNewProjectProgress] = useState<number | string>(0);
   const [newProjectDeadline, setNewProjectDeadline] = useState("");
   
+  // Form state for editing project
   const [editFormProjectName, setEditFormProjectName] = useState("");
   const [editFormProjectDescription, setEditFormProjectDescription] = useState("");
   const [editFormProjectStatus, setEditFormProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
@@ -246,7 +248,7 @@ export default function CrmProjectsPage() {
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleProjectDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
       <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
           <div>

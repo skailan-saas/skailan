@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, GripVertical, Tag, Eye, Edit, Trash2 } from "lucide-react";
 import { useState, type FC, type FormEvent, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 const TASK_STATUSES = ["PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"] as const;
@@ -179,6 +179,7 @@ export default function CrmTasksPage() {
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  // Form state for adding new task
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>("PENDIENTE");
@@ -187,6 +188,7 @@ export default function CrmTasksPage() {
   const [newTaskAssigneeName, setNewTaskAssigneeName] = useState("");
   const [newTaskTags, setNewTaskTags] = useState("");
 
+  // Form state for editing task
   const [editFormTaskTitle, setEditFormTaskTitle] = useState("");
   const [editFormTaskDescription, setEditFormTaskDescription] = useState("");
   const [editFormTaskStatus, setEditFormTaskStatus] = useState<TaskStatus>("PENDIENTE");
@@ -272,13 +274,13 @@ export default function CrmTasksPage() {
       );
       toast({
         title: "Task Status Updated",
-        description: `Task "${activeTask.title}" moved to ${statusToColumnTitle[targetStatus]}.`,
+        description: `Task "${activeTask.name}" moved to ${statusToColumnTitle[targetStatus]}.`,
       });
     }
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleTaskDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTaskDragEnd}>
       <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
           <div>
