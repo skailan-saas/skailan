@@ -2,13 +2,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer } from "lucide-react";
@@ -16,6 +16,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, type FormEvent, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { QuotePreview } from "@/components/crm/QuotePreview"; 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, FormProvider } from "react-hook-form";
+import { z } from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "CANCELED"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
@@ -38,13 +42,14 @@ const mockProducts: Product[] = [
 interface Lead {
   id: string;
   name: string;
+  dataAiHint?: string;
 }
 
 const mockLeads: Lead[] = [
-    { id: "lead-1", name: "Alice W. (Wonderland Inc.)" },
-    { id: "lead-2", name: "Bob T. (Builders Co.)" },
-    { id: "lead-3", name: "Charlie Brown (Good Grief LLC)" },
-    { id: "lead-4", name: "Diana Prince (Themyscira Ventures)" },
+    { id: "lead-1", name: "Alice W. (Wonderland Inc.)", dataAiHint: "woman face" },
+    { id: "lead-2", name: "Bob T. (Builders Co.)", dataAiHint: "man face" },
+    { id: "lead-3", name: "Charlie Brown (Good Grief LLC)", dataAiHint: "boy face" },
+    { id: "lead-4", name: "Diana Prince (Themyscira Ventures)", dataAiHint: "woman hero" },
 ];
 
 
@@ -67,6 +72,7 @@ export interface Quote {
   status: QuoteStatus;
   lineItems: QuoteLineItem[];
   totalAmount: number;
+  dataAiHint?: string;
 }
 
 const initialQuotesData: Quote[] = [
@@ -83,6 +89,7 @@ const initialQuotesData: Quote[] = [
       { id: "qli-1-2", productId: "prod-3", productName: "Monthly SEO Consulting", quantity: 1, unitPrice: 250, total: 250 },
     ],
     totalAmount: 5250.00,
+    dataAiHint: "document contract",
   },
   {
     id: "quote-2",
@@ -97,8 +104,18 @@ const initialQuotesData: Quote[] = [
       { id: "qli-2-2", productId: "prod-5", productName: "Graphic Design Package", quantity: 1, unitPrice: 800.55, total: 800.55 },
     ],
     totalAmount: 1800.50,
+    dataAiHint: "invoice paper",
   },
 ];
+
+const QuoteFormSchema = z.object({
+    leadId: z.string().min(1, "Lead/Customer is required"),
+    expiryDate: z.string().optional(),
+    status: z.enum(QUOTE_STATUSES, { required_error: "Quote status is required" }),
+    // Line items will be managed separately in state, not directly by react-hook-form for simplicity here
+});
+type QuoteFormValues = z.infer<typeof QuoteFormSchema>;
+
 
 export default function CrmQuotesPage() {
   const { toast } = useToast();
@@ -106,11 +123,8 @@ export default function CrmQuotesPage() {
   const [isAddOrEditQuoteDialogOpen, setIsAddOrEditQuoteDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
 
-  const [currentLeadId, setCurrentLeadId] = useState<string>("");
-  const [currentExpiryDate, setCurrentExpiryDate] = useState("");
-  const [currentStatus, setCurrentStatus] = useState<QuoteStatus>("DRAFT");
+  // State for the form within the dialog
   const [currentLineItems, setCurrentLineItems] = useState<QuoteLineItem[]>([]);
-
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [itemQuantity, setItemQuantity] = useState<number | string>(1);
   const [itemUnitPrice, setItemUnitPrice] = useState<number | string>("");
@@ -121,21 +135,43 @@ export default function CrmQuotesPage() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [quoteToDeleteId, setQuoteToDeleteId] = useState<string | null>(null);
 
+  const quoteForm = useForm<QuoteFormValues>({
+    resolver: zodResolver(QuoteFormSchema),
+    defaultValues: {
+        leadId: "",
+        expiryDate: "",
+        status: "DRAFT",
+    }
+  });
+
 
   const calculatedTotalAmount = useMemo(() => {
     return currentLineItems.reduce((sum, item) => sum + item.total, 0);
   }, [currentLineItems]);
 
-  const resetDialogForm = () => {
-    setCurrentLeadId("");
-    setCurrentExpiryDate("");
-    setCurrentStatus("DRAFT");
+  const resetDialogFormFields = () => {
+    quoteForm.reset({ leadId: "", expiryDate: "", status: "DRAFT" });
     setCurrentLineItems([]);
     setSelectedProductId("");
     setItemQuantity(1);
     setItemUnitPrice("");
-    setEditingQuote(null);
   };
+
+  useEffect(() => {
+    if (isAddOrEditQuoteDialogOpen) {
+      if (editingQuote) {
+        quoteForm.reset({
+          leadId: editingQuote.leadId || "",
+          expiryDate: editingQuote.expiryDate || "",
+          status: editingQuote.status,
+        });
+        setCurrentLineItems([...editingQuote.lineItems]);
+      } else {
+        resetDialogFormFields();
+      }
+    }
+  }, [isAddOrEditQuoteDialogOpen, editingQuote, quoteForm]);
+
 
   const handleProductSelectionChange = (productId: string) => {
     setSelectedProductId(productId);
@@ -174,10 +210,9 @@ export default function CrmQuotesPage() {
     setCurrentLineItems(prev => prev.filter(item => item.id !== itemId));
   };
 
-  const handleSaveQuote = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const selectedLead = mockLeads.find(l => l.id === currentLeadId);
-    if (!selectedLead) {
+  const handleActualSaveQuote = (values: QuoteFormValues) => {
+    const selectedLead = mockLeads.find(l => l.id === values.leadId);
+    if (!selectedLead) { // Should be caught by Zod, but good to double check
         toast({ title: "Missing Lead", description: "Please select a lead/customer.", variant: "destructive" });
         return;
     }
@@ -186,17 +221,18 @@ export default function CrmQuotesPage() {
         return;
     }
 
-    const quoteData: Omit<Quote, 'id' | 'quoteNumber' | 'dateCreated'> = {
+    const quoteData = {
       leadId: selectedLead.id,
       leadName: selectedLead.name,
-      expiryDate: currentExpiryDate || undefined,
-      status: currentStatus,
+      expiryDate: values.expiryDate || undefined,
+      status: values.status,
       lineItems: currentLineItems,
       totalAmount: calculatedTotalAmount,
+      dataAiHint: "document paper",
     };
 
     if (editingQuote) {
-      const updatedQuote: Quote = { ...editingQuote, ...quoteData, totalAmount: calculatedTotalAmount }; 
+      const updatedQuote: Quote = { ...editingQuote, ...quoteData }; 
       setQuotes(prevQuotes => prevQuotes.map(q => q.id === editingQuote.id ? updatedQuote : q));
       toast({ title: "Quote Updated", description: `Quote ${updatedQuote.quoteNumber} has been updated.` });
     } else {
@@ -209,23 +245,20 @@ export default function CrmQuotesPage() {
       setQuotes(prevQuotes => [newQuoteToAdd, ...prevQuotes]);
       toast({ title: "Quote Added", description: `Quote for ${newQuoteToAdd.leadName} has been added.` });
     }
-
-    resetDialogForm();
+    
     setIsAddOrEditQuoteDialogOpen(false);
+    setEditingQuote(null);
+    resetDialogFormFields(); 
   };
 
   const openEditQuoteDialog = (quote: Quote) => {
     setEditingQuote(quote);
-    setCurrentLeadId(quote.leadId || "");
-    setCurrentExpiryDate(quote.expiryDate || "");
-    setCurrentStatus(quote.status);
-    setCurrentLineItems([...quote.lineItems]);
     setIsAddOrEditQuoteDialogOpen(true);
   };
 
-
   const openAddQuoteDialog = () => {
-    resetDialogForm();
+    setEditingQuote(null); // Ensure we're in "add" mode
+    resetDialogFormFields();
     setIsAddOrEditQuoteDialogOpen(true);
   };
 
@@ -243,7 +276,6 @@ export default function CrmQuotesPage() {
     setQuoteToDeleteId(null);
   };
 
-
   const openPreviewDialog = (quote: Quote) => {
     setQuoteToPreview(quote);
     setIsPreviewDialogOpen(true);
@@ -252,17 +284,6 @@ export default function CrmQuotesPage() {
   const handlePrintQuote = () => {
     window.print();
   };
-
-  useEffect(() => {
-    if (isAddOrEditQuoteDialogOpen && editingQuote) {
-        setCurrentLeadId(editingQuote.leadId || "");
-        setCurrentExpiryDate(editingQuote.expiryDate || "");
-        setCurrentStatus(editingQuote.status);
-        setCurrentLineItems([...editingQuote.lineItems]); 
-    } else if (!isAddOrEditQuoteDialogOpen) {
-        // resetDialogForm(); 
-    }
-  }, [isAddOrEditQuoteDialogOpen, editingQuote]);
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -274,8 +295,8 @@ export default function CrmQuotesPage() {
           </p>
         </div>
         <Dialog open={isAddOrEditQuoteDialogOpen} onOpenChange={(isOpen) => {
-          if (!isOpen) resetDialogForm(); 
           setIsAddOrEditQuoteDialogOpen(isOpen);
+          if (!isOpen) setEditingQuote(null); // Reset editing state on close
         }}>
           <DialogTrigger asChild>
             <Button onClick={openAddQuoteDialog} className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -287,38 +308,63 @@ export default function CrmQuotesPage() {
               <DialogTitle>{editingQuote ? `Edit Quote: ${editingQuote.quoteNumber}` : "Create New Quote"}</DialogTitle>
               <DialogDescription>Enter the details for the sales quote.</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSaveQuote}>
-              <ScrollArea className="max-h-[65vh] p-1">
-                <div className="grid gap-4 py-4 pr-4">
+            <FormProvider {...quoteForm}>
+            <form onSubmit={quoteForm.handleSubmit(handleActualSaveQuote)}>
+              <ScrollArea className="max-h-[65vh] p-1 pr-3">
+                <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="currentLeadId">Lead/Customer</Label>
-                      <Select value={currentLeadId} onValueChange={setCurrentLeadId}>
-                        <SelectTrigger id="currentLeadId">
-                          <SelectValue placeholder="Select a lead" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {mockLeads.map(lead => (
-                            <SelectItem key={lead.id} value={lead.id}>{lead.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="currentExpiryDate">Expiry Date</Label>
-                      <div className="relative">
-                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input id="currentExpiryDate" type="date" value={currentExpiryDate} onChange={(e) => setCurrentExpiryDate(e.target.value)} className="pl-10" />
-                      </div>
-                    </div>
+                    <FormField
+                        control={quoteForm.control}
+                        name="leadId"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Lead/Customer</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                        <SelectTrigger><SelectValue placeholder="Select a lead" /></SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                    {mockLeads.map(lead => (
+                                        <SelectItem key={lead.id} value={lead.id}>{lead.name}</SelectItem>
+                                    ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={quoteForm.control}
+                        name="expiryDate"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Expiry Date</FormLabel>
+                                 <div className="relative">
+                                     <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                     <FormControl><Input type="date" className="pl-10" {...field} /></FormControl>
+                                </div>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
                   </div>
-                  <div>
-                    <Label htmlFor="currentStatus">Status</Label>
-                    <Select value={currentStatus} onValueChange={(value: QuoteStatus) => setCurrentStatus(value)}>
-                      <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                      <SelectContent>{QUOTE_STATUSES.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
+                  <FormField
+                    control={quoteForm.control}
+                    name="status"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Status</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                    <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>{QUOTE_STATUSES.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                  />
+                  
 
                   <div className="space-y-3 pt-4 border-t mt-2">
                     <h3 className="text-md font-semibold">Line Items</h3>
@@ -383,13 +429,14 @@ export default function CrmQuotesPage() {
                   </div>
                 </div>
               </ScrollArea>
-              <DialogFooter className="pt-4 border-t">
-                <DialogClose asChild><Button type="button" variant="outline" onClick={resetDialogForm}>Cancel</Button></DialogClose>
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <DialogFooter className="pt-4 border-t mt-2">
+                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={quoteForm.formState.isSubmitting}>
                   {editingQuote ? "Save Changes" : "Save Quote"}
                 </Button>
               </DialogFooter>
             </form>
+            </FormProvider>
           </DialogContent>
         </Dialog>
       </div>
@@ -441,7 +488,7 @@ export default function CrmQuotesPage() {
                         }
                         className={quote.status === "ACCEPTED" ? "bg-green-600 text-white" : ""}
                       >
-                        {quote.status}
+                        {quote.status.charAt(0) + quote.status.slice(1).toLowerCase()}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">${quote.totalAmount.toFixed(2)}</TableCell>
@@ -456,7 +503,8 @@ export default function CrmQuotesPage() {
                           <DropdownMenuItem onClick={() => openPreviewDialog(quote)}><Eye className="mr-2 h-4 w-4" /> View/Preview Quote</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem>
                           <DropdownMenuItem><Send className="mr-2 h-4 w-4" /> Send Quote</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => triggerDeleteConfirmation(quote.id)}>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => triggerDeleteConfirmation(quote.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Quote
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -504,14 +552,14 @@ export default function CrmQuotesPage() {
       <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this quote?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete quote 
               "{quotes.find(q => q.id === quoteToDeleteId)?.quoteNumber || 'this quote'}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setQuoteToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {setQuoteToDeleteId(null); setIsDeleteConfirmOpen(false);}}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteQuote} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
               Delete Quote
             </AlertDialogAction>
@@ -525,4 +573,3 @@ export default function CrmQuotesPage() {
     </div>
   );
 }
-

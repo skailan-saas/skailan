@@ -5,20 +5,24 @@ import React, { useState, type FC, type FormEvent, useEffect, useCallback } from
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react";
+import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, Eye, Edit, Trash2, User, Users } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent } from "@/components/ui/card";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, FormProvider } from "react-hook-form";
+import { z } from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+
 
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
 type ProjectStatus = typeof PROJECT_STATUSES[number];
@@ -33,6 +37,7 @@ interface Project {
   team?: ProjectTeamMember[];
   progress?: number;
   deadline?: string;
+  dataAiHint?: string;
 }
 
 type ProjectsByStatus = {
@@ -40,33 +45,47 @@ type ProjectsByStatus = {
 };
 
 const initialProjectsData: Project[] = [
-  { id: "proj-1", name: "Lanzamiento App Móvil", description: "Desarrollo y lanzamiento de la app móvil.", status: "ACTIVO", clientName: "Interno", team: [ { name: "Elena V.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", avatarFallback: "EV" }, { name: "Marco C.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "asian man", avatarFallback: "MC" } ], progress: 65, deadline: "2024-10-31", },
-  { id: "proj-2", name: "Integración CRM", status: "PLANIFICACION", clientName: "Cliente Alfa", progress: 10, deadline: "2024-11-15", },
-  { id: "proj-3", name: "Campaña Marketing Q4", description: "Planificación y ejecución de la campaña de marketing para el último trimestre.", status: "ACTIVO", clientName: "Marketing Dept.", team: [ { name: "Sofia L.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "latina woman", avatarFallback: "SL" } ], progress: 30, deadline: "2024-12-15", },
-  { id: "proj-4", name: "Rediseño Web Corporativa", status: "COMPLETADO", clientName: "CEO Office", progress: 100, deadline: "2024-06-30", },
+  { id: "proj-1", name: "Lanzamiento App Móvil", description: "Desarrollo y lanzamiento de la app móvil.", status: "ACTIVO", clientName: "Interno", team: [ { name: "Elena V.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", avatarFallback: "EV" }, { name: "Marco C.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "asian man", avatarFallback: "MC" } ], progress: 65, deadline: "2024-10-31", dataAiHint: "mobile app"},
+  { id: "proj-2", name: "Integración CRM", status: "PLANIFICACION", clientName: "Cliente Alfa", progress: 10, deadline: "2024-11-15", dataAiHint: "crm system"},
+  { id: "proj-3", name: "Campaña Marketing Q4", description: "Planificación y ejecución de la campaña de marketing para el último trimestre.", status: "ACTIVO", clientName: "Marketing Dept.", team: [ { name: "Sofia L.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "latina woman", avatarFallback: "SL" } ], progress: 30, deadline: "2024-12-15", dataAiHint: "marketing campaign"},
+  { id: "proj-4", name: "Rediseño Web Corporativa", status: "COMPLETADO", clientName: "CEO Office", progress: 100, deadline: "2024-06-30", dataAiHint: "website design"},
 ];
 
 const projectStatusToColumnTitle: Record<ProjectStatus, string> = {
   PLANIFICACION: "Planificación", ACTIVO: "Activo", COMPLETADO: "Completado", EN_ESPERA: "En Espera", CANCELADO: "Cancelado",
 };
 
+const ProjectFormSchema = z.object({
+    name: z.string().min(1, "Project name is required"),
+    description: z.string().optional(),
+    status: z.enum(PROJECT_STATUSES, { required_error: "Status is required" }),
+    clientName: z.string().optional(),
+    teamMembers: z.string().optional(), // Comma-separated names for now
+    progress: z.coerce.number().min(0).max(100).optional(),
+    deadline: z.string().optional(),
+});
+type ProjectFormValues = z.infer<typeof ProjectFormSchema>;
+
+
 interface ProjectCardProps {
   project: Project;
   index: number;
   onEdit: (project: Project) => void;
+  onView: (project: Project) => void;
   onDelete: (projectId: string) => void;
 }
 
-const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, onDelete }) => {
+const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, onView, onDelete }) => {
   return (
-    <Draggable key={String(project.id)} draggableId={String(project.id)} index={index}>
+    <Draggable draggableId={String(project.id)} index={index}>
       {(provided, snapshot) => (
-        <Card
+        <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           style={{
             ...provided.draggableProps.style,
+            userSelect: "none",
           }}
           className={cn(
             "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
@@ -78,8 +97,10 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(project)}><Eye className="mr-2 h-4 w-4" /> View/Edit Project</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(project.id)}><Trash2 className="mr-2 h-4 w-4"/> Delete Project</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onView(project)}><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onEdit(project)}><Edit className="mr-2 h-4 w-4" /> Edit Project</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => onDelete(project.id)}><Trash2 className="mr-2 h-4 w-4"/> Delete Project</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -98,7 +119,7 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
                 <Progress value={project.progress} className="h-2" />
             </div>
           )}
-        </Card>
+        </div>
       )}
     </Draggable>
   );
@@ -109,10 +130,11 @@ interface ProjectKanbanBoardProps {
   projectsByStatus: ProjectsByStatus;
   onDragEnd: (result: DropResult) => void;
   onEditProject: (project: Project) => void;
+  onViewProject: (project: Project) => void;
   onDeleteProject: (projectId: string) => void;
 }
 
-const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projectsByStatus, onDragEnd, onEditProject, onDeleteProject }) => {
+const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projectsByStatus, onDragEnd, onEditProject, onViewProject, onDeleteProject }) => {
   const [isClient, setIsClient] = useState(false);
   useEffect(() => { setIsClient(true); }, []);
 
@@ -141,7 +163,7 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projectsByStatus, onD
                     </div>
                     <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto">
                       {(projectsByStatus[statusKey] || []).map((project, index) => (
-                        <ProjectCard key={project.id} project={project} index={index} onEdit={onEditProject} onDelete={onDeleteProject} />
+                        <ProjectCard key={project.id} project={project} index={index} onEdit={onEditProject} onView={onViewProject} onDelete={onDeleteProject} />
                       ))}
                       {provided.placeholder}
                       {(!projectsByStatus[statusKey] || projectsByStatus[statusKey].length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay proyectos en este estado.</p>)}
@@ -177,66 +199,67 @@ export default function CrmProjectsPage() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [projectToDeleteId, setProjectToDeleteId] = useState<string | null>(null);
 
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectDescription, setNewProjectDescription] = useState("");
-  const [newProjectStatus, setNewProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
-  const [newProjectClientName, setNewProjectClientName] = useState("");
-  const [newProjectTeam, setNewProjectTeam] = useState("");
-  const [newProjectProgress, setNewProjectProgress] = useState<number | string>(0);
-  const [newProjectDeadline, setNewProjectDeadline] = useState("");
+  const [isViewProjectDialogOpen, setIsViewProjectDialogOpen] = useState(false);
+  const [viewingProject, setViewingProject] = useState<Project | null>(null);
 
-  const [editFormProjectName, setEditFormProjectName] = useState("");
-  const [editFormProjectDescription, setEditFormProjectDescription] = useState("");
-  const [editFormProjectStatus, setEditFormProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
-  const [editFormProjectClientName, setEditFormProjectClientName] = useState("");
-  const [editFormProjectTeam, setEditFormProjectTeam] = useState("");
-  const [editFormProjectProgress, setEditFormProjectProgress] = useState<number | string>(0);
-  const [editFormProjectDeadline, setEditFormProjectDeadline] = useState("");
+  const addProjectForm = useForm<ProjectFormValues>({
+    resolver: zodResolver(ProjectFormSchema),
+    defaultValues: { name: "", description: "", status: "PLANIFICACION", clientName: "", teamMembers: "", progress: 0, deadline: "" },
+  });
 
-  const resetAddProjectForm = useCallback(() => {
-    setNewProjectName(""); setNewProjectDescription(""); setNewProjectStatus("PLANIFICACION");
-    setNewProjectClientName(""); setNewProjectTeam(""); setNewProjectProgress(0); setNewProjectDeadline("");
-  }, []);
+  const editProjectForm = useForm<ProjectFormValues>({
+    resolver: zodResolver(ProjectFormSchema),
+  });
 
-  const handleAddProjectSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const progressValue = parseInt(String(newProjectProgress), 10);
-    if (isNaN(progressValue) || progressValue < 0 || progressValue > 100) { toast({ title: "Invalid Progress", description: "Progress must be 0-100.", variant: "destructive" }); return; }
-    const teamMembers: ProjectTeamMember[] = newProjectTeam.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
+  useEffect(() => {
+    if (editingProject) {
+        editProjectForm.reset({
+            name: editingProject.name,
+            description: editingProject.description || "",
+            status: editingProject.status,
+            clientName: editingProject.clientName || "",
+            teamMembers: editingProject.team?.map(m => m.name).join(", ") || "",
+            progress: editingProject.progress || 0,
+            deadline: editingProject.deadline || "",
+        });
+    }
+  }, [editingProject, editProjectForm]);
+
+  const handleActualAddProjectSubmit = useCallback((values: ProjectFormValues) => {
+    const teamMembers: ProjectTeamMember[] = values.teamMembers?.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()})) || [];
     const newProjectToAdd: Project = {
-      id: `proj-${Date.now()}`, name: newProjectName, description: newProjectDescription || undefined,
-      status: newProjectStatus, clientName: newProjectClientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
-      progress: progressValue, deadline: newProjectDeadline || undefined,
+      id: `proj-${Date.now()}`, name: values.name, description: values.description || undefined,
+      status: values.status, clientName: values.clientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
+      progress: values.progress, deadline: values.deadline || undefined, dataAiHint: "project folder",
     };
     setProjectsByStatus(prev => {
         const newState = {...prev};
-        newState[newProjectStatus] = [...(newState[newProjectStatus] || []), newProjectToAdd];
+        newState[values.status] = [...(newState[values.status] || []), newProjectToAdd];
         return newState;
     });
     toast({ title: "Project Added", description: `Project "${newProjectToAdd.name}" added.` });
-    resetAddProjectForm(); setIsAddProjectDialogOpen(false);
-  }, [newProjectName, newProjectDescription, newProjectStatus, newProjectClientName, newProjectTeam, newProjectProgress, newProjectDeadline, resetAddProjectForm, toast]);
+    addProjectForm.reset(); 
+    setIsAddProjectDialogOpen(false);
+  }, [toast, addProjectForm, setProjectsByStatus]);
 
   const openEditProjectDialog = useCallback((project: Project) => {
     setEditingProject(project);
-    setEditFormProjectName(project.name); setEditFormProjectDescription(project.description || "");
-    setEditFormProjectStatus(project.status); setEditFormProjectClientName(project.clientName || "");
-    setEditFormProjectTeam(project.team?.map(m => m.name).join(", ") || "");
-    setEditFormProjectProgress(project.progress || 0); setEditFormProjectDeadline(project.deadline || "");
     setIsEditProjectDialogOpen(true);
   }, []);
 
-  const handleEditProjectSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const openViewProjectDialog = useCallback((project: Project) => {
+    setViewingProject(project);
+    setIsViewProjectDialogOpen(true);
+  }, []);
+
+  const handleActualEditProjectSubmit = useCallback((values: ProjectFormValues) => {
     if (!editingProject) return;
-    const progressValue = parseInt(String(editFormProjectProgress), 10);
-    if (isNaN(progressValue) || progressValue < 0 || progressValue > 100) { toast({ title: "Invalid Progress", description: "Progress must be 0-100.", variant: "destructive" }); return; }
-    const teamMembers: ProjectTeamMember[] = editFormProjectTeam.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()}));
+    const teamMembers: ProjectTeamMember[] = values.teamMembers?.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()})) || [];
 
     const updatedProject: Project = {
-      ...editingProject, name: editFormProjectName, description: editFormProjectDescription || undefined,
-      status: editFormProjectStatus, clientName: editFormProjectClientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
-      progress: progressValue, deadline: editFormProjectDeadline || undefined,
+      ...editingProject, name: values.name, description: values.description || undefined,
+      status: values.status, clientName: values.clientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
+      progress: values.progress, deadline: values.deadline || undefined,
     };
 
     setProjectsByStatus(prev => {
@@ -252,7 +275,7 @@ export default function CrmProjectsPage() {
 
     toast({ title: "Project Updated", description: `Project "${updatedProject.name}" updated.` });
     setIsEditProjectDialogOpen(false); setEditingProject(null);
-  }, [editingProject, editFormProjectName, editFormProjectDescription, editFormProjectStatus, editFormProjectClientName, editFormProjectTeam, editFormProjectProgress, editFormProjectDeadline, toast]);
+  }, [editingProject, toast, setProjectsByStatus]);
 
   const triggerDeleteConfirmation = useCallback((id: string) => {
     setProjectToDeleteId(id);
@@ -278,34 +301,27 @@ export default function CrmProjectsPage() {
     toast({ title: "Project Deleted", description: `Project "${projectNameToDelete}" removed.` });
     setIsDeleteConfirmOpen(false);
     setProjectToDeleteId(null);
-  }, [projectToDeleteId, toast]);
+  }, [projectToDeleteId, toast, setProjectsByStatus]);
 
   const onDragEndProjects = useCallback((result: DropResult) => {
     const { source, destination, draggableId } = result;
-
-    if (!destination) {
-      return;
-    }
+    if (!destination) return;
 
     const sourceStatus = source.droppableId as ProjectStatus;
     const destStatus = destination.droppableId as ProjectStatus;
 
-    setProjectsByStatus(prevProjectsByStatus => {
-      const newProjectsByStatus = JSON.parse(JSON.stringify(prevProjectsByStatus)) as ProjectsByStatus;
+    setProjectsByStatus(prev => {
+      const newProjectsByStatus = JSON.parse(JSON.stringify(prev)) as ProjectsByStatus;
       const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
       const destProjects = sourceStatus === destStatus ? sourceProjects : Array.from(newProjectsByStatus[destStatus] || []);
-
-      const projectIndexInSource = sourceProjects.findIndex(project => String(project.id) === draggableId);
-      if (projectIndexInSource === -1) {
-          console.warn(`Could not find moved project with id ${draggableId} in source list ${sourceStatus}.`);
-          return prevProjectsByStatus;
-      }
-      const [movedProjectOriginal] = sourceProjects.splice(projectIndexInSource, 1);
       
+      const [movedProjectOriginal] = sourceProjects.splice(source.index, 1);
+      if (!movedProjectOriginal) return prev;
+
       if (sourceStatus === destStatus) {
           destProjects.splice(destination.index, 0, movedProjectOriginal);
           newProjectsByStatus[sourceStatus] = destProjects;
-          toast({ title: "Project Reordered", description: `Project "${movedProjectOriginal.name}" reordered in ${projectStatusToColumnTitle[sourceStatus]}.` });
+          toast({ title: "Project Reordered", description: `Project "${movedProjectOriginal.name}" reordered.` });
       } else {
           const movedProjectCopy = { ...movedProjectOriginal, status: destStatus };
           destProjects.splice(destination.index, 0, movedProjectCopy);
@@ -315,7 +331,7 @@ export default function CrmProjectsPage() {
       }
       return newProjectsByStatus;
     });
-  }, [toast]);
+  }, [toast, setProjectsByStatus]);
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -325,58 +341,114 @@ export default function CrmProjectsPage() {
           <p className="text-muted-foreground">Supervisa tus proyectos.</p>
         </div>
         <Dialog open={isAddProjectDialogOpen} onOpenChange={setIsAddProjectDialogOpen}>
-          <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-primary-foreground"><PlusCircle className="mr-2 h-4 w-4" /> Add New Project</Button></DialogTrigger>
+          <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => {addProjectForm.reset(); setIsAddProjectDialogOpen(true);}}><PlusCircle className="mr-2 h-4 w-4" /> Add New Project</Button></DialogTrigger>
           <DialogContent className="sm:max-w-[625px]">
             <DialogHeader><DialogTitle>Add New Project</DialogTitle><DialogDescription>Enter project details.</DialogDescription></DialogHeader>
-            <form onSubmit={handleAddProjectSubmit}>
-              <ScrollArea className="max-h-[60vh] overflow-y-auto p-1">
-                <div className="grid gap-4 py-4 pr-4">
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectName" className="text-right col-span-1">Name</Label><Input id="newProjectName" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="e.g., Q4 Campaign" className="col-span-3" required /></div>
-                  <div className="grid grid-cols-4 items-start gap-4"><Label htmlFor="newProjectDescription" className="text-right col-span-1 pt-2">Description</Label><Textarea id="newProjectDescription" value={newProjectDescription} onChange={(e) => setNewProjectDescription(e.target.value)} placeholder="Describe project scope" className="col-span-3" rows={3}/></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectStatus" className="text-right col-span-1">Status</Label><Select value={newProjectStatus} onValueChange={(value: ProjectStatus) => setNewProjectStatus(value)}><SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger><SelectContent>{PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{projectStatusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectClientName" className="text-right col-span-1">Client</Label><Input id="newProjectClientName" value={newProjectClientName} onChange={(e) => setNewProjectClientName(e.target.value)} placeholder="e.g., Client Inc." className="col-span-3" /></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectTeam" className="text-right col-span-1">Team</Label><Input id="newProjectTeam" value={newProjectTeam} onChange={(e) => setNewProjectTeam(e.target.value)} placeholder="e.g., John, Jane" className="col-span-3" /><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectProgress" className="text-right col-span-1">Progress (%)</Label><Input id="newProjectProgress" type="number" value={newProjectProgress} onChange={(e) => setNewProjectProgress(e.target.value)} placeholder="0-100" className="col-span-3" min="0" max="100"/></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newProjectDeadline" className="text-right col-span-1">Deadline</Label><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="newProjectDeadline" type="date" value={newProjectDeadline} onChange={(e) => setNewProjectDeadline(e.target.value)} className="pl-10" /></div></div>
+            <FormProvider {...addProjectForm}>
+            <form onSubmit={addProjectForm.handleSubmit(handleActualAddProjectSubmit)}>
+              <ScrollArea className="max-h-[60vh] overflow-y-auto p-1 pr-3">
+                <div className="grid gap-4 py-4">
+                  <FormField control={addProjectForm.control} name="name" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Name</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., Q4 Campaign" {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addProjectForm.control} name="description" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-start gap-4"><FormLabel className="text-right col-span-1 pt-2">Description</FormLabel><FormControl className="col-span-3"><Textarea placeholder="Describe project scope" {...field} rows={3}/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addProjectForm.control} name="status" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{projectStatusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addProjectForm.control} name="clientName" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Client</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., Client Inc." {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addProjectForm.control} name="teamMembers" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Team</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., John, Jane" {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addProjectForm.control} name="progress" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Progress (%)</FormLabel><FormControl className="col-span-3"><Input type="number" placeholder="0-100" {...field} min="0" max="100"/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addProjectForm.control} name="deadline" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Deadline</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                 </div>
               </ScrollArea>
-              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline" onClick={resetAddProjectForm}>Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Project</Button></DialogFooter>
+              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={addProjectForm.formState.isSubmitting}>Save Project</Button></DialogFooter>
             </form>
+            </FormProvider>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Dialog open={isEditProjectDialogOpen} onOpenChange={setIsEditProjectDialogOpen}>
+      {/* Edit Project Dialog */}
+      <Dialog open={isEditProjectDialogOpen} onOpenChange={(isOpen) => {
+          setIsEditProjectDialogOpen(isOpen);
+          if (!isOpen) setEditingProject(null);
+      }}>
         <DialogContent className="sm:max-w-[625px]">
           <DialogHeader><DialogTitle>Edit Project: {editingProject?.name}</DialogTitle><DialogDescription>Update project details.</DialogDescription></DialogHeader>
-          <form onSubmit={handleEditProjectSubmit}>
-            <ScrollArea className="max-h-[60vh] overflow-y-auto p-1">
-              <div className="grid gap-4 py-4 pr-4">
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectName" className="text-right col-span-1">Name</Label><Input id="editFormProjectName" value={editFormProjectName} onChange={(e) => setEditFormProjectName(e.target.value)} className="col-span-3" required /></div>
-                <div className="grid grid-cols-4 items-start gap-4"><Label htmlFor="editFormProjectDescription" className="text-right col-span-1 pt-2">Description</Label><Textarea id="editFormProjectDescription" value={editFormProjectDescription} onChange={(e) => setEditFormProjectDescription(e.target.value)} className="col-span-3" rows={3}/></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectStatus" className="text-right col-span-1">Status</Label><Select value={editFormProjectStatus} onValueChange={(value: ProjectStatus) => setEditFormProjectStatus(value)}><SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger><SelectContent>{PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{projectStatusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectClientName" className="text-right col-span-1">Client</Label><Input id="editFormProjectClientName" value={editFormProjectClientName} onChange={(e) => setEditFormProjectClientName(e.target.value)} className="col-span-3" /></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectTeam" className="text-right col-span-1">Team</Label><Input id="editFormProjectTeam" value={editFormProjectTeam} onChange={(e) => setEditFormProjectTeam(e.target.value)} className="col-span-3" /><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectProgress" className="text-right col-span-1">Progress (%)</Label><Input id="editFormProjectProgress" type="number" value={editFormProjectProgress} onChange={(e) => setEditFormProjectProgress(e.target.value)} className="col-span-3" min="0" max="100"/></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormProjectDeadline" className="text-right col-span-1">Deadline</Label><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="editFormProjectDeadline" type="date" value={editFormProjectDeadline} onChange={(e) => setEditFormProjectDeadline(e.target.value)} className="pl-10" /></div></div>
-              </div>
-            </ScrollArea>
-            <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditProjectDialogOpen(false)}>Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button></DialogFooter>
-          </form>
+          {editingProject && (
+             <FormProvider {...editProjectForm}>
+            <form onSubmit={editProjectForm.handleSubmit(handleActualEditProjectSubmit)}>
+              <ScrollArea className="max-h-[60vh] overflow-y-auto p-1 pr-3">
+                <div className="grid gap-4 py-4">
+                  <FormField control={editProjectForm.control} name="name" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Name</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={editProjectForm.control} name="description" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-start gap-4"><FormLabel className="text-right col-span-1 pt-2">Description</FormLabel><FormControl className="col-span-3"><Textarea {...field} rows={3}/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={editProjectForm.control} name="status" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Status</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{projectStatusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={editProjectForm.control} name="clientName" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Client</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={editProjectForm.control} name="teamMembers" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Team</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={editProjectForm.control} name="progress" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Progress (%)</FormLabel><FormControl className="col-span-3"><Input type="number" {...field} min="0" max="100"/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={editProjectForm.control} name="deadline" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Deadline</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                </div>
+              </ScrollArea>
+              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={editProjectForm.formState.isSubmitting}>Save Changes</Button></DialogFooter>
+            </form>
+            </FormProvider>
+          )}
         </DialogContent>
       </Dialog>
+
+       {/* View Project Dialog */}
+      <Dialog open={isViewProjectDialogOpen} onOpenChange={setIsViewProjectDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Project Details: {viewingProject?.name}</DialogTitle>
+            <DialogDescription>Read-only view of the project information.</DialogDescription>
+          </DialogHeader>
+          {viewingProject && (
+            <ScrollArea className="max-h-[60vh] p-1 pr-3">
+            <div className="space-y-3 py-4 text-sm">
+              <div><p className="font-medium text-muted-foreground">Name:</p><p>{viewingProject.name}</p></div>
+              {viewingProject.description && (<div><p className="font-medium text-muted-foreground">Description:</p><p className="whitespace-pre-wrap">{viewingProject.description}</p></div>)}
+              <div><p className="font-medium text-muted-foreground">Status:</p><div><Badge variant="outline">{projectStatusToColumnTitle[viewingProject.status]}</Badge></div></div>
+              {viewingProject.clientName && (<div><p className="font-medium text-muted-foreground">Client:</p><p>{viewingProject.clientName}</p></div>)}
+              {viewingProject.team && viewingProject.team.length > 0 && (
+                <div><p className="font-medium text-muted-foreground">Team:</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    {viewingProject.team.map(member => (
+                      <div key={member.name} className="flex items-center gap-1 bg-muted/50 p-1 rounded-md">
+                        <Avatar className="h-5 w-5"><AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint={member.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{member.avatarFallback}</AvatarFallback></Avatar>
+                        <span className="text-xs">{member.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {viewingProject.progress !== undefined && (
+                <div><p className="font-medium text-muted-foreground">Progress:</p>
+                  <div className="flex items-center gap-2">
+                    <Progress value={viewingProject.progress} className="h-2 w-full" /> <span className="text-xs">{viewingProject.progress}%</span>
+                  </div>
+                </div>
+              )}
+              {viewingProject.deadline && (<div><p className="font-medium text-muted-foreground">Deadline:</p><p>{viewingProject.deadline}</p></div>)}
+            </div>
+            </ScrollArea>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this project?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete project 
               "{Object.values(projectsByStatus).flat().find(p => p.id === projectToDeleteId)?.name || 'this project'}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setProjectToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {setProjectToDeleteId(null); setIsDeleteConfirmOpen(false);}}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteProject} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
               Delete Project
             </AlertDialogAction>
@@ -388,9 +460,9 @@ export default function CrmProjectsPage() {
           projectsByStatus={projectsByStatus}
           onDragEnd={onDragEndProjects}
           onEditProject={openEditProjectDialog}
+          onViewProject={openViewProjectDialog}
           onDeleteProject={triggerDeleteConfirmation}
       />
     </div>
   );
 }
-

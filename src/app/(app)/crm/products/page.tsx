@@ -1,12 +1,14 @@
+
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +17,11 @@ import { PlusCircle, Package, Search, Filter, MoreHorizontal, Edit, Eye, Trash2 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, type FormEvent, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, FormProvider } from "react-hook-form";
+import { z } from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+
 
 const PRODUCT_TYPES = ["PRODUCTO", "SERVICIO"] as const;
 type ProductType = typeof PRODUCT_TYPES[number];
@@ -28,7 +35,21 @@ interface Product {
   sku?: string; 
   category?: string;
   isActive: boolean;
+  dataAiHint?: string;
 }
+
+const ProductFormSchema = z.object({
+  name: z.string().min(1, "Product name is required"),
+  type: z.enum(PRODUCT_TYPES, { required_error: "Product type is required" }),
+  description: z.string().optional(),
+  price: z.coerce.number().min(0, "Price must be a positive number"),
+  sku: z.string().optional(),
+  category: z.string().optional(),
+  isActive: z.boolean(),
+});
+
+type ProductFormValues = z.infer<typeof ProductFormSchema>;
+
 
 const initialProducts: Product[] = [
   {
@@ -39,6 +60,7 @@ const initialProducts: Product[] = [
     price: 5000,
     category: "Web Services",
     isActive: true,
+    dataAiHint: "website code",
   },
   {
     id: "prod-2",
@@ -49,6 +71,7 @@ const initialProducts: Product[] = [
     sku: "HDPHN-NC20-BLK",
     category: "Electronics",
     isActive: true,
+    dataAiHint: "headphones audio",
   },
 ];
 
@@ -58,87 +81,82 @@ export default function CrmProductsPage() {
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
   const [isEditProductDialogOpen, setIsEditProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [productToDeleteId, setProductToDeleteId] = useState<string | null>(null);
+  const [isViewProductDialogOpen, setIsViewProductDialogOpen] = useState(false);
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
 
-  // Form state for adding
-  const [newProductName, setNewProductName] = useState("");
-  const [newProductType, setNewProductType] = useState<ProductType>("PRODUCTO");
-  const [newProductDescription, setNewProductDescription] = useState("");
-  const [newProductPrice, setNewProductPrice] = useState<number | string>("");
-  const [newProductSku, setNewProductSku] = useState("");
-  const [newProductCategory, setNewProductCategory] = useState("");
-  const [newProductIsActive, setNewProductIsActive] = useState(true);
+  const addProductForm = useForm<ProductFormValues>({
+    resolver: zodResolver(ProductFormSchema),
+    defaultValues: {
+      name: "",
+      type: "PRODUCTO",
+      description: "",
+      price: 0,
+      sku: "",
+      category: "",
+      isActive: true,
+    },
+  });
 
-  // Form state for editing
-  const [editFormProductName, setEditFormProductName] = useState("");
-  const [editFormProductType, setEditFormProductType] = useState<ProductType>("PRODUCTO");
-  const [editFormProductDescription, setEditFormProductDescription] = useState("");
-  const [editFormProductPrice, setEditFormProductPrice] = useState<number | string>("");
-  const [editFormProductSku, setEditFormProductSku] = useState("");
-  const [editFormProductCategory, setEditFormProductCategory] = useState("");
-  const [editFormProductIsActive, setEditFormProductIsActive] = useState(true);
-
-  const resetAddProductForm = () => {
-    setNewProductName("");
-    setNewProductType("PRODUCTO");
-    setNewProductDescription("");
-    setNewProductPrice("");
-    setNewProductSku("");
-    setNewProductCategory("");
-    setNewProductIsActive(true);
-  };
-
-  const handleAddProductSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const priceAsNumber = parseFloat(String(newProductPrice));
-    if (isNaN(priceAsNumber) || priceAsNumber < 0) {
-        toast({ title: "Invalid Price", description: "Please enter a valid price.", variant: "destructive" });
-        return;
+  const editProductForm = useForm<ProductFormValues>({
+    resolver: zodResolver(ProductFormSchema),
+  });
+  
+  useEffect(() => {
+    if (editingProduct) {
+      editProductForm.reset({
+        name: editingProduct.name,
+        type: editingProduct.type,
+        description: editingProduct.description || "",
+        price: editingProduct.price,
+        sku: editingProduct.sku || "",
+        category: editingProduct.category || "",
+        isActive: editingProduct.isActive,
+      });
     }
+  }, [editingProduct, editProductForm]);
+
+  const handleActualAddProductSubmit = (values: ProductFormValues) => {
     const newProd: Product = {
       id: `prod-${Date.now()}`,
-      name: newProductName,
-      type: newProductType,
-      description: newProductDescription || undefined,
-      price: priceAsNumber,
-      sku: newProductType === "PRODUCTO" ? newProductSku || undefined : undefined,
-      category: newProductCategory || undefined,
-      isActive: newProductIsActive,
+      name: values.name,
+      type: values.type,
+      description: values.description || undefined,
+      price: values.price,
+      sku: values.type === "PRODUCTO" ? values.sku || undefined : undefined,
+      category: values.category || undefined,
+      isActive: values.isActive,
+      dataAiHint: values.type === "PRODUCTO" ? "item object" : "service gear",
     };
     setProducts(prevProducts => [newProd, ...prevProducts]);
     toast({ title: "Product/Service Added", description: `${newProd.name} has been added.` });
-    resetAddProductForm();
+    addProductForm.reset();
     setIsAddProductDialogOpen(false);
   };
   
   const openEditProductDialog = (product: Product) => {
     setEditingProduct(product);
-    setEditFormProductName(product.name);
-    setEditFormProductType(product.type);
-    setEditFormProductDescription(product.description || "");
-    setEditFormProductPrice(product.price);
-    setEditFormProductSku(product.sku || "");
-    setEditFormProductCategory(product.category || "");
-    setEditFormProductIsActive(product.isActive);
     setIsEditProductDialogOpen(true);
   };
 
-  const handleEditProductSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const openViewProductDialog = (product: Product) => {
+    setViewingProduct(product);
+    setIsViewProductDialogOpen(true);
+  };
+
+  const handleActualEditProductSubmit = (values: ProductFormValues) => {
     if (!editingProduct) return;
-    const priceAsNumber = parseFloat(String(editFormProductPrice));
-    if (isNaN(priceAsNumber) || priceAsNumber < 0) {
-        toast({ title: "Invalid Price", description: "Please enter a valid price.", variant: "destructive" });
-        return;
-    }
+
     const updatedProduct: Product = {
       ...editingProduct,
-      name: editFormProductName,
-      type: editFormProductType,
-      description: editFormProductDescription || undefined,
-      price: priceAsNumber,
-      sku: editFormProductType === "PRODUCTO" ? editFormProductSku || undefined : undefined,
-      category: editFormProductCategory || undefined,
-      isActive: editFormProductIsActive,
+      name: values.name,
+      type: values.type,
+      description: values.description || undefined,
+      price: values.price,
+      sku: values.type === "PRODUCTO" ? values.sku || undefined : undefined,
+      category: values.category || undefined,
+      isActive: values.isActive,
     };
     setProducts(prevProducts => prevProducts.map(p => p.id === editingProduct.id ? updatedProduct : p));
     toast({ title: "Product/Service Updated", description: `${updatedProduct.name} has been updated.` });
@@ -146,9 +164,18 @@ export default function CrmProductsPage() {
     setEditingProduct(null);
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    setProducts(prevProducts => prevProducts.filter(product => product.id !== productId));
-    toast({ title: "Product/Service Deleted (Demo)", description: "Item has been removed." });
+  const triggerDeleteConfirmation = (id: string) => {
+    setProductToDeleteId(id);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteProduct = () => {
+    if (!productToDeleteId) return;
+    const productNameToDelete = products.find(p => p.id === productToDeleteId)?.name || "Product/Service";
+    setProducts(prevProducts => prevProducts.filter(product => product.id !== productToDeleteId));
+    toast({ title: "Product/Service Deleted", description: `"${productNameToDelete}" has been removed.` });
+    setIsDeleteConfirmOpen(false);
+    setProductToDeleteId(null);
   };
 
   return (
@@ -162,7 +189,7 @@ export default function CrmProductsPage() {
         </div>
         <Dialog open={isAddProductDialogOpen} onOpenChange={setIsAddProductDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => { addProductForm.reset(); setIsAddProductDialogOpen(true); }}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add New Product/Service
             </Button>
           </DialogTrigger>
@@ -171,105 +198,308 @@ export default function CrmProductsPage() {
               <DialogTitle>Add New Product or Service</DialogTitle>
               <DialogDescription>Enter the details for the new item.</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleAddProductSubmit}>
-              <ScrollArea className="max-h-[60vh] p-1">
-                <div className="grid gap-4 py-4 pr-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newProductName" className="text-right col-span-1">Name</Label>
-                    <Input id="newProductName" value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="e.g., Premium Subscription" className="col-span-3" required />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newProductType" className="text-right col-span-1">Type</Label>
-                    <Select value={newProductType} onValueChange={(value: ProductType) => setNewProductType(value)}>
-                      <SelectTrigger className="col-span-3"><SelectValue placeholder="Select type" /></SelectTrigger>
-                      <SelectContent>{PRODUCT_TYPES.map(type => <SelectItem key={type} value={type}>{type.charAt(0) + type.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-4 items-start gap-4">
-                    <Label htmlFor="newProductDescription" className="text-right col-span-1 pt-2">Description</Label>
-                    <Textarea id="newProductDescription" value={newProductDescription} onChange={(e) => setNewProductDescription(e.target.value)} placeholder="Describe the item" className="col-span-3" rows={3}/>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newProductPrice" className="text-right col-span-1">Price ($)</Label>
-                    <Input id="newProductPrice" type="number" value={newProductPrice} onChange={(e) => setNewProductPrice(e.target.value)} placeholder="e.g., 99.99" className="col-span-3" required step="0.01" min="0"/>
-                  </div>
-                  {newProductType === "PRODUCTO" && (
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="newProductSku" className="text-right col-span-1">SKU</Label>
-                      <Input id="newProductSku" value={newProductSku} onChange={(e) => setNewProductSku(e.target.value)} placeholder="e.g., PROD-001" className="col-span-3" />
-                    </div>
+            <FormProvider {...addProductForm}>
+              <form onSubmit={addProductForm.handleSubmit(handleActualAddProductSubmit)}>
+                <ScrollArea className="max-h-[60vh] p-1 pr-3">
+                <div className="grid gap-4 py-4">
+                  <FormField
+                    control={addProductForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Name</FormLabel>
+                        <FormControl className="col-span-3">
+                          <Input placeholder="e.g., Premium Subscription" {...field} />
+                        </FormControl>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addProductForm.control}
+                    name="type"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Type</FormLabel>
+                         <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl className="col-span-3">
+                              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>{PRODUCT_TYPES.map(type => <SelectItem key={type} value={type}>{type.charAt(0) + type.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
+                          </Select>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addProductForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-start gap-4">
+                        <FormLabel className="text-right col-span-1 pt-2">Description</FormLabel>
+                        <FormControl className="col-span-3">
+                          <Textarea placeholder="Describe the item" {...field} rows={3}/>
+                        </FormControl>
+                         <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addProductForm.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Price ($)</FormLabel>
+                        <FormControl className="col-span-3">
+                          <Input type="number" placeholder="e.g., 99.99" {...field} step="0.01" min="0"/>
+                        </FormControl>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                  {addProductForm.watch("type") === "PRODUCTO" && (
+                     <FormField
+                      control={addProductForm.control}
+                      name="sku"
+                      render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
+                          <FormLabel className="text-right col-span-1">SKU</FormLabel>
+                          <FormControl className="col-span-3">
+                            <Input placeholder="e.g., PROD-001" {...field} />
+                          </FormControl>
+                          <FormMessage className="col-start-2 col-span-3" />
+                        </FormItem>
+                      )}
+                    />
                   )}
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newProductCategory" className="text-right col-span-1">Category</Label>
-                    <Input id="newProductCategory" value={newProductCategory} onChange={(e) => setNewProductCategory(e.target.value)} placeholder="e.g., Software" className="col-span-3" />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newProductIsActive" className="text-right col-span-1">Active</Label>
-                    <Switch id="newProductIsActive" checked={newProductIsActive} onCheckedChange={setNewProductIsActive} className="col-span-3 justify-self-start"/>
-                  </div>
+                  <FormField
+                    control={addProductForm.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Category</FormLabel>
+                        <FormControl className="col-span-3">
+                           <Input placeholder="e.g., Software" {...field} />
+                        </FormControl>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={addProductForm.control}
+                    name="isActive"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Active</FormLabel>
+                        <FormControl className="col-span-3 justify-self-start">
+                           <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                         <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
                 </div>
-              </ScrollArea>
-              <DialogFooter className="pt-4 border-t">
-                <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddProductForm}>Cancel</Button></DialogClose>
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Product/Service</Button>
-              </DialogFooter>
-            </form>
+                </ScrollArea>
+                <DialogFooter className="pt-4 border-t mt-2">
+                  <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsAddProductDialogOpen(false)}>Cancel</Button></DialogClose>
+                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={addProductForm.formState.isSubmitting}>Save Product/Service</Button>
+                </DialogFooter>
+              </form>
+            </FormProvider>
           </DialogContent>
         </Dialog>
       </div>
 
       {/* Edit Product Dialog */}
-      <Dialog open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
+      <Dialog open={isEditProductDialogOpen} onOpenChange={(isOpen) => {
+          setIsEditProductDialogOpen(isOpen);
+          if (!isOpen) setEditingProduct(null);
+      }}>
         <DialogContent className="sm:max-w-[625px]">
           <DialogHeader>
             <DialogTitle>Edit: {editingProduct?.name}</DialogTitle>
             <DialogDescription>Update the details for this product or service.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditProductSubmit}>
-            <ScrollArea className="max-h-[60vh] p-1">
-              <div className="grid gap-4 py-4 pr-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editFormProductName" className="text-right col-span-1">Name</Label>
-                  <Input id="editFormProductName" value={editFormProductName} onChange={(e) => setEditFormProductName(e.target.value)} className="col-span-3" required />
+          {editingProduct && (
+          <FormProvider {...editProductForm}>
+              <form onSubmit={editProductForm.handleSubmit(handleActualEditProductSubmit)}>
+                <ScrollArea className="max-h-[60vh] p-1 pr-3">
+                <div className="grid gap-4 py-4">
+                  <FormField
+                    control={editProductForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Name</FormLabel>
+                        <FormControl className="col-span-3"><Input {...field} /></FormControl>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editProductForm.control}
+                    name="type"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Type</FormLabel>
+                         <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl className="col-span-3">
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>{PRODUCT_TYPES.map(type => <SelectItem key={type} value={type}>{type.charAt(0) + type.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
+                          </Select>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={editProductForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-start gap-4">
+                        <FormLabel className="text-right col-span-1 pt-2">Description</FormLabel>
+                        <FormControl className="col-span-3"><Textarea {...field} rows={3}/></FormControl>
+                         <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editProductForm.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Price ($)</FormLabel>
+                        <FormControl className="col-span-3"><Input type="number" {...field} step="0.01" min="0"/></FormControl>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                  {editProductForm.watch("type") === "PRODUCTO" && (
+                     <FormField
+                      control={editProductForm.control}
+                      name="sku"
+                      render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
+                          <FormLabel className="text-right col-span-1">SKU</FormLabel>
+                          <FormControl className="col-span-3"><Input {...field} /></FormControl>
+                           <FormMessage className="col-start-2 col-span-3" />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  <FormField
+                    control={editProductForm.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Category</FormLabel>
+                        <FormControl className="col-span-3"><Input {...field} /></FormControl>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={editProductForm.control}
+                    name="isActive"
+                    render={({ field }) => (
+                      <FormItem className="grid grid-cols-4 items-center gap-4">
+                        <FormLabel className="text-right col-span-1">Active</FormLabel>
+                        <FormControl className="col-span-3 justify-self-start">
+                           <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editFormProductType" className="text-right col-span-1">Type</Label>
-                  <Select value={editFormProductType} onValueChange={(value: ProductType) => setEditFormProductType(value)}>
-                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select type" /></SelectTrigger>
-                    <SelectContent>{PRODUCT_TYPES.map(type => <SelectItem key={type} value={type}>{type.charAt(0) + type.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
-                  </Select>
+                </ScrollArea>
+                <DialogFooter className="pt-4 border-t mt-2">
+                  <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditProductDialogOpen(false)}>Cancel</Button></DialogClose>
+                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={editProductForm.formState.isSubmitting}>Save Changes</Button>
+                </DialogFooter>
+              </form>
+            </FormProvider>
+          )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* View Product Dialog */}
+      <Dialog open={isViewProductDialogOpen} onOpenChange={setIsViewProductDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Product Details: {viewingProduct?.name}</DialogTitle>
+            <DialogDescription>Read-only view of the product/service information.</DialogDescription>
+          </DialogHeader>
+          {viewingProduct && (
+            <ScrollArea className="max-h-[60vh] p-1 pr-3">
+              <div className="space-y-3 py-4 text-sm">
+                <div>
+                  <p className="font-medium text-muted-foreground">Name:</p>
+                  <p>{viewingProduct.name}</p>
                 </div>
-                <div className="grid grid-cols-4 items-start gap-4">
-                  <Label htmlFor="editFormProductDescription" className="text-right col-span-1 pt-2">Description</Label>
-                  <Textarea id="editFormProductDescription" value={editFormProductDescription} onChange={(e) => setEditFormProductDescription(e.target.value)} className="col-span-3" rows={3}/>
+                <div>
+                  <p className="font-medium text-muted-foreground">Type:</p>
+                  <div><Badge variant={viewingProduct.type === 'PRODUCTO' ? "secondary" : "outline"}>{viewingProduct.type}</Badge></div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editFormProductPrice" className="text-right col-span-1">Price ($)</Label>
-                  <Input id="editFormProductPrice" type="number" value={editFormProductPrice} onChange={(e) => setEditFormProductPrice(e.target.value)} className="col-span-3" required step="0.01" min="0"/>
-                </div>
-                {editFormProductType === "PRODUCTO" && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editFormProductSku" className="text-right col-span-1">SKU</Label>
-                    <Input id="editFormProductSku" value={editFormProductSku} onChange={(e) => setEditFormProductSku(e.target.value)} className="col-span-3" />
+                {viewingProduct.description && (
+                  <div>
+                    <p className="font-medium text-muted-foreground">Description:</p>
+                    <p className="whitespace-pre-wrap">{viewingProduct.description}</p>
                   </div>
                 )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editFormProductCategory" className="text-right col-span-1">Category</Label>
-                  <Input id="editFormProductCategory" value={editFormProductCategory} onChange={(e) => setEditFormProductCategory(e.target.value)} className="col-span-3" />
+                <div>
+                  <p className="font-medium text-muted-foreground">Price:</p>
+                  <p>${viewingProduct.price.toFixed(2)}</p>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editFormProductIsActive" className="text-right col-span-1">Active</Label>
-                  <Switch id="editFormProductIsActive" checked={editFormProductIsActive} onCheckedChange={setEditFormProductIsActive} className="col-span-3 justify-self-start"/>
+                {viewingProduct.type === "PRODUCTO" && viewingProduct.sku && (
+                  <div>
+                    <p className="font-medium text-muted-foreground">SKU:</p>
+                    <p>{viewingProduct.sku}</p>
+                  </div>
+                )}
+                {viewingProduct.category && (
+                  <div>
+                    <p className="font-medium text-muted-foreground">Category:</p>
+                    <p>{viewingProduct.category}</p>
+                  </div>
+                )}
+                 <div>
+                  <p className="font-medium text-muted-foreground">Status:</p>
+                  <div>
+                    <Badge variant={viewingProduct.isActive ? "default" : "destructive"} className={viewingProduct.isActive ? "bg-green-600 text-white" : "bg-red-600 text-white"}>
+                      {viewingProduct.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
                 </div>
               </div>
             </ScrollArea>
-            <DialogFooter className="pt-4 border-t">
-              <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditProductDialogOpen(false)}>Cancel</Button></DialogClose>
-              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
-            </DialogFooter>
-          </form>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete product/service "{products.find(p => p.id === productToDeleteId)?.name || 'this item'}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {setProductToDeleteId(null); setIsDeleteConfirmOpen(false);}}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteProduct} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       <Card className="shadow-lg flex-1 flex flex-col">
         <CardHeader className="border-b p-4">
@@ -309,7 +539,7 @@ export default function CrmProductsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={product.type === 'PRODUCTO' ? "secondary" : "outline"}>
-                        {product.type === 'PRODUCTO' ? 'Product' : 'Service'}
+                        {product.type.charAt(0) + product.type.slice(1).toLowerCase()}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">{product.category || "N/A"}</TableCell>
@@ -327,9 +557,10 @@ export default function CrmProductsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                           <DropdownMenuItem onClick={() => openEditProductDialog(product)}><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEditProductDialog(product)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteProduct(product.id)}>
+                           <DropdownMenuItem onClick={() => openViewProductDialog(product)}><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => openEditProductDialog(product)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                           <DropdownMenuSeparator />
+                           <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => triggerDeleteConfirmation(product.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>

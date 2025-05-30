@@ -5,9 +5,9 @@ import React, { useState, type FC, type FormEvent, useEffect, useCallback } from
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,8 +16,12 @@ import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, Tag, Eye, Edi
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
 import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, FormProvider } from "react-hook-form";
+import { z } from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+
 
 const TASK_STATUSES = ["PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"] as const;
 type TaskStatus = typeof TASK_STATUSES[number];
@@ -55,22 +59,37 @@ const statusToColumnTitle: Record<TaskStatus, string> = {
   PENDIENTE: "Pendiente", EN_PROGRESO: "En Progreso", COMPLETADA: "Completada", ARCHIVADA: "Archivada",
 };
 
+const TaskFormSchema = z.object({
+    title: z.string().min(1, "Title is required"),
+    description: z.string().optional(),
+    status: z.enum(TASK_STATUSES, { required_error: "Status is required" }),
+    dueDate: z.string().optional(),
+    priority: z.enum(TASK_PRIORITIES).optional(),
+    assigneeName: z.string().optional(), // Simple text for now
+    tags: z.string().optional(), // Comma-separated string
+});
+type TaskFormValues = z.infer<typeof TaskFormSchema>;
+
 interface TaskCardProps {
   task: Task;
   index: number; 
   onEdit: (task: Task) => void;
+  onView: (task: Task) => void;
   onDelete: (taskId: string) => void;
 }
 
-const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete }) => {
+const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onView, onDelete }) => {
   return (
-    <Draggable key={task.id} draggableId={String(task.id)} index={index}>
+    <Draggable draggableId={String(task.id)} index={index}>
       {(provided, snapshot) => (
-         <Card
+         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          style={{ ...provided.draggableProps.style }}
+          style={{
+            ...provided.draggableProps.style,
+            userSelect: "none", 
+          }}
           className={cn(
             "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
             snapshot.isDragging && "shadow-xl opacity-80"
@@ -81,8 +100,10 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(task)}><Eye className="mr-2 h-4 w-4" /> View/Edit Task</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onView(task)}><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onEdit(task)}><Edit className="mr-2 h-4 w-4" /> Edit Task</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -96,7 +117,7 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete 
                 <span className="text-xs text-muted-foreground">{task.assignee.name}</span>
             </div>
           )}
-        </Card>
+        </div>
       )}
     </Draggable>
   );
@@ -107,10 +128,11 @@ interface TaskKanbanBoardProps {
   tasksByStatus: TasksByStatus;
   onDragEnd: (result: DropResult) => void;
   onEditTask: (task: Task) => void;
+  onViewTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
 }
 
-const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onDragEnd, onEditTask, onDeleteTask }) => {
+const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onDragEnd, onEditTask, onViewTask, onDeleteTask }) => {
   const [isClient, setIsClient] = useState(false);
   useEffect(() => { setIsClient(true); }, []);
 
@@ -139,7 +161,7 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onDragEnd, o
                   </div>
                   <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto">
                     {(tasksByStatus[statusKey] || []).map((task, index) => (
-                      <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onDelete={onDeleteTask} />
+                      <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onView={onViewTask} onDelete={onDeleteTask} />
                     ))}
                     {provided.placeholder}
                     {(!tasksByStatus[statusKey] || tasksByStatus[statusKey].length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
@@ -175,74 +197,81 @@ export default function CrmTasksPage() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [taskToDeleteId, setTaskToDeleteId] = useState<string | null>(null);
 
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskDescription, setNewTaskDescription] = useState("");
-  const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>("PENDIENTE");
-  const [newTaskDueDate, setNewTaskDueDate] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("Media");
-  const [newTaskAssigneeName, setNewTaskAssigneeName] = useState("");
-  const [newTaskTags, setNewTaskTags] = useState("");
+  const [isViewTaskDialogOpen, setIsViewTaskDialogOpen] = useState(false);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
 
-  const [editFormTaskTitle, setEditFormTaskTitle] = useState("");
-  const [editFormTaskDescription, setEditFormTaskDescription] = useState("");
-  const [editFormTaskStatus, setEditFormTaskStatus] = useState<TaskStatus>("PENDIENTE");
-  const [editFormTaskDueDate, setEditFormTaskDueDate] = useState("");
-  const [editFormTaskPriority, setEditFormTaskPriority] = useState<TaskPriority>("Media");
-  const [editFormTaskAssigneeName, setEditFormTaskAssigneeName] = useState("");
-  const [editFormTaskTags, setEditFormTaskTags] = useState("");
+  const addTaskForm = useForm<TaskFormValues>({
+    resolver: zodResolver(TaskFormSchema),
+    defaultValues: { title: "", description: "", status: "PENDIENTE", dueDate: "", priority: "Media", assigneeName: "", tags: "" },
+  });
 
-  const resetAddTaskForm = useCallback(() => {
-    setNewTaskTitle(""); setNewTaskDescription(""); setNewTaskStatus("PENDIENTE");
-    setNewTaskDueDate(""); setNewTaskPriority("Media"); setNewTaskAssigneeName(""); setNewTaskTags("");
-  }, []);
+  const editTaskForm = useForm<TaskFormValues>({
+    resolver: zodResolver(TaskFormSchema),
+  });
 
-  const handleAddTaskSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) { toast({ title: "Task Title Required", description: "Please enter a title.", variant: "destructive" }); return; }
+  useEffect(() => {
+    if (editingTask) {
+        editTaskForm.reset({
+            title: editingTask.title,
+            description: editingTask.description || "",
+            status: editingTask.status,
+            dueDate: editingTask.dueDate || "",
+            priority: editingTask.priority || "Media",
+            assigneeName: editingTask.assignee?.name || "",
+            tags: editingTask.tags?.join(", ") || "",
+        });
+    }
+  }, [editingTask, editTaskForm]);
+
+
+  const handleActualAddTaskSubmit = useCallback((values: TaskFormValues) => {
     const newTaskToAdd: Task = {
-      id: `task-${Date.now()}`, title: newTaskTitle, description: newTaskDescription || undefined,
-      status: newTaskStatus, dueDate: newTaskDueDate || undefined, priority: newTaskPriority || undefined,
-      assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
-      tags: newTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
+      id: `task-${Date.now()}`, title: values.title, description: values.description || undefined,
+      status: values.status, dueDate: values.dueDate || undefined, priority: values.priority || undefined,
+      assignee: values.assigneeName ? { name: values.assigneeName, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: values.assigneeName.substring(0,2).toUpperCase()} : undefined,
+      tags: values.tags?.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
     setTasksByStatus(prev => {
         const newState = {...prev};
-        newState[newTaskStatus] = [...(newState[newTaskStatus] || []), newTaskToAdd];
+        newState[values.status] = [...(newState[values.status] || []), newTaskToAdd];
         return newState;
     });
-    toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added to ${statusToColumnTitle[newTaskStatus]}.` });
-    resetAddTaskForm(); setIsAddTaskDialogOpen(false);
-  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast]);
+    toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added to ${statusToColumnTitle[values.status]}.` });
+    addTaskForm.reset(); 
+    setIsAddTaskDialogOpen(false);
+  }, [toast, addTaskForm, setTasksByStatus]);
 
   const openEditTaskDialog = useCallback((task: Task) => {
     setEditingTask(task);
-    setEditFormTaskTitle(task.title); setEditFormTaskDescription(task.description || "");
-    setEditFormTaskStatus(task.status); setEditFormTaskDueDate(task.dueDate || "");
-    setEditFormTaskPriority(task.priority || "Media"); setEditFormTaskAssigneeName(task.assignee?.name || "");
-    setEditFormTaskTags(task.tags?.join(", ") || "");
     setIsEditTaskDialogOpen(true);
   }, []);
 
-  const handleEditTaskSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!editingTask || !editFormTaskTitle.trim()) { toast({ title: "Task Title Required", description: "Please enter a title.", variant: "destructive" }); return; }
+  const openViewTaskDialog = useCallback((task: Task) => {
+    setViewingTask(task);
+    setIsViewTaskDialogOpen(true);
+  }, []);
+
+
+  const handleActualEditTaskSubmit = useCallback((values: TaskFormValues) => {
+    if (!editingTask) return;
 
     const updatedTask: Task = {
-      ...editingTask, title: editFormTaskTitle, description: editFormTaskDescription || undefined,
-      status: editFormTaskStatus, dueDate: editFormTaskDueDate || undefined, priority: editFormTaskPriority || undefined,
-      assignee: editFormTaskAssigneeName ? { name: editFormTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: editFormTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
-      tags: editFormTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
+      ...editingTask, title: values.title, description: values.description || undefined,
+      status: values.status, dueDate: values.dueDate || undefined, priority: values.priority || undefined,
+      assignee: values.assigneeName ? { name: values.assigneeName, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: values.assigneeName.substring(0,2).toUpperCase()} : undefined,
+      tags: values.tags?.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
 
     setTasksByStatus(prev => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prev)) as TasksByStatus;
+      const newTasksByStatus = JSON.parse(JSON.stringify(prev)) as TasksByStatus; 
       const oldStatus = editingTask.status;
       const newStatus = updatedTask.status;
 
+      // Remove from old list
       newTasksByStatus[oldStatus] = (newTasksByStatus[oldStatus] || []).filter((t: Task) => t.id !== editingTask.id);
-      
+      // Add to new list (or same list if status didn't change)
       newTasksByStatus[newStatus] = [...(newTasksByStatus[newStatus] || []), updatedTask];
-      
+      // Sort new list by original index to maintain some order (optional)
       newTasksByStatus[newStatus].sort((a: Task, b: Task) => (initialTasksData.findIndex(t => t.id === a.id) - initialTasksData.findIndex(t => t.id === b.id)));
 
       return newTasksByStatus;
@@ -250,7 +279,7 @@ export default function CrmTasksPage() {
 
     toast({ title: "Task Updated", description: `Task "${updatedTask.title}" updated.` });
     setIsEditTaskDialogOpen(false); setEditingTask(null);
-  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast]);
+  }, [editingTask, toast, setTasksByStatus]);
 
   const triggerDeleteConfirmation = useCallback((taskId: string) => {
     setTaskToDeleteId(taskId);
@@ -276,7 +305,7 @@ export default function CrmTasksPage() {
     toast({ title: "Task Deleted", description: `Task "${taskNameToDelete}" removed.` });
     setIsDeleteConfirmOpen(false);
     setTaskToDeleteId(null);
-  }, [taskToDeleteId, toast]);
+  }, [taskToDeleteId, toast, setTasksByStatus]);
 
   
   const onDragEndTasks = useCallback((result: DropResult) => {
@@ -286,32 +315,28 @@ export default function CrmTasksPage() {
     const sourceStatus = source.droppableId as TaskStatus;
     const destStatus = destination.droppableId as TaskStatus;
 
-    setTasksByStatus(prevTasksByStatus => {
-        const newTasksByStatus = JSON.parse(JSON.stringify(prevTasksByStatus)) as TasksByStatus;
+    setTasksByStatus((prev) => {
+        const newTasksByStatus = { ...prev };
         const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
         const destTasks = sourceStatus === destStatus ? sourceTasks : Array.from(newTasksByStatus[destStatus] || []);
+        
+        const [movedTaskOriginal] = sourceTasks.splice(source.index, 1);
+        if (!movedTaskOriginal) return prev; // Should not happen
 
-        const taskIndexInSource = sourceTasks.findIndex(task => String(task.id) === draggableId);
-        if (taskIndexInSource === -1) {
-            console.warn(`Could not find moved task ${draggableId} in source list ${sourceStatus}.`);
-            return prevTasksByStatus;
-        }
-        const [movedTask] = sourceTasks.splice(taskIndexInSource, 1);
-
-        if (sourceStatus === destStatus) { // Moved within the same column
-            destTasks.splice(destination.index, 0, movedTask);
+        if (sourceStatus === destStatus) {
+            destTasks.splice(destination.index, 0, movedTaskOriginal);
             newTasksByStatus[sourceStatus] = destTasks;
-            toast({ title: "Task Reordered", description: `Task "${movedTask.title}" reordered in ${statusToColumnTitle[sourceStatus]}.` });
-        } else { // Moved to a different column
-            const movedTaskCopy = { ...movedTask, status: destStatus };
+            toast({ title: "Task Reordered", description: `Task "${movedTaskOriginal.title}" reordered.` });
+        } else {
+            const movedTaskCopy = { ...movedTaskOriginal, status: destStatus };
             destTasks.splice(destination.index, 0, movedTaskCopy);
             newTasksByStatus[sourceStatus] = sourceTasks;
             newTasksByStatus[destStatus] = destTasks;
-            toast({ title: "Task Status Updated", description: `Task "${movedTask.title}" moved to ${statusToColumnTitle[destStatus]}.` });
+            toast({ title: "Task Status Updated", description: `Task "${movedTaskOriginal.title}" moved to ${statusToColumnTitle[destStatus]}.` });
         }
         return newTasksByStatus;
     });
-  }, [toast]);
+  }, [toast, setTasksByStatus]);
   
 
   return (
@@ -322,58 +347,108 @@ export default function CrmTasksPage() {
           <p className="text-muted-foreground">Organiza y haz seguimiento de las tareas.</p>
         </div>
         <Dialog open={isAddTaskDialogOpen} onOpenChange={setIsAddTaskDialogOpen}>
-          <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-primary-foreground"><PlusCircle className="mr-2 h-4 w-4" /> Add New Task</Button></DialogTrigger>
+          <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => {addTaskForm.reset(); setIsAddTaskDialogOpen(true);}}><PlusCircle className="mr-2 h-4 w-4" /> Add New Task</Button></DialogTrigger>
           <DialogContent className="sm:max-w-[625px]">
             <DialogHeader><DialogTitle>Add New Task</DialogTitle><DialogDescription>Enter task details.</DialogDescription></DialogHeader>
-            <form onSubmit={handleAddTaskSubmit}>
-              <ScrollArea className="max-h-[60vh] p-1">
-                <div className="grid gap-4 py-4 pr-4">
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskTitle" className="text-right col-span-1">Title</Label><Input id="newTaskTitle" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="e.g., Follow up with client" className="col-span-3" required /></div>
-                  <div className="grid grid-cols-4 items-start gap-4"><Label htmlFor="newTaskDescription" className="text-right col-span-1 pt-2">Description</Label><Textarea id="newTaskDescription" value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} placeholder="Provide details..." className="col-span-3" rows={3}/></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskStatus" className="text-right col-span-1">Status</Label><Select value={newTaskStatus} onValueChange={(value: TaskStatus) => setNewTaskStatus(value)}><SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger><SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskDueDate" className="text-right col-span-1">Due Date</Label><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="newTaskDueDate" type="date" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} className="pl-10" /></div></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskPriority" className="text-right col-span-1">Priority</Label><Select value={newTaskPriority} onValueChange={(value: TaskPriority) => setNewTaskPriority(value)}><SelectTrigger className="col-span-3"><SelectValue placeholder="Select priority" /></SelectTrigger><SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskAssigneeName" className="text-right col-span-1">Assignee</Label><Input id="newTaskAssigneeName" value={newTaskAssigneeName} onChange={(e) => setNewTaskAssigneeName(e.target.value)} placeholder="e.g., John Doe" className="col-span-3" /></div>
-                  <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="newTaskTags" className="text-right col-span-1">Tags</Label><Input id="newTaskTags" value={newTaskTags} onChange={(e) => setNewTaskTags(e.target.value)} placeholder="e.g., urgent, client_x" className="col-span-3" /><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p></div>
+            <FormProvider {...addTaskForm}>
+            <form onSubmit={addTaskForm.handleSubmit(handleActualAddTaskSubmit)}>
+              <ScrollArea className="max-h-[60vh] p-1 pr-3">
+                <div className="grid gap-4 py-4">
+                  <FormField control={addTaskForm.control} name="title" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Title</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., Follow up with client" {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="description" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-start gap-4"><FormLabel className="text-right col-span-1 pt-2">Description</FormLabel><FormControl className="col-span-3"><Textarea placeholder="Provide details..." {...field} rows={3}/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="status" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="dueDate" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Due Date</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="priority" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Priority</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger></FormControl><SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="assigneeName" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Assignee</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., John Doe" {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="tags" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Tags</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., urgent, client_x" {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                 </div>
               </ScrollArea>
-              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline" onClick={resetAddTaskForm}>Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Task</Button></DialogFooter>
+              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={addTaskForm.formState.isSubmitting}>Save Task</Button></DialogFooter>
             </form>
+            </FormProvider>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Dialog open={isEditTaskDialogOpen} onOpenChange={setIsEditTaskDialogOpen}>
+      {/* Edit Task Dialog */}
+      <Dialog open={isEditTaskDialogOpen} onOpenChange={(isOpen) => {
+          setIsEditTaskDialogOpen(isOpen);
+          if (!isOpen) setEditingTask(null);
+      }}>
         <DialogContent className="sm:max-w-[625px]">
           <DialogHeader><DialogTitle>Edit Task: {editingTask?.title}</DialogTitle><DialogDescription>Update task details.</DialogDescription></DialogHeader>
-          <form onSubmit={handleEditTaskSubmit}>
-            <ScrollArea className="max-h-[60vh] p-1">
-              <div className="grid gap-4 py-4 pr-4">
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskTitle" className="text-right col-span-1">Title</Label><Input id="editFormTaskTitle" value={editFormTaskTitle} onChange={(e) => setEditFormTaskTitle(e.target.value)} className="col-span-3" required /></div>
-                <div className="grid grid-cols-4 items-start gap-4"><Label htmlFor="editFormTaskDescription" className="text-right col-span-1 pt-2">Description</Label><Textarea id="editFormTaskDescription" value={editFormTaskDescription} onChange={(e) => setEditFormTaskDescription(e.target.value)} className="col-span-3" rows={3}/></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskStatus" className="text-right col-span-1">Status</Label><Select value={editFormTaskStatus} onValueChange={(value: TaskStatus) => setEditFormTaskStatus(value)}><SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger><SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskDueDate" className="text-right col-span-1">Due Date</Label><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="editFormTaskDueDate" type="date" value={editFormTaskDueDate} onChange={(e) => setEditFormTaskDueDate(e.target.value)} className="pl-10" /></div></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskPriority" className="text-right col-span-1">Priority</Label><Select value={editFormTaskPriority} onValueChange={(value: TaskPriority) => setEditFormTaskPriority(value)}><SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger><SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent></Select></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskAssigneeName" className="text-right col-span-1">Assignee</Label><Input id="editFormTaskAssigneeName" value={editFormTaskAssigneeName} onChange={(e) => setEditFormTaskAssigneeName(e.target.value)} className="col-span-3" /></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="editFormTaskTags" className="text-right col-span-1">Tags</Label><Input id="editFormTaskTags" value={editFormTaskTags} onChange={(e) => setEditFormTaskTags(e.target.value)} className="col-span-3" /><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p></div>
-              </div>
-            </ScrollArea>
-            <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditTaskDialogOpen(false)}>Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button></DialogFooter>
-          </form>
+          {editingTask && (
+            <FormProvider {...editTaskForm}>
+            <form onSubmit={editTaskForm.handleSubmit(handleActualEditTaskSubmit)}>
+              <ScrollArea className="max-h-[60vh] p-1 pr-3">
+                <div className="grid gap-4 py-4">
+                    <FormField control={editTaskForm.control} name="title" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Title</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="description" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-start gap-4"><FormLabel className="text-right col-span-1 pt-2">Description</FormLabel><FormControl className="col-span-3"><Textarea {...field} rows={3}/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="status" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Status</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="dueDate" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Due Date</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="priority" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Priority</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="assigneeName" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Assignee</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="tags" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Tags</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                </div>
+              </ScrollArea>
+              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={editTaskForm.formState.isSubmitting}>Save Changes</Button></DialogFooter>
+            </form>
+            </FormProvider>
+          )}
         </DialogContent>
       </Dialog>
       
+      {/* View Task Dialog */}
+      <Dialog open={isViewTaskDialogOpen} onOpenChange={setIsViewTaskDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Task Details: {viewingTask?.title}</DialogTitle>
+            <DialogDescription>Read-only view of the task information.</DialogDescription>
+          </DialogHeader>
+          {viewingTask && (
+            <ScrollArea className="max-h-[60vh] p-1 pr-3">
+            <div className="space-y-3 py-4 text-sm">
+              <div><p className="font-medium text-muted-foreground">Title:</p><p>{viewingTask.title}</p></div>
+              {viewingTask.description && (<div><p className="font-medium text-muted-foreground">Description:</p><p className="whitespace-pre-wrap">{viewingTask.description}</p></div>)}
+              <div><p className="font-medium text-muted-foreground">Status:</p><div><Badge variant="outline">{statusToColumnTitle[viewingTask.status]}</Badge></div></div>
+              {viewingTask.dueDate && (<div><p className="font-medium text-muted-foreground">Due Date:</p><p>{viewingTask.dueDate}</p></div>)}
+              {viewingTask.priority && (<div><p className="font-medium text-muted-foreground">Priority:</p><div><Badge variant={viewingTask.priority === 'Alta' ? 'destructive' : viewingTask.priority === 'Media' ? 'secondary' : 'outline'}>{viewingTask.priority}</Badge></div></div>)}
+              {viewingTask.assignee && (
+                 <div><p className="font-medium text-muted-foreground">Assigned To:</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Avatar className="h-7 w-7"><AvatarImage src={viewingTask.assignee.avatarUrl} alt={viewingTask.assignee.name} data-ai-hint={viewingTask.assignee.dataAiHint || "avatar person"} /><AvatarFallback>{viewingTask.assignee.avatarFallback}</AvatarFallback></Avatar>
+                    <span>{viewingTask.assignee.name}</span>
+                  </div>
+                </div>
+              )}
+              {viewingTask.tags && viewingTask.tags.length > 0 && (
+                <div><p className="font-medium text-muted-foreground">Tags:</p>
+                  <div className="flex flex-wrap gap-1 mt-1">{viewingTask.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>
+                </div>
+              )}
+            </div>
+            </ScrollArea>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this task?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete task 
               "{Object.values(tasksByStatus).flat().find(t => t.id === taskToDeleteId)?.title || 'this task'}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setTaskToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {setTaskToDeleteId(null); setIsDeleteConfirmOpen(false);}}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteTask} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
               Delete Task
             </AlertDialogAction>
@@ -385,9 +460,9 @@ export default function CrmTasksPage() {
           tasksByStatus={tasksByStatus}
           onDragEnd={onDragEndTasks}
           onEditTask={openEditTaskDialog}
+          onViewTask={openViewTaskDialog}
           onDeleteTask={triggerDeleteConfirmation}
       />
     </div>
   );
 }
-
