@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit2, Mail, MessageSquare, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Star, Trash2, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
 import Image from "next/image";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type FC } from "react";
 import { summarizeConversation, suggestResponse } from "@/ai/flows";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -117,11 +117,11 @@ const initialMessages: Record<string, Message[]> = {
   ]
 };
 
-type StatusFilterOption = ConversationStatus | "all";
+type StatusFilterOption = ConversationStatus | "all_active"; // "all_active" includes active, assigned, closed
 const CHANNELS: Channel[] = ["whatsapp", "messenger", "instagram", "web"];
 
 const STATUS_FILTER_OPTIONS: { value: StatusFilterOption; label: string }[] = [
-    { value: "all", label: "All (Active/Assigned/Closed)" },
+    { value: "all_active", label: "All (Active/Assigned/Closed)" },
     { value: "active", label: "Active" },
     { value: "assigned", label: "Assigned" },
     { value: "closed", label: "Closed" },
@@ -137,7 +137,7 @@ export default function AgentWorkspacePage() {
   const [messages, setMessages] = useState<Message[]>(selectedConversationId ? initialMessages[selectedConversationId] : []);
   const [newMessage, setNewMessage] = useState("");
   const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilterOption>("all");
+  const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilterOption>("all_active");
   const [selectedChannelFilter, setSelectedChannelFilter] = useState<Channel | "all">("all");
   const [contactDaysAgo, setContactDaysAgo] = useState<number | null>(null);
 
@@ -145,7 +145,6 @@ export default function AgentWorkspacePage() {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
       setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
-      // Generate random days ago only when conversation changes
       setContactDaysAgo(Math.floor(Math.random() * 5) + 1); 
     } else {
       setMessages([]);
@@ -160,7 +159,7 @@ export default function AgentWorkspacePage() {
   const displayedConversations = useMemo(() => {
     let filtered = conversations;
 
-    if (activeStatusFilter === "all") {
+    if (activeStatusFilter === "all_active") {
       filtered = conversations.filter(c => c.status !== 'archived');
     } else if (activeStatusFilter === "archived") {
       filtered = conversations.filter(c => c.status === 'archived');
@@ -225,8 +224,8 @@ export default function AgentWorkspacePage() {
   const updateConversationStatus = (id: string, status: ConversationStatus, agentName?: string) => {
     setConversations(prev => prev.map(conv => {
       if (conv.id === id) {
-        const updatedConv = { ...conv, status };
-        if (agentName !== undefined) { // Allows clearing agentName by passing empty string or null
+        const updatedConv: Conversation = { ...conv, status };
+        if (agentName !== undefined) { 
           updatedConv.assignedAgentName = agentName || undefined;
         }
         return updatedConv;
@@ -237,7 +236,6 @@ export default function AgentWorkspacePage() {
 
   const handleAssignAction = () => {
     if (!selectedConversationId) return;
-    // In a real app, this would open a dialog to select an agent
     const demoAgent = "Agent Demo";
     updateConversationStatus(selectedConversationId, "assigned", demoAgent);
     toast({ title: "Conversation Assigned", description: `Assigned to ${demoAgent}.` });
@@ -254,24 +252,20 @@ export default function AgentWorkspacePage() {
     const oldStatus = selectedConversation?.status;
     updateConversationStatus(selectedConversationId, "archived");
     toast({ title: "Conversation Archived" });
-    // Optionally, select the next conversation
-    const nextConv = conversations.find(c => c.id !== selectedConversationId && c.status !== 'archived');
-    setSelectedConversationId(nextConv?.id || null);
+    
+    const nextConvIndex = conversations.findIndex(c => c.id !== selectedConversationId && c.status !== 'archived');
+    setSelectedConversationId(conversations[nextConvIndex]?.id || null);
 
-    // If the current filter was for the status that just got archived (and it's not 'all' or 'archived'),
-    // switch to a more general filter to avoid an empty list if that was the last item.
-    if (activeStatusFilter === oldStatus && activeStatusFilter !== "all" && activeStatusFilter !== "archived") {
-        setActiveStatusFilter("all");
+    if (activeStatusFilter === oldStatus && activeStatusFilter !== "all_active" && activeStatusFilter !== "archived") {
+        setActiveStatusFilter("all_active");
     }
   };
 
   const handleUnarchiveAction = () => {
     if (!selectedConversationId || selectedConversation?.status !== "archived") return;
-    // When unarchiving, set to 'active' and clear agent. 
-    // Or, restore its previous status if stored, for now 'active' is fine.
     updateConversationStatus(selectedConversationId, "active", ""); 
     toast({ title: "Conversation Unarchived" });
-    setActiveStatusFilter("all"); // Switch to 'all' to see the unarchived item
+    setActiveStatusFilter("all_active"); 
   };
 
 
@@ -282,7 +276,7 @@ export default function AgentWorkspacePage() {
         <Card className="flex flex-col rounded-none border-0 md:border-r h-full">
           <CardHeader className="p-4 space-y-3">
             <Input placeholder="Search conversations..." className="rounded-full" />
-            <Select value={selectedChannelFilter} onValueChange={(value) => setSelectedChannelFilter(value as Channel | "all")}>
+             <Select value={selectedChannelFilter} onValueChange={(value) => setSelectedChannelFilter(value as Channel | "all")}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Filter by channel" />
               </SelectTrigger>
@@ -318,7 +312,7 @@ export default function AgentWorkspacePage() {
                 <Button
                   key={conv.id}
                   variant={selectedConversationId === conv.id ? "secondary" : "ghost"}
-                  className="w-full h-auto justify-start p-3 text-left"
+                  className="w-full h-auto justify-start p-3 text-left overflow-hidden"
                   onClick={() => setSelectedConversationId(conv.id)}
                 >
                   <Avatar className="mr-3 h-10 w-10 flex-shrink-0" data-ai-hint={conv.dataAiHint || "avatar person"}>
@@ -327,24 +321,24 @@ export default function AgentWorkspacePage() {
                   </Avatar>
                   <div className="flex-1 overflow-hidden">
                     <div className="flex justify-between items-center">
-                      <h3 className="font-semibold">{conv.userName}</h3>
+                      <h3 className="font-semibold truncate">{conv.userName}</h3>
                       <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{conv.timestamp}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground">{conv.lastMessageSnippet}</p>
-                     <div className="flex items-center justify-between mt-1 flex-wrap gap-1">
-                        <Badge variant="outline" className="text-xs capitalize">
+                    <p className="text-sm text-muted-foreground truncate">{conv.lastMessageSnippet}</p>
+                     <div className="flex items-center justify-between mt-1 gap-1 flex-nowrap overflow-hidden">
+                        <Badge variant="outline" className="text-xs capitalize flex-shrink-0">
                             {conv.channel}
                         </Badge>
                         {conv.status === "assigned" && conv.assignedAgentName && (
-                            <Badge variant="outline" className="text-xs whitespace-nowrap">To: {conv.assignedAgentName}</Badge>
+                            <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0">To: {conv.assignedAgentName}</Badge>
                         )}
                          {conv.status !== "assigned" && conv.status !== "active" && (
-                           <Badge variant={conv.status === "closed" || conv.status === "archived" ? "secondary" : "outline"} className="text-xs capitalize">{conv.status}</Badge>
+                           <Badge variant={conv.status === "closed" || conv.status === "archived" ? "secondary" : "outline"} className="text-xs capitalize flex-shrink-0">{conv.status}</Badge>
                         )}
                     </div>
                   </div>
                   {conv.unreadCount > 0 && conv.status !== "archived" && (
-                    <Badge variant="default" className="ml-2 bg-primary text-primary-foreground self-start mt-1">{conv.unreadCount}</Badge>
+                    <Badge variant="default" className="ml-2 bg-primary text-primary-foreground self-start mt-1 flex-shrink-0">{conv.unreadCount}</Badge>
                   )}
                 </Button>
               ))}
@@ -416,19 +410,19 @@ export default function AgentWorkspacePage() {
                       </div>
                     )}
                      {msg.type === "interactive" && msg.buttons && (
-                       <div className="mt-1">
+                       <div className={cn("mt-1", msg.content && "pt-1")}>
                         {msg.content && <p className="text-sm mb-2">{msg.content}</p>}
-                        <div className="flex flex-col gap-2 pt-1">
-                          {msg.buttons.map(btn => (
+                        <div className="flex flex-col gap-2">
+                          {msg.buttons.map((btn, idx) => (
                             <Button
-                              key={btn.payload}
+                              key={`${btn.payload}-${idx}`}
                               variant="outline"
                               size="sm"
                               className={cn(
                                 "w-full justify-start text-left px-3 py-2 h-auto rounded-md",
                                 msg.sender === "agent"
                                   ? "bg-white text-primary border-primary/50 hover:bg-primary/10"
-                                  : "bg-muted/50 hover:bg-muted" // Style for user-sent buttons if ever needed
+                                  : "bg-muted/50 hover:bg-muted"
                               )}
                               onClick={() => console.log("Button clicked:", btn.payload)}
                             >
@@ -517,7 +511,7 @@ export default function AgentWorkspacePage() {
                     <Badge variant={
                         selectedConversation.status === "closed" || selectedConversation.status === "archived" ? "destructive" :
                         selectedConversation.status === "assigned" ? "secondary" : "default"
-                    } className={selectedConversation.status === "active" ? "bg-green-500 text-white" : ""}>
+                    } className={cn(selectedConversation.status === "active" && "bg-green-500 text-white", selectedConversation.status === "closed" && "bg-muted text-muted-foreground")}>
                         {selectedConversation.status.charAt(0).toUpperCase() + selectedConversation.status.slice(1)}
                     </Badge>
                 </div>
@@ -578,4 +572,8 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
+
+// Used to make ScrollArea take full height
+// import { ScrollArea } from "@/components/ui/scroll-area"; // Already imported
+// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Not used in this file
 
