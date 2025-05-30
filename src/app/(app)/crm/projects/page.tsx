@@ -1,6 +1,7 @@
 
 "use client";
 
+import React from 'react'; // Ensure React is imported
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,7 +17,7 @@ import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, GripVertical, Eye,
 import { useState, type FC, type FormEvent, useEffect, useCallback } from "react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent, type Announcements } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
@@ -75,6 +76,7 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, onEdit, onDelet
 
   const style = transform ? {
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    zIndex: isDragging ? 50 : 'auto', // Ensure dragging item is on top
   } : {};
   
   const draggableProps = mounted ? {
@@ -147,6 +149,27 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, onEdit, onDelet
   );
 });
 ProjectCard.displayName = 'ProjectCard';
+
+const customAnnouncements: Announcements = {
+  onDragStart({ active }) {
+    return `Picked up draggable item ${active.id}.`;
+  },
+  onDragOver({ active, over }) {
+    if (over) {
+      return `Draggable item ${active.id} was moved over droppable area ${over.id}.`;
+    }
+    return `Draggable item ${active.id} is no longer over a droppable area.`;
+  },
+  onDragEnd({ active, over }) {
+    if (over) {
+      return `Draggable item ${active.id} was dropped over droppable area ${over.id}`;
+    }
+    return `Draggable item ${active.id} was dropped.`;
+  },
+  onDragCancel({ active }) {
+    return `Dragging was cancelled. Draggable item ${active.id} was dropped.`;
+  },
+};
 
 export default function CrmProjectsPage() {
   const { toast } = useToast();
@@ -248,12 +271,12 @@ export default function CrmProjectsPage() {
     }
 
     const projectId = active.id as string;
-    const targetStatus = over.id as ProjectStatus; // Column ID is the statusKey
+    const targetStatus = over.id as ProjectStatus; 
 
     setProjects((prevProjects) => {
       const projectToMove = prevProjects.find(p => p.id === projectId);
       if (projectToMove && projectToMove.status !== targetStatus) {
-        console.log(`Project ${projectId} current status: ${projectToMove.status}, target status: ${targetStatus}. Updating state.`);
+        console.log(`Attempting to move project ${projectId} to status ${targetStatus}`);
         toast({
           title: "Project Status Updated",
           description: `Project "${projectToMove.name}" moved to ${statusToColumnTitle[targetStatus]}.`,
@@ -268,7 +291,7 @@ export default function CrmProjectsPage() {
   }, [toast]);
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleProjectDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleProjectDragEnd} announcements={customAnnouncements}>
       <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
           <div>
@@ -407,15 +430,15 @@ export default function CrmProjectsPage() {
                     isOver && "bg-primary/10 border-2 border-primary"
                   )}
                 >
-                   <div className="p-4 border-b sticky top-0 bg-muted/40 rounded-t-lg z-10">
-                    <h3 className="text-md font-semibold flex justify-between items-center">
+                   <div className="p-4 border-b sticky top-0 bg-muted/40 rounded-t-lg z-10 flex justify-between items-center">
+                    <h3 className="text-md font-semibold">
                       {statusToColumnTitle[statusKey]}
-                      <Badge variant="secondary" className="text-xs">
-                        {projects.filter(p => p.status === statusKey).length}
-                      </Badge>
                     </h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {projects.filter(p => p.status === statusKey).length}
+                    </Badge>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  <div className="flex-1 overflow-y-auto p-3 pr-1 space-y-3"> {/* Added pr-1 to avoid scrollbar overlapping content */}
                     {projects.filter(p => p.status === statusKey).length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-4">No hay proyectos en este estado.</p>
                     )}

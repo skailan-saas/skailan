@@ -1,6 +1,7 @@
 
 "use client";
 
+import React from 'react'; // Ensure React is imported
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, GripVertical, Tag, Eye, Edit, Trash2 } from "lucide-react";
 import { useState, type FC, type FormEvent, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, useDraggable, useDroppable, type DragEndEvent, type Announcements } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 const TASK_STATUSES = ["PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"] as const;
@@ -104,6 +105,7 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, onEdit, onDelete }) => {
 
   const style = transform ? {
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    zIndex: isDragging ? 50 : 'auto', // Ensure dragging item is on top
   } : {};
 
   const draggableProps = mounted ? {
@@ -119,7 +121,7 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, onEdit, onDelete }) => {
       style={style}
       className={cn(
         "mb-3 shadow-md hover:shadow-lg transition-shadow bg-card cursor-grab",
-        isDragging && "opacity-60"
+        isDragging && "opacity-60" 
       )}
       {...draggableProps}
     >
@@ -183,6 +185,26 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, onEdit, onDelete }) => {
 });
 TaskCard.displayName = 'TaskCard';
 
+const customAnnouncements: Announcements = {
+  onDragStart({ active }) {
+    return `Picked up draggable item ${active.id}.`;
+  },
+  onDragOver({ active, over }) {
+    if (over) {
+      return `Draggable item ${active.id} was moved over droppable area ${over.id}.`;
+    }
+    return `Draggable item ${active.id} is no longer over a droppable area.`;
+  },
+  onDragEnd({ active, over }) {
+    if (over) {
+      return `Draggable item ${active.id} was dropped over droppable area ${over.id}`;
+    }
+    return `Draggable item ${active.id} was dropped.`;
+  },
+  onDragCancel({ active }) {
+    return `Dragging was cancelled. Draggable item ${active.id} was dropped.`;
+  },
+};
 
 export default function CrmTasksPage() {
   const { toast } = useToast();
@@ -269,7 +291,7 @@ export default function CrmTasksPage() {
   }, [toast]);
 
   const handleTaskDragEnd = useCallback((event: DragEndEvent) => {
-    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event)));
+    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event))); // Keep for debugging
     const { active, over } = event;
     console.log("Active ID:", active.id);
     console.log("Over ID:", over ? over.id : null);
@@ -280,12 +302,12 @@ export default function CrmTasksPage() {
     }
 
     const taskId = active.id as string;
-    const targetStatus = over.id as TaskStatus; // Column ID is the statusKey
+    const targetStatus = over.id as TaskStatus;
 
     setTasks((prevTasks) => {
       const taskToMove = prevTasks.find(t => t.id === taskId);
       if (taskToMove && taskToMove.status !== targetStatus) {
-        console.log(`Task ${taskId} current status: ${taskToMove.status}, target status: ${targetStatus}. Updating state.`);
+        console.log(`Attempting to move task ${taskId} to status ${targetStatus}`);
         toast({
           title: "Task Status Updated",
           description: `Task "${taskToMove.title}" moved to ${statusToColumnTitle[targetStatus]}.`,
@@ -300,7 +322,7 @@ export default function CrmTasksPage() {
   }, [toast]);
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleTaskDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleTaskDragEnd} announcements={customAnnouncements}>
       <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
           <div>
@@ -441,19 +463,19 @@ export default function CrmTasksPage() {
                   key={statusKey}
                   ref={setDroppableRef}
                   className={cn(
-                    "w-[300px] flex-shrink-0 flex flex-col bg-muted/40 shadow-md rounded-lg p-0 transition-colors duration-200 min-h-[400px]", // Ensure it's a flex column and has padding 0 initially
+                    "w-[300px] flex-shrink-0 flex flex-col bg-muted/40 shadow-md rounded-lg p-0 transition-colors duration-200 min-h-[400px]",
                     isOver && "bg-primary/10 border-2 border-primary"
                   )}
                 >
-                  <div className="p-4 border-b sticky top-0 bg-muted/40 rounded-t-lg z-10"> {/* Header for column title */}
-                    <h3 className="text-md font-semibold flex justify-between items-center">
+                   <div className="p-4 border-b sticky top-0 bg-muted/40 rounded-t-lg z-10 flex justify-between items-center">
+                    <h3 className="text-md font-semibold">
                       {statusToColumnTitle[statusKey]}
-                      <Badge variant="secondary" className="text-xs">
-                        {tasks.filter(task => task.status === statusKey).length}
-                      </Badge>
                     </h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {tasks.filter(task => task.status === statusKey).length}
+                    </Badge>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3"> {/* Scrollable content area */}
+                  <div className="flex-1 overflow-y-auto p-3 space-y-3">
                     {tasks.filter(task => task.status === statusKey).length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>
                     )}
