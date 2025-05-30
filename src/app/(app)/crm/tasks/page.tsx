@@ -7,12 +7,20 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { PlusCircle, ClipboardCheck, CalendarDays, UserCircle, MoreHorizontal, GripVertical } from "lucide-react";
-import { useState, type FC } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlusCircle, ClipboardCheck, CalendarDays, UserCircle, MoreHorizontal, GripVertical, Tag } from "lucide-react";
+import { useState, type FC, type FormEvent } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 // Based on Prisma TaskStatus enum
 const TASK_STATUSES = ["PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"] as const;
 type TaskStatus = typeof TASK_STATUSES[number];
+const TASK_PRIORITIES = ["Alta", "Media", "Baja"] as const;
+type TaskPriority = typeof TASK_PRIORITIES[number];
 
 interface Task {
   id: string;
@@ -20,7 +28,7 @@ interface Task {
   description?: string;
   status: TaskStatus;
   dueDate?: string;
-  priority?: "Alta" | "Media" | "Baja";
+  priority?: TaskPriority;
   assignee?: {
     name: string;
     avatarUrl: string;
@@ -30,7 +38,7 @@ interface Task {
   tags?: string[];
 }
 
-const initialTasks: Task[] = [
+const initialTasksData: Task[] = [
   {
     id: "task-1",
     title: "Diseñar landing page",
@@ -114,9 +122,9 @@ const TaskCard: FC<TaskCardProps> = ({ task }) => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Ver Detalles</DropdownMenuItem>
-              <DropdownMenuItem>Editar Tarea</DropdownMenuItem>
-              <DropdownMenuItem>Asignar</DropdownMenuItem>
+              <DropdownMenuItem>View Details</DropdownMenuItem>
+              <DropdownMenuItem>Edit Task</DropdownMenuItem>
+              <DropdownMenuItem>Assign</DropdownMenuItem>
               <DropdownMenuItem className="text-destructive focus:text-destructive">Eliminar</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -140,7 +148,7 @@ const TaskCard: FC<TaskCardProps> = ({ task }) => {
         )}
         {task.tags && task.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2">
-                {task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>)}
+                {task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}
             </div>
         )}
       </CardContent>
@@ -165,10 +173,54 @@ const TaskCard: FC<TaskCardProps> = ({ task }) => {
 
 
 export default function CrmTasksPage() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const { toast } = useToast();
+  const [tasks, setTasks] = useState<Task[]>(initialTasksData);
+  const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
 
-  // Placeholder for drag-and-drop logic
-  // const handleDragEnd = (result: any) => { /* ... */ };
+  // Form state for adding task
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDescription, setNewTaskDescription] = useState("");
+  const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>("PENDIENTE");
+  const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("Media");
+  const [newTaskAssigneeName, setNewTaskAssigneeName] = useState("");
+  const [newTaskTags, setNewTaskTags] = useState("");
+
+
+  const resetAddTaskForm = () => {
+    setNewTaskTitle("");
+    setNewTaskDescription("");
+    setNewTaskStatus("PENDIENTE");
+    setNewTaskDueDate("");
+    setNewTaskPriority("Media");
+    setNewTaskAssigneeName("");
+    setNewTaskTags("");
+  };
+
+  const handleAddTaskSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) {
+        toast({ title: "Task Title Required", description: "Please enter a title for the task.", variant: "destructive" });
+        return;
+    }
+    const newId = `task-${Date.now()}`;
+    const newTask: Task = {
+      id: newId,
+      title: newTaskTitle,
+      description: newTaskDescription || undefined,
+      status: newTaskStatus,
+      dueDate: newTaskDueDate || undefined,
+      priority: newTaskPriority || undefined,
+      assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${newTaskAssigneeName[0]}`, avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase(), dataAiHint: "avatar person"} : undefined,
+      tags: newTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
+    };
+    
+    console.log("New Task Data:", newTask);
+    setTasks(prevTasks => [...prevTasks, newTask]);
+    toast({ title: "Task Added (Demo)", description: `Task "${newTask.title}" has been added.` });
+    resetAddTaskForm();
+    setIsAddTaskDialogOpen(false);
+  };
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -179,9 +231,71 @@ export default function CrmTasksPage() {
             Organiza y haz seguimiento de las tareas de tu equipo en este tablero Kanban.
           </p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Task
-        </Button>
+        <Dialog open={isAddTaskDialogOpen} onOpenChange={setIsAddTaskDialogOpen}>
+            <DialogTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setIsAddTaskDialogOpen(true)}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Task
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[625px]">
+                <DialogHeader>
+                    <DialogTitle>Add New Task</DialogTitle>
+                    <DialogDescription>Enter the details for the new task.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddTaskSubmit}>
+                    <ScrollArea className="max-h-[60vh] p-1">
+                        <div className="grid gap-4 py-4 pr-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="taskTitle" className="text-right col-span-1">Title</Label>
+                                <Input id="taskTitle" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="e.g., Follow up with client" className="col-span-3" required />
+                            </div>
+                            <div className="grid grid-cols-4 items-start gap-4">
+                                <Label htmlFor="taskDescription" className="text-right col-span-1 pt-2">Description</Label>
+                                <Textarea id="taskDescription" value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} placeholder="Provide more details..." className="col-span-3" rows={3}/>
+                            </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="taskStatus" className="text-right col-span-1">Status</Label>
+                                <Select value={newTaskStatus} onValueChange={(value: TaskStatus) => setNewTaskStatus(value)}>
+                                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
+                                    <SelectContent>
+                                        {TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="taskDueDate" className="text-right col-span-1">Due Date</Label>
+                                 <div className="col-span-3 relative">
+                                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input id="taskDueDate" type="date" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} className="pl-10" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="taskPriority" className="text-right col-span-1">Priority</Label>
+                                <Select value={newTaskPriority} onValueChange={(value: TaskPriority) => setNewTaskPriority(value)}>
+                                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select priority" /></SelectTrigger>
+                                    <SelectContent>
+                                        {TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="taskAssignee" className="text-right col-span-1">Assignee</Label>
+                                <Input id="taskAssignee" value={newTaskAssigneeName} onChange={(e) => setNewTaskAssigneeName(e.target.value)} placeholder="e.g., John Doe" className="col-span-3" />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="taskTags" className="text-right col-span-1">Tags</Label>
+                                <Input id="taskTags" value={newTaskTags} onChange={(e) => setNewTaskTags(e.target.value)} placeholder="e.g., urgent, client_x" className="col-span-3" />
+                                <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p>
+                            </div>
+                        </div>
+                    </ScrollArea>
+                    <DialogFooter className="pt-4 border-t">
+                        <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddTaskForm}>Cancel</Button></DialogClose>
+                        <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Task</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
       </div>
       
       <p className="text-sm text-muted-foreground">
@@ -219,3 +333,5 @@ export default function CrmTasksPage() {
     </div>
   );
 }
+
+    

@@ -7,27 +7,34 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { PlusCircle, Briefcase, Users, GripVertical, MoreHorizontal, Percent } from "lucide-react";
-import { useState, type FC } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlusCircle, Briefcase, Users, GripVertical, MoreHorizontal, Percent, CalendarDays } from "lucide-react";
+import { useState, type FC, type FormEvent } from "react";
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
 
 
 // Based on Prisma ProjectStatus enum
 const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
 type ProjectStatus = typeof PROJECT_STATUSES[number];
 
+interface ProjectTeamMember { name: string; avatarUrl: string; avatarFallback: string; dataAiHint?: string }
 interface Project {
   id: string;
   name: string;
   description?: string;
   status: ProjectStatus;
   clientName?: string;
-  team?: { name: string; avatarUrl: string; avatarFallback: string; dataAiHint?: string }[];
+  team?: ProjectTeamMember[];
   progress?: number; // 0-100
   deadline?: string;
 }
 
-const initialProjects: Project[] = [
+const initialProjectsData: Project[] = [
   {
     id: "proj-1",
     name: "Lanzamiento App Móvil Conecta Hub",
@@ -120,7 +127,7 @@ const ProjectCard: FC<ProjectCardProps> = ({ project }) => {
       </CardHeader>
       <CardContent className="p-3 pt-1 space-y-2">
         {project.clientName && <p className="text-xs text-muted-foreground">Cliente: <span className="font-medium text-foreground">{project.clientName}</span></p>}
-        {project.deadline && <p className="text-xs text-muted-foreground">Fecha Límite: {project.deadline}</p>}
+        {project.deadline && <p className="text-xs text-muted-foreground flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1"/>Fecha Límite: {project.deadline}</p>}
         {project.team && project.team.length > 0 && (
           <div className="flex items-center -space-x-2">
             {project.team.map(member => (
@@ -129,6 +136,7 @@ const ProjectCard: FC<ProjectCardProps> = ({ project }) => {
                 <AvatarFallback className="text-xs">{member.avatarFallback}</AvatarFallback>
               </Avatar>
             ))}
+            <span className="pl-3 text-xs text-muted-foreground">({project.team.length} {project.team.length === 1 ? 'miembro' : 'miembros'})</span>
           </div>
         )}
         {project.progress !== undefined && (
@@ -152,10 +160,66 @@ const ProjectCard: FC<ProjectCardProps> = ({ project }) => {
 };
 
 export default function CrmProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const { toast } = useToast();
+  const [projects, setProjects] = useState<Project[]>(initialProjectsData);
+  const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
 
-  // Placeholder for drag-and-drop logic
-  // const handleDragEnd = (result: any) => { /* ... */ };
+  // Form state for adding project
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [newProjectStatus, setNewProjectStatus] = useState<ProjectStatus>("PLANIFICACION");
+  const [newProjectClientName, setNewProjectClientName] = useState("");
+  const [newProjectTeam, setNewProjectTeam] = useState(""); // Simple text input for now
+  const [newProjectProgress, setNewProjectProgress] = useState<number | string>(0);
+  const [newProjectDeadline, setNewProjectDeadline] = useState("");
+  
+  const resetAddProjectForm = () => {
+    setNewProjectName("");
+    setNewProjectDescription("");
+    setNewProjectStatus("PLANIFICACION");
+    setNewProjectClientName("");
+    setNewProjectTeam("");
+    setNewProjectProgress(0);
+    setNewProjectDeadline("");
+  };
+
+  const handleAddProjectSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const progressValue = parseInt(String(newProjectProgress), 10);
+    if (isNaN(progressValue) || progressValue < 0 || progressValue > 100) {
+        toast({ title: "Invalid Progress", description: "Progress must be a number between 0 and 100.", variant: "destructive" });
+        return;
+    }
+
+    const teamMembers: ProjectTeamMember[] = newProjectTeam
+        .split(',')
+        .map(name => name.trim())
+        .filter(name => name)
+        .map(name => ({
+            name,
+            avatarUrl: `https://placehold.co/40x40.png?text=${name[0]}`,
+            avatarFallback: name.substring(0,2).toUpperCase(),
+            dataAiHint: "avatar person"
+        }));
+
+    const newProject: Project = {
+      id: `proj-${Date.now()}`,
+      name: newProjectName,
+      description: newProjectDescription || undefined,
+      status: newProjectStatus,
+      clientName: newProjectClientName || undefined,
+      team: teamMembers.length > 0 ? teamMembers : undefined,
+      progress: progressValue,
+      deadline: newProjectDeadline || undefined,
+    };
+    
+    console.log("New Project Data:", newProject);
+    setProjects(prevProjects => [...prevProjects, newProject]);
+    toast({ title: "Project Added (Demo)", description: `Project "${newProject.name}" has been added.` });
+    resetAddProjectForm();
+    setIsAddProjectDialogOpen(false);
+  };
+
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -166,9 +230,66 @@ export default function CrmProjectsPage() {
             Supervisa tus proyectos desde la planificación hasta la finalización en este tablero Kanban.
           </p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Project
-        </Button>
+        <Dialog open={isAddProjectDialogOpen} onOpenChange={setIsAddProjectDialogOpen}>
+            <DialogTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setIsAddProjectDialogOpen(true)}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Project
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[625px]">
+                <DialogHeader>
+                    <DialogTitle>Add New Project</DialogTitle>
+                    <DialogDescription>Enter the details for the new project.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddProjectSubmit}>
+                    <ScrollArea className="max-h-[60vh] p-1">
+                        <div className="grid gap-4 py-4 pr-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="projectName" className="text-right col-span-1">Project Name</Label>
+                                <Input id="projectName" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="e.g., Q4 Marketing Campaign" className="col-span-3" required />
+                            </div>
+                            <div className="grid grid-cols-4 items-start gap-4">
+                                <Label htmlFor="projectDescription" className="text-right col-span-1 pt-2">Description</Label>
+                                <Textarea id="projectDescription" value={newProjectDescription} onChange={(e) => setNewProjectDescription(e.target.value)} placeholder="Describe the project scope and goals" className="col-span-3" rows={3}/>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="projectStatus" className="text-right col-span-1">Status</Label>
+                                <Select value={newProjectStatus} onValueChange={(value: ProjectStatus) => setNewProjectStatus(value)}>
+                                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
+                                    <SelectContent>
+                                        {PROJECT_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="projectClient" className="text-right col-span-1">Client Name</Label>
+                                <Input id="projectClient" value={newProjectClientName} onChange={(e) => setNewProjectClientName(e.target.value)} placeholder="e.g., Client Company Inc." className="col-span-3" />
+                            </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="projectTeam" className="text-right col-span-1">Team Members</Label>
+                                <Input id="projectTeam" value={newProjectTeam} onChange={(e) => setNewProjectTeam(e.target.value)} placeholder="e.g., John, Jane, Mike" className="col-span-3" />
+                                <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated names.</p>
+                            </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="projectProgress" className="text-right col-span-1">Progress (%)</Label>
+                                <Input id="projectProgress" type="number" value={newProjectProgress} onChange={(e) => setNewProjectProgress(e.target.value)} placeholder="0-100" className="col-span-3" min="0" max="100"/>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="projectDeadline" className="text-right col-span-1">Deadline</Label>
+                                <div className="col-span-3 relative">
+                                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input id="projectDeadline" type="date" value={newProjectDeadline} onChange={(e) => setNewProjectDeadline(e.target.value)} className="pl-10" />
+                                </div>
+                            </div>
+                        </div>
+                    </ScrollArea>
+                    <DialogFooter className="pt-4 border-t">
+                        <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddProjectForm}>Cancel</Button></DialogClose>
+                        <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Project</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
       </div>
 
        <p className="text-sm text-muted-foreground">
@@ -206,3 +327,5 @@ export default function CrmProjectsPage() {
     </div>
   );
 }
+
+    
