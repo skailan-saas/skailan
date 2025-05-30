@@ -1,12 +1,75 @@
 
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, FileText } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+// Based on Prisma QuoteStatus enum
+const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "CANCELED"] as const;
+type QuoteStatus = typeof QUOTE_STATUSES[number];
+
+interface Quote {
+  id: string;
+  quoteNumber: string;
+  leadName: string; // Simplified, in reality leadId and fetch lead info
+  leadId?: string;
+  dateCreated: string;
+  expiryDate?: string;
+  status: QuoteStatus;
+  totalAmount: number;
+}
+
+const initialQuotes: Quote[] = [
+  {
+    id: "quote-1",
+    quoteNumber: "QT-2024-001",
+    leadName: "Alice W. (Wonderland Inc.)",
+    leadId: "lead-1",
+    dateCreated: "2024-07-20",
+    expiryDate: "2024-08-20",
+    status: "SENT",
+    totalAmount: 5250.00,
+  },
+  {
+    id: "quote-2",
+    quoteNumber: "QT-2024-002",
+    leadName: "Bob T. (Builders Co.)",
+    leadId: "lead-2",
+    dateCreated: "2024-07-22",
+    expiryDate: "2024-08-22",
+    status: "ACCEPTED",
+    totalAmount: 1800.50,
+  },
+  {
+    id: "quote-3",
+    quoteNumber: "QT-2024-003",
+    leadName: "Diana P. (Justice Solutions)",
+    leadId: "lead-4",
+    dateCreated: "2024-07-15",
+    expiryDate: "2024-08-15",
+    status: "DRAFT",
+    totalAmount: 12000.00,
+  },
+  {
+    id: "quote-4",
+    quoteNumber: "QT-2024-004",
+    leadName: "Tech Innovations Ltd.", // New lead not in current lead list
+    dateCreated: "2024-07-28",
+    status: "REJECTED",
+    totalAmount: 850.00,
+  },
+];
 
 export default function CrmQuotesPage() {
   return (
-    <div className="p-6 space-y-6 h-[calc(100vh-4rem)] overflow-y-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
         <div>
           <h1 className="text-3xl font-bold flex items-center"><FileText className="mr-3 h-8 w-8 text-primary"/>Quotes Management</h1>
           <p className="text-muted-foreground">
@@ -18,20 +81,96 @@ export default function CrmQuotesPage() {
         </Button>
       </div>
 
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle>Quotes List</CardTitle>
-          <CardDescription>
-            A table displaying all quotes, their statuses, associated leads, and totals will be shown here.
-          </CardDescription>
+      <Card className="shadow-lg flex-1 flex flex-col">
+        <CardHeader className="border-b p-4">
+           <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
+            <CardTitle className="text-lg">All Quotes</CardTitle>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-initial">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search quotes..." className="pl-8 w-full sm:w-[200px] lg:w-[250px]" />
+              </div>
+              <Button variant="outline" size="icon">
+                <Filter className="h-4 w-4" />
+                <span className="sr-only">Filter</span>
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-center py-10">
-            Quote management table and tools will be implemented here.
-          </p>
-          {/* Placeholder for table or list of quotes */}
+        <CardContent className="p-0 flex-1">
+          <ScrollArea className="h-full">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Quote #</TableHead>
+                  <TableHead>Lead / Customer</TableHead>
+                  <TableHead className="hidden md:table-cell">Date Created</TableHead>
+                  <TableHead className="hidden lg:table-cell">Expiry Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Total Amount</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {initialQuotes.map((quote) => (
+                  <TableRow key={quote.id}>
+                    <TableCell className="font-medium">{quote.quoteNumber}</TableCell>
+                    <TableCell>{quote.leadName}</TableCell>
+                    <TableCell className="hidden md:table-cell">{quote.dateCreated}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{quote.expiryDate || "N/A"}</TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={
+                            quote.status === "ACCEPTED" ? "default" : 
+                            quote.status === "SENT" ? "secondary" :
+                            quote.status === "REJECTED" || quote.status === "CANCELED" ? "destructive" : 
+                            "outline"
+                        }
+                        className={quote.status === "ACCEPTED" ? "bg-green-600 text-white" : ""}
+                      >
+                        {quote.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">${quote.totalAmount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> View Quote</DropdownMenuItem>
+                          <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem>
+                          <DropdownMenuItem><Send className="mr-2 h-4 w-4" /> Send Quote</DropdownMenuItem>
+                          <DropdownMenuItem><Download className="mr-2 h-4 w-4" /> Download PDF</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive">
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Quote
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {initialQuotes.length === 0 && (
+                <div className="text-center py-20">
+                    <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-xl font-semibold text-foreground">No Quotes Found</h3>
+                    <p className="text-muted-foreground">
+                    Create your first quote to get started.
+                    </p>
+                </div>
+            )}
+          </ScrollArea>
         </CardContent>
       </Card>
+      <div className="text-xs text-muted-foreground text-center flex-shrink-0 py-2">
+        Pagination and advanced filtering controls will be added here.
+      </div>
     </div>
   );
 }
+
+    
