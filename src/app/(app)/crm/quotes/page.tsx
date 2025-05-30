@@ -12,17 +12,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-// Based on Prisma QuoteStatus enum
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "CANCELED"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
 
 interface Quote {
   id: string;
   quoteNumber: string;
-  leadName: string; // Simplified, in reality leadId and fetch lead info
+  leadName: string; 
   leadId?: string;
   dateCreated: string;
   expiryDate?: string;
@@ -51,36 +50,27 @@ const initialQuotesData: Quote[] = [
     status: "ACCEPTED",
     totalAmount: 1800.50,
   },
-  {
-    id: "quote-3",
-    quoteNumber: "QT-2024-003",
-    leadName: "Diana P. (Justice Solutions)",
-    leadId: "lead-4",
-    dateCreated: "2024-07-15",
-    expiryDate: "2024-08-15",
-    status: "DRAFT",
-    totalAmount: 12000.00,
-  },
-  {
-    id: "quote-4",
-    quoteNumber: "QT-2024-004",
-    leadName: "Tech Innovations Ltd.", // New lead not in current lead list
-    dateCreated: "2024-07-28",
-    status: "REJECTED",
-    totalAmount: 850.00,
-  },
 ];
 
 export default function CrmQuotesPage() {
   const { toast } = useToast();
   const [quotes, setQuotes] = useState<Quote[]>(initialQuotesData);
   const [isAddQuoteDialogOpen, setIsAddQuoteDialogOpen] = useState(false);
+  const [isEditQuoteDialogOpen, setIsEditQuoteDialogOpen] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
 
-  // Form state for adding a new quote
+  // Form state for adding
   const [newQuoteLeadName, setNewQuoteLeadName] = useState("");
   const [newQuoteExpiryDate, setNewQuoteExpiryDate] = useState("");
   const [newQuoteStatus, setNewQuoteStatus] = useState<QuoteStatus>("DRAFT");
   const [newQuoteTotalAmount, setNewQuoteTotalAmount] = useState<number | string>("");
+
+  // Form state for editing
+  const [editFormQuoteLeadName, setEditFormQuoteLeadName] = useState("");
+  const [editFormQuoteExpiryDate, setEditFormQuoteExpiryDate] = useState("");
+  const [editFormQuoteStatus, setEditFormQuoteStatus] = useState<QuoteStatus>("DRAFT");
+  const [editFormQuoteTotalAmount, setEditFormQuoteTotalAmount] = useState<number | string>("");
+
 
   const resetAddQuoteForm = () => {
     setNewQuoteLeadName("");
@@ -96,26 +86,54 @@ export default function CrmQuotesPage() {
       toast({ title: "Invalid Amount", description: "Please enter a valid total amount.", variant: "destructive" });
       return;
     }
-
-    const newQuote: Omit<Quote, "id" | "quoteNumber" | "dateCreated"> = {
+    const newQuoteToAdd: Quote = {
+      id: `quote-${Date.now()}`,
+      quoteNumber: `QT-${new Date().getFullYear()}-${String(quotes.length + 1).padStart(3, '0')}`,
+      dateCreated: new Date().toISOString().split('T')[0],
       leadName: newQuoteLeadName,
       expiryDate: newQuoteExpiryDate || undefined,
       status: newQuoteStatus,
       totalAmount: amount,
     };
-
-    const newQuoteFull: Quote = {
-        ...newQuote,
-        id: `quote-${Date.now()}`,
-        quoteNumber: `QT-${new Date().getFullYear()}-${String(quotes.length + 1).padStart(3, '0')}`,
-        dateCreated: new Date().toISOString().split('T')[0],
-    };
-    
-    console.log("New Quote Data:", newQuoteFull);
-    setQuotes(prevQuotes => [newQuoteFull, ...prevQuotes]);
-    toast({ title: "Quote Added (Demo)", description: `Quote for ${newQuote.leadName} has been added.` });
+    setQuotes(prevQuotes => [newQuoteToAdd, ...prevQuotes]);
+    toast({ title: "Quote Added", description: `Quote for ${newQuoteToAdd.leadName} has been added.` });
     resetAddQuoteForm();
     setIsAddQuoteDialogOpen(false);
+  };
+
+  const openEditQuoteDialog = (quote: Quote) => {
+    setEditingQuote(quote);
+    setEditFormQuoteLeadName(quote.leadName);
+    setEditFormQuoteExpiryDate(quote.expiryDate || "");
+    setEditFormQuoteStatus(quote.status);
+    setEditFormQuoteTotalAmount(quote.totalAmount);
+    setIsEditQuoteDialogOpen(true);
+  };
+
+  const handleEditQuoteSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingQuote) return;
+    const amount = parseFloat(String(editFormQuoteTotalAmount));
+    if (isNaN(amount) || amount <= 0) {
+      toast({ title: "Invalid Amount", description: "Please enter a valid total amount.", variant: "destructive" });
+      return;
+    }
+    const updatedQuote: Quote = {
+      ...editingQuote,
+      leadName: editFormQuoteLeadName,
+      expiryDate: editFormQuoteExpiryDate || undefined,
+      status: editFormQuoteStatus,
+      totalAmount: amount,
+    };
+    setQuotes(prevQuotes => prevQuotes.map(q => q.id === editingQuote.id ? updatedQuote : q));
+    toast({ title: "Quote Updated", description: `Quote ${updatedQuote.quoteNumber} has been updated.` });
+    setIsEditQuoteDialogOpen(false);
+    setEditingQuote(null);
+  };
+  
+  const handleDeleteQuote = (quoteId: string) => {
+    setQuotes(prevQuotes => prevQuotes.filter(quote => quote.id !== quoteId));
+    toast({ title: "Quote Deleted (Demo)", description: "Quote has been removed." });
   };
 
   return (
@@ -129,7 +147,7 @@ export default function CrmQuotesPage() {
         </div>
         <Dialog open={isAddQuoteDialogOpen} onOpenChange={setIsAddQuoteDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setIsAddQuoteDialogOpen(true)}>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <PlusCircle className="mr-2 h-4 w-4" /> Create New Quote
             </Button>
           </DialogTrigger>
@@ -141,35 +159,28 @@ export default function CrmQuotesPage() {
             <form onSubmit={handleAddQuoteSubmit}>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="quoteLeadName" className="text-right col-span-1">Lead/Customer</Label>
-                  <Input id="quoteLeadName" value={newQuoteLeadName} onChange={(e) => setNewQuoteLeadName(e.target.value)} placeholder="e.g., Acme Corp or John Doe" className="col-span-3" required />
+                  <Label htmlFor="newQuoteLeadName" className="text-right col-span-1">Lead/Customer</Label>
+                  <Input id="newQuoteLeadName" value={newQuoteLeadName} onChange={(e) => setNewQuoteLeadName(e.target.value)} placeholder="e.g., Acme Corp" className="col-span-3" required />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="quoteExpiryDate" className="text-right col-span-1">Expiry Date</Label>
+                  <Label htmlFor="newQuoteExpiryDate" className="text-right col-span-1">Expiry Date</Label>
                   <div className="col-span-3 relative">
                     <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="quoteExpiryDate" type="date" value={newQuoteExpiryDate} onChange={(e) => setNewQuoteExpiryDate(e.target.value)} className="pl-10" />
+                    <Input id="newQuoteExpiryDate" type="date" value={newQuoteExpiryDate} onChange={(e) => setNewQuoteExpiryDate(e.target.value)} className="pl-10" />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="quoteStatus" className="text-right col-span-1">Status</Label>
+                  <Label htmlFor="newQuoteStatus" className="text-right col-span-1">Status</Label>
                   <Select value={newQuoteStatus} onValueChange={(value: QuoteStatus) => setNewQuoteStatus(value)}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select quote status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {QUOTE_STATUSES.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}
-                    </SelectContent>
+                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
+                    <SelectContent>{QUOTE_STATUSES.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="quoteTotalAmount" className="text-right col-span-1">Total Amount ($)</Label>
-                  <Input id="quoteTotalAmount" type="number" value={newQuoteTotalAmount} onChange={(e) => setNewQuoteTotalAmount(e.target.value)} placeholder="e.g., 1500.00" className="col-span-3" required step="0.01" min="0"/>
+                  <Label htmlFor="newQuoteTotalAmount" className="text-right col-span-1">Total ($)</Label>
+                  <Input id="newQuoteTotalAmount" type="number" value={newQuoteTotalAmount} onChange={(e) => setNewQuoteTotalAmount(e.target.value)} placeholder="e.g., 1500.00" className="col-span-3" required step="0.01" min="0"/>
                 </div>
-                {/* Placeholder for line items - would be a more complex component */}
-                <div className="col-span-4 text-sm text-muted-foreground text-center pt-2">
-                    Advanced line item editor will be available here.
-                </div>
+                <div className="col-span-4 text-sm text-muted-foreground text-center pt-2">Line item editor placeholder.</div>
               </div>
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline" onClick={resetAddQuoteForm}>Cancel</Button></DialogClose>
@@ -179,6 +190,47 @@ export default function CrmQuotesPage() {
           </DialogContent>
         </Dialog>
       </div>
+      
+      {/* Edit Quote Dialog */}
+      <Dialog open={isEditQuoteDialogOpen} onOpenChange={setIsEditQuoteDialogOpen}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Edit Quote: {editingQuote?.quoteNumber}</DialogTitle>
+            <DialogDescription>Update the details for this sales quote.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditQuoteSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editFormQuoteLeadName" className="text-right col-span-1">Lead/Customer</Label>
+                <Input id="editFormQuoteLeadName" value={editFormQuoteLeadName} onChange={(e) => setEditFormQuoteLeadName(e.target.value)} className="col-span-3" required />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editFormQuoteExpiryDate" className="text-right col-span-1">Expiry Date</Label>
+                 <div className="col-span-3 relative">
+                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="editFormQuoteExpiryDate" type="date" value={editFormQuoteExpiryDate} onChange={(e) => setEditFormQuoteExpiryDate(e.target.value)} className="pl-10" />
+                  </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editFormQuoteStatus" className="text-right col-span-1">Status</Label>
+                <Select value={editFormQuoteStatus} onValueChange={(value: QuoteStatus) => setEditFormQuoteStatus(value)}>
+                  <SelectTrigger className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
+                  <SelectContent>{QUOTE_STATUSES.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editFormQuoteTotalAmount" className="text-right col-span-1">Total ($)</Label>
+                <Input id="editFormQuoteTotalAmount" type="number" value={editFormQuoteTotalAmount} onChange={(e) => setEditFormQuoteTotalAmount(e.target.value)} className="col-span-3" required step="0.01" min="0"/>
+              </div>
+               <div className="col-span-4 text-sm text-muted-foreground text-center pt-2">Line item editor placeholder.</div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditQuoteDialogOpen(false)}>Cancel</Button></DialogClose>
+              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Card className="shadow-lg flex-1 flex flex-col">
         <CardHeader className="border-b p-4">
@@ -239,11 +291,11 @@ export default function CrmQuotesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> View Quote</DropdownMenuItem>
-                          <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Eye className="mr-2 h-4 w-4" /> View Quote</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditQuoteDialog(quote)}><Edit className="mr-2 h-4 w-4" /> Edit Quote</DropdownMenuItem>
                           <DropdownMenuItem><Send className="mr-2 h-4 w-4" /> Send Quote</DropdownMenuItem>
                           <DropdownMenuItem><Download className="mr-2 h-4 w-4" /> Download PDF</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive">
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteQuote(quote.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Quote
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -271,5 +323,6 @@ export default function CrmQuotesPage() {
     </div>
   );
 }
+    
 
     

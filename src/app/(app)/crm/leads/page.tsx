@@ -13,10 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { PlusCircle, Users, Search, Filter, MoreHorizontal, Edit, Trash2, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-// Based on Prisma LeadStatus enum
 const LEAD_STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "LOST", "UNQUALIFIED"] as const;
 type LeadStatus = typeof LEAD_STATUSES[number];
 const LEAD_SOURCES = ["WhatsApp", "Web Chat", "Messenger", "Instagram", "Manual", "Referral"] as const;
@@ -59,44 +58,14 @@ const initialLeads: Lead[] = [
     company: "Builders Co.",
     dataAiHint: "male face",
   },
-  {
-    id: "lead-3",
-    name: "Charlie B.",
-    email: "charlie.b@example.com",
-    phone: "555-0103",
-    source: "Instagram",
-    status: "NEW",
-    lastContacted: "2024-07-30",
-    dataAiHint: "person face",
-  },
-  {
-    id: "lead-4",
-    name: "Diana P.",
-    email: "diana.p@example.com",
-    source: "Web Chat",
-    status: "CONVERTED",
-    assignedTo: { name: "John Doe", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "man face", avatarFallback: "JD" },
-    lastContacted: "2024-07-25",
-    company: "Justice Solutions",
-    dataAiHint: "woman avatar",
-  },
-  {
-    id: "lead-5",
-    name: "Edward N.",
-    email: "edward.n@example.com",
-    phone: "555-0105",
-    source: "Manual",
-    status: "LOST",
-    assignedTo: { name: "Jane Smith", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", avatarFallback: "JS" },
-    lastContacted: "2024-07-15",
-    dataAiHint: "man avatar",
-  },
 ];
 
 export default function CrmLeadsPage() {
   const { toast } = useToast();
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [isAddLeadDialogOpen, setIsAddLeadDialogOpen] = useState(false);
+  const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
 
   // Form state for adding a new lead
   const [newLeadName, setNewLeadName] = useState("");
@@ -105,6 +74,15 @@ export default function CrmLeadsPage() {
   const [newLeadCompany, setNewLeadCompany] = useState("");
   const [newLeadSource, setNewLeadSource] = useState<LeadSource>("Manual");
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>("NEW");
+
+  // Form state for editing a lead
+  const [editFormLeadName, setEditFormLeadName] = useState("");
+  const [editFormLeadEmail, setEditFormLeadEmail] = useState("");
+  const [editFormLeadPhone, setEditFormLeadPhone] = useState("");
+  const [editFormLeadCompany, setEditFormLeadCompany] = useState("");
+  const [editFormLeadSource, setEditFormLeadSource] = useState<LeadSource>("Manual");
+  const [editFormLeadStatus, setEditFormLeadStatus] = useState<LeadStatus>("NEW");
+
 
   const resetAddLeadForm = () => {
     setNewLeadName("");
@@ -117,22 +95,61 @@ export default function CrmLeadsPage() {
 
   const handleAddLeadSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const newLead: Omit<Lead, "id" | "assignedTo" | "lastContacted" | "dataAiHint"> = {
+    const newLeadToAdd: Lead = {
+      id: `lead-${Date.now()}`,
       name: newLeadName,
       email: newLeadEmail,
       phone: newLeadPhone || undefined,
       company: newLeadCompany || undefined,
       source: newLeadSource,
       status: newLeadStatus,
+      lastContacted: new Date().toISOString().split('T')[0],
+      dataAiHint: "person avatar" // generic hint for new leads
     };
-    // In a real app, you would send this to your backend to create the lead
-    console.log("New Lead Data:", newLead); 
-    // Add to local state for demo purposes
-    setLeads(prevLeads => [...prevLeads, { ...newLead, id: `lead-${Date.now()}`, lastContacted: new Date().toISOString().split('T')[0] }]);
-    toast({ title: "Lead Added (Demo)", description: `${newLead.name} has been added to the list.` });
+    setLeads(prevLeads => [newLeadToAdd, ...prevLeads]);
+    toast({ title: "Lead Added", description: `${newLeadToAdd.name} has been added.` });
     resetAddLeadForm();
     setIsAddLeadDialogOpen(false);
   };
+
+  const openEditLeadDialog = (lead: Lead) => {
+    setEditingLead(lead);
+    setEditFormLeadName(lead.name);
+    setEditFormLeadEmail(lead.email);
+    setEditFormLeadPhone(lead.phone || "");
+    setEditFormLeadCompany(lead.company || "");
+    setEditFormLeadSource(lead.source);
+    setEditFormLeadStatus(lead.status);
+    setIsEditLeadDialogOpen(true);
+  };
+
+  const handleEditLeadSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingLead) return;
+
+    const updatedLead: Lead = {
+      ...editingLead,
+      name: editFormLeadName,
+      email: editFormLeadEmail,
+      phone: editFormLeadPhone || undefined,
+      company: editFormLeadCompany || undefined,
+      source: editFormLeadSource,
+      status: editFormLeadStatus,
+      lastContacted: new Date().toISOString().split('T')[0], // Update last contacted date
+    };
+
+    setLeads(prevLeads => prevLeads.map(l => l.id === editingLead.id ? updatedLead : l));
+    toast({ title: "Lead Updated", description: `${updatedLead.name} has been updated.` });
+    setIsEditLeadDialogOpen(false);
+    setEditingLead(null);
+  };
+  
+  const handleDeleteLead = (leadId: string) => {
+    // Placeholder for actual delete logic, e.g., API call
+    setLeads(prevLeads => prevLeads.filter(lead => lead.id !== leadId));
+    toast({ title: "Lead Deleted (Demo)", description: "Lead has been removed from the list." });
+  };
+
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -145,7 +162,7 @@ export default function CrmLeadsPage() {
         </div>
         <Dialog open={isAddLeadDialogOpen} onOpenChange={setIsAddLeadDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setIsAddLeadDialogOpen(true)}>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <PlusCircle className="mr-2 h-4 w-4" /> Add New Lead
             </Button>
           </DialogTrigger>
@@ -203,6 +220,63 @@ export default function CrmLeadsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Edit Lead Dialog */}
+      <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Edit Lead: {editingLead?.name}</DialogTitle>
+            <DialogDescription>Update the details for this lead.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditLeadSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editLeadName" className="text-right col-span-1">Full Name</Label>
+                <Input id="editLeadName" value={editFormLeadName} onChange={(e) => setEditFormLeadName(e.target.value)} className="col-span-3" required />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editLeadEmail" className="text-right col-span-1">Email</Label>
+                <Input id="editLeadEmail" type="email" value={editFormLeadEmail} onChange={(e) => setEditFormLeadEmail(e.target.value)} className="col-span-3" required />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editLeadPhone" className="text-right col-span-1">Phone</Label>
+                <Input id="editLeadPhone" value={editFormLeadPhone} onChange={(e) => setEditFormLeadPhone(e.target.value)} className="col-span-3" />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editLeadCompany" className="text-right col-span-1">Company</Label>
+                <Input id="editLeadCompany" value={editFormLeadCompany} onChange={(e) => setEditFormLeadCompany(e.target.value)} className="col-span-3" />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editLeadSource" className="text-right col-span-1">Source</Label>
+                <Select value={editFormLeadSource} onValueChange={(value: LeadSource) => setEditFormLeadSource(value)}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select lead source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LEAD_SOURCES.map(source => <SelectItem key={source} value={source}>{source}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editLeadStatus" className="text-right col-span-1">Status</Label>
+                <Select value={editFormLeadStatus} onValueChange={(value: LeadStatus) => setEditFormLeadStatus(value)}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select lead status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LEAD_STATUSES.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsEditLeadDialogOpen(false)}>Cancel</Button></DialogClose>
+              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
 
       <Card className="shadow-lg flex-1 flex flex-col">
         <CardHeader className="border-b p-4">
@@ -282,10 +356,10 @@ export default function CrmLeadsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
-                          <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit Lead</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditLeadDialog(lead)}><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditLeadDialog(lead)}><Edit className="mr-2 h-4 w-4" /> Edit Lead</DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive">
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteLead(lead.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Lead
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -313,7 +387,6 @@ export default function CrmLeadsPage() {
     </div>
   );
 }
-
     
 
-      
+    
