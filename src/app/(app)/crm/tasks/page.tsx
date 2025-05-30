@@ -12,12 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, GripVertical, Tag, Eye, Edit, Trash2 } from "lucide-react";
+import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, Tag, Eye, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { DndContext, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
 import { cn } from "@/lib/utils";
 
-// Module-level constants
 const TASK_STATUSES = ["PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"] as const;
 type TaskStatus = typeof TASK_STATUSES[number];
 const TASK_PRIORITIES = ["Alta", "Media", "Baja"] as const;
@@ -39,158 +38,134 @@ interface Task {
   tags?: string[];
 }
 
+type TasksByStatus = {
+  [key in TaskStatus]: Task[];
+};
+
 const initialTasksData: Task[] = [
-  {
-    id: "task-1",
-    title: "Diseñar landing page",
-    description: "Crear el diseño inicial para la nueva landing page del producto X.",
-    status: "PENDIENTE",
-    dueDate: "2024-08-15",
-    priority: "Alta",
-    assignee: { name: "Laura Gómez", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female face", avatarFallback: "LG" },
-    tags: ["Diseño", "Web"],
-  },
-  {
-    id: "task-2",
-    title: "Desarrollar API de autenticación",
-    status: "EN_PROGRESO",
-    dueDate: "2024-08-20",
-    priority: "Alta",
-    assignee: { name: "Carlos Ruiz", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "male face", avatarFallback: "CR" },
-    tags: ["Backend", "API"],
-  },
-   {
-    id: "task-3",
-    title: "Revisar feedback de usuarios",
-    description: "Analizar los comentarios de la última encuesta y proponer mejoras.",
-    status: "PENDIENTE",
-    dueDate: "2024-08-18",
-    priority: "Media",
-    assignee: { name: "Ana Torres", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman smiling", avatarFallback: "AT" },
-    tags: ["UX", "Investigación"],
-  },
-  {
-    id: "task-4",
-    title: "Actualizar documentación técnica",
-    status: "COMPLETADA",
-    dueDate: "2024-07-30",
-    priority: "Baja",
-    tags: ["Documentación"],
-  },
+  { id: "task-1", title: "Diseñar landing page", description: "Crear el diseño inicial para la nueva landing page del producto X.", status: "PENDIENTE", dueDate: "2024-08-15", priority: "Alta", assignee: { name: "Laura Gómez", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female face", avatarFallback: "LG" }, tags: ["Diseño", "Web"], },
+  { id: "task-2", title: "Desarrollar API de autenticación", status: "EN_PROGRESO", dueDate: "2024-08-20", priority: "Alta", assignee: { name: "Carlos Ruiz", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "male face", avatarFallback: "CR" }, tags: ["Backend", "API"], },
+  { id: "task-3", title: "Revisar feedback de usuarios", description: "Analizar los comentarios de la última encuesta y proponer mejoras.", status: "PENDIENTE", dueDate: "2024-08-18", priority: "Media", assignee: { name: "Ana Torres", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman smiling", avatarFallback: "AT" }, tags: ["UX", "Investigación"], },
+  { id: "task-4", title: "Actualizar documentación técnica", status: "COMPLETADA", dueDate: "2024-07-30", priority: "Baja", tags: ["Documentación"], },
 ];
 
 const statusToColumnTitle: Record<TaskStatus, string> = {
-  PENDIENTE: "Pendiente",
-  EN_PROGRESO: "En Progreso",
-  COMPLETADA: "Completada",
-  ARCHIVADA: "Archivada",
+  PENDIENTE: "Pendiente", EN_PROGRESO: "En Progreso", COMPLETADA: "Completada", ARCHIVADA: "Archivada",
 };
 
 interface TaskCardProps {
   task: Task;
+  index: number;
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
 }
 
-const TaskCard: FC<TaskCardProps> = React.memo(({ task, onEdit, onDelete }) => {
-  const { attributes, listeners, setNodeRef: setDraggableRef, transform, isDragging } = useDraggable({ id: task.id });
-  const style: React.CSSProperties = transform ? { 
-    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-    touchAction: 'none',
-    zIndex: isDragging ? 100 : undefined,
-  } : { touchAction: 'none' };
-
+const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onDelete }) => {
   return (
-    <Card ref={setDraggableRef} style={style} {...listeners} {...attributes} className={cn("rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow cursor-grab", isDragging && "opacity-60")}>
-      <CardHeader className="p-3 pb-2">
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-sm font-semibold leading-tight">{task.title}</CardTitle>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(task)}><Eye className="mr-2 h-4 w-4" /> View/Edit Task</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{task.description}</p>}
-      </CardHeader>
-      <CardContent className="p-3 pt-1">
-        {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
-        {task.priority && (<Badge variant={task.priority === 'Alta' ? 'destructive' : task.priority === 'Media' ? 'secondary' : 'outline'} className="text-xs mb-2">Prioridad: {task.priority}</Badge>)}
-        {task.tags && task.tags.length > 0 && (<div className="flex flex-wrap gap-1 mb-2">{task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>)}
-      </CardContent>
-      <CardFooter className="p-3 pt-0 flex justify-between items-center">
-        {task.assignee ? (<div className="flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{task.assignee.avatarFallback}</AvatarFallback></Avatar><span className="text-xs text-muted-foreground">{task.assignee.name}</span></div>) : <div />}
-        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 hover:opacity-100"><GripVertical className="h-4 w-4" /><span className="sr-only">Arrastrar tarea</span></Button>
-      </CardFooter>
-    </Card>
+    <Draggable draggableId={task.id} index={index}>
+      {(provided, snapshot) => (
+        <Card
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          className={cn(
+            "rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow",
+            snapshot.isDragging && "shadow-xl opacity-80"
+          )}
+          style={{ ...provided.draggableProps.style }}
+        >
+          <CardHeader className="p-3 pb-2">
+            <div className="flex justify-between items-start">
+              <CardTitle className="text-sm font-semibold leading-tight">{task.title}</CardTitle>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onEdit(task)}><Eye className="mr-2 h-4 w-4" /> View/Edit Task</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete Task</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{task.description}</p>}
+          </CardHeader>
+          <CardContent className="p-3 pt-1">
+            {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
+            {task.priority && (<Badge variant={task.priority === 'Alta' ? 'destructive' : task.priority === 'Media' ? 'secondary' : 'outline'} className="text-xs mb-2">Prioridad: {task.priority}</Badge>)}
+            {task.tags && task.tags.length > 0 && (<div className="flex flex-wrap gap-1 mb-2">{task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>)}
+          </CardContent>
+          <CardFooter className="p-3 pt-0 flex justify-between items-center">
+            {task.assignee ? (<div className="flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{task.assignee.avatarFallback}</AvatarFallback></Avatar><span className="text-xs text-muted-foreground">{task.assignee.name}</span></div>) : <div />}
+          </CardFooter>
+        </Card>
+      )}
+    </Draggable>
   );
 });
 TaskCard.displayName = 'TaskCard';
 
 interface TaskKanbanBoardProps {
-  tasks: Task[];
-  statuses: readonly TaskStatus[];
-  handleTaskDragEnd: (event: DragEndEvent) => void;
+  tasksByStatus: TasksByStatus;
+  onDragEnd: (result: DropResult) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
 }
 
-const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasks, statuses, handleTaskDragEnd, onEditTask, onDeleteTask }) => {
-  const sensors = useSensors(
-    useSensor(MouseSensor, {
-      activationConstraint: {
-        distance: 10, 
-      },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 150, 
-        tolerance: 5, 
-      },
-    }),
-    useSensor(KeyboardSensor)
-  );
+const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, onDragEnd, onEditTask, onDeleteTask }) => {
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => { setIsClient(true); }, []);
+
+  if (!isClient) {
+    return <div className="flex-1 flex items-center justify-center text-muted-foreground">Loading board...</div>;
+  }
   
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTaskDragEnd}>
+    <DragDropContext onDragEnd={onDragEnd}>
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max h-full">
-          {statuses.map((statusKey) => {
-            const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: statusKey });
-            const columnTasks = tasks.filter(task => task.status === statusKey);
-            return (
-              <div 
-                key={statusKey} 
-                ref={setDroppableRef} 
-                className={cn(
-                  "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg transition-colors duration-200 min-h-[400px]", 
-                  isOver && "bg-primary/10 border-2 border-primary"
-                )}
-              >
-                <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
-                  <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
-                  <Badge variant="secondary" className="text-xs">{columnTasks.length}</Badge>
+          {TASK_STATUSES.map((statusKey) => (
+            <Droppable key={statusKey} droppableId={statusKey} type="TASK">
+              {(provided, snapshot) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className={cn(
+                    "w-[300px] flex-shrink-0 flex flex-col bg-muted/50 shadow-md rounded-lg min-h-[400px]",
+                    snapshot.isDraggingOver && "bg-primary/10"
+                  )}
+                >
+                  <div className="p-4 border-b sticky top-0 bg-muted/60 backdrop-blur-sm rounded-t-lg z-10 flex justify-between items-center">
+                    <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
+                    <Badge variant="secondary" className="text-xs">{tasksByStatus[statusKey]?.length || 0}</Badge>
+                  </div>
+                  <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto">
+                    {tasksByStatus[statusKey]?.map((task, index) => (
+                      <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onDelete={onDeleteTask} />
+                    ))}
+                    {provided.placeholder}
+                    {(tasksByStatus[statusKey]?.length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
+                  </div>
                 </div>
-                <div className="flex-1 p-3 pr-1 space-y-3 overflow-y-auto min-h-0"> 
-                  {columnTasks.length === 0 && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
-                  {columnTasks.map(task => (<TaskCard key={task.id} task={task} onEdit={onEditTask} onDelete={onDeleteTask} />))}
-                </div>
-              </div>
-            );
-          })}
+              )}
+            </Droppable>
+          ))}
         </div>
       </div>
-    </DndContext>
+    </DragDropContext>
   );
 });
 TaskKanbanBoard.displayName = 'TaskKanbanBoard';
 
-
 export default function CrmTasksPage() {
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<Task[]>(initialTasksData);
+  const [tasksByStatus, setTasksByStatus] = useState<TasksByStatus>(() => {
+    const initial: TasksByStatus = { PENDIENTE: [], EN_PROGRESO: [], COMPLETADA: [], ARCHIVADA: [] };
+    initialTasksData.forEach(task => {
+      if (initial[task.status]) {
+        initial[task.status].push(task);
+      }
+    });
+    return initial;
+  });
+  
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -211,9 +186,6 @@ export default function CrmTasksPage() {
   const [editFormTaskAssigneeName, setEditFormTaskAssigneeName] = useState("");
   const [editFormTaskTags, setEditFormTaskTags] = useState("");
 
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => { setIsClient(true); }, []);
-
   const resetAddTaskForm = useCallback(() => {
     setNewTaskTitle(""); setNewTaskDescription(""); setNewTaskStatus("PENDIENTE");
     setNewTaskDueDate(""); setNewTaskPriority("Media"); setNewTaskAssigneeName(""); setNewTaskTags("");
@@ -228,10 +200,10 @@ export default function CrmTasksPage() {
       assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${newTaskAssigneeName[0]}`, dataAiHint: "avatar person", avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
       tags: newTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
-    setTasks(prevTasks => [newTaskToAdd, ...prevTasks]);
-    toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added.` });
+    setTasksByStatus(prev => ({ ...prev, [newTaskStatus]: [...(prev[newTaskStatus] || []), newTaskToAdd] }));
+    toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added to ${statusToColumnTitle[newTaskStatus]}.` });
     resetAddTaskForm(); setIsAddTaskDialogOpen(false);
-  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast]);
+  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast, setTasksByStatus]);
 
   const openEditTaskDialog = useCallback((task: Task) => {
     setEditingTask(task);
@@ -245,47 +217,86 @@ export default function CrmTasksPage() {
   const handleEditTaskSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingTask || !editFormTaskTitle.trim()) { toast({ title: "Task Title Required", description: "Please enter a title.", variant: "destructive" }); return; }
+    
     const updatedTask: Task = {
       ...editingTask, title: editFormTaskTitle, description: editFormTaskDescription || undefined,
       status: editFormTaskStatus, dueDate: editFormTaskDueDate || undefined, priority: editFormTaskPriority || undefined,
       assignee: editFormTaskAssigneeName ? { name: editFormTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${editFormTaskAssigneeName[0]}`, dataAiHint: "avatar person", avatarFallback: editFormTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
       tags: editFormTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
-    setTasks(prevTasks => prevTasks.map(t => t.id === editingTask.id ? updatedTask : t));
+
+    setTasksByStatus(prev => {
+      const newTasksByStatus = { ...prev };
+      // Remove from old status list
+      if (editingTask.status !== updatedTask.status) {
+        newTasksByStatus[editingTask.status] = (newTasksByStatus[editingTask.status] || []).filter(t => t.id !== editingTask.id);
+      }
+      // Add/Update in new status list
+      const targetList = newTasksByStatus[updatedTask.status] || [];
+      const taskIndex = targetList.findIndex(t => t.id === updatedTask.id);
+      if (taskIndex > -1) {
+        targetList[taskIndex] = updatedTask;
+      } else {
+        targetList.push(updatedTask); // Add if it moved status and wasn't there
+      }
+      newTasksByStatus[updatedTask.status] = [...targetList]; // Ensure new array reference
+      return newTasksByStatus;
+    });
+
     toast({ title: "Task Updated", description: `Task "${updatedTask.title}" updated.` });
     setIsEditTaskDialogOpen(false); setEditingTask(null);
-  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast]);
+  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast, setTasksByStatus]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
-    setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
-    toast({ title: "Task Deleted (Demo)", description: "Task removed." });
-  }, [toast]);
+    let taskToDelete: Task | undefined;
+    setTasksByStatus(prev => {
+      const newTasksByStatus = { ...prev };
+      for (const status of TASK_STATUSES) {
+        const list = newTasksByStatus[status] || [];
+        const taskIndex = list.findIndex(t => t.id === taskId);
+        if (taskIndex > -1) {
+          taskToDelete = list[taskIndex];
+          newTasksByStatus[status] = list.filter(t => t.id !== taskId);
+          break;
+        }
+      }
+      return newTasksByStatus;
+    });
+    if (taskToDelete) {
+      toast({ title: "Task Deleted (Demo)", description: `Task "${taskToDelete.title}" removed.` });
+    }
+  }, [toast, setTasksByStatus]);
   
-  const handleTaskDragEnd = useCallback((event: DragEndEvent) => {
-    console.log("DragEnd Event:", JSON.parse(JSON.stringify(event)));
-    const { active, over } = event;
-    console.log("Active ID:", active.id as string);
-    console.log("Over ID:", over ? over.id as string : null);
+  const onDragEndTasks = useCallback((result: DropResult) => {
+    const { source, destination, draggableId } = result;
 
-    if (!over) { 
-      console.log("Drag ended but no valid 'over' target.");
-      return; 
-    }
+    if (!destination) return; // Dropped outside a valid area
 
-    const taskId = active.id as string;
-    const targetStatus = over.id as TaskStatus;
-    
-    const taskToMove = tasks.find(t => t.id === taskId);
+    const sourceStatus = source.droppableId as TaskStatus;
+    const destinationStatus = destination.droppableId as TaskStatus;
 
-    if (taskToMove && taskToMove.status !== targetStatus) {
-      console.log(`Attempting to move task ${taskId} to status ${targetStatus}`);
-      const updatedTask = { ...taskToMove, status: targetStatus };
-      setTasks(prevTasks => prevTasks.map(t => t.id === updatedTask.id ? updatedTask : t));
-      toast({ title: "Task Status Updated", description: `Task "${taskToMove.title}" moved to ${statusToColumnTitle[targetStatus]}.`});
-    } else {
-       console.log(`Task ${taskId} not moved. Current status: ${taskToMove?.status}, target status: ${targetStatus}.`);
-    }
-  }, [tasks, toast, setTasks]);
+    setTasksByStatus(prev => {
+      const newTasksByStatus = { ...prev };
+      const sourceTasks = [...(newTasksByStatus[sourceStatus] || [])];
+      const taskToMove = sourceTasks.find(task => task.id === draggableId);
+
+      if (!taskToMove) return prev; // Should not happen
+
+      // Remove from source
+      sourceTasks.splice(source.index, 1);
+      newTasksByStatus[sourceStatus] = sourceTasks;
+      
+      taskToMove.status = destinationStatus; // Update status
+
+      // Add to destination
+      const destinationTasks = [...(newTasksByStatus[destinationStatus] || [])];
+      destinationTasks.splice(destination.index, 0, taskToMove);
+      newTasksByStatus[destinationStatus] = destinationTasks;
+      
+      return newTasksByStatus;
+    });
+    toast({ title: "Task Moved", description: `Task moved to ${statusToColumnTitle[destinationStatus]}.` });
+  }, [toast, setTasksByStatus]);
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -337,17 +348,13 @@ export default function CrmTasksPage() {
       </Dialog>
       <p className="text-sm text-muted-foreground flex-shrink-0">Arrastra las tareas entre columnas para cambiar su estado.</p>
       
-      {isClient ? (
-        <TaskKanbanBoard 
-            tasks={tasks} 
-            statuses={TASK_STATUSES}
-            handleTaskDragEnd={handleTaskDragEnd} 
-            onEditTask={openEditTaskDialog} 
-            onDeleteTask={handleDeleteTask} 
-        />
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">Loading board...</div>
-      )}
+      <TaskKanbanBoard 
+          tasksByStatus={tasksByStatus}
+          onDragEnd={onDragEndTasks}
+          onEditTask={openEditTaskDialog} 
+          onDeleteTask={handleDeleteTask} 
+      />
     </div>
   );
 }
+
