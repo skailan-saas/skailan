@@ -116,13 +116,13 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = React.memo(({ tasksByStatus, o
   if (!isClient) {
     return <div className="flex-1 flex items-center justify-center text-muted-foreground">Loading board...</div>;
   }
-  
+
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max h-full">
           {TASK_STATUSES.map((statusKey) => (
-            <Droppable key={statusKey} droppableId={statusKey} type="TASK">
+            <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false}>
               {(provided, snapshot) => (
                 <div
                   ref={provided.innerRef}
@@ -200,10 +200,14 @@ export default function CrmTasksPage() {
       assignee: newTaskAssigneeName ? { name: newTaskAssigneeName, avatarUrl: `https://placehold.co/40x40.png?text=${newTaskAssigneeName[0]}`, dataAiHint: "avatar person", avatarFallback: newTaskAssigneeName.substring(0,2).toUpperCase()} : undefined,
       tags: newTaskTags.split(',').map(tag => tag.trim()).filter(tag => tag),
     };
-    setTasksByStatus(prev => ({ ...prev, [newTaskStatus]: [...(prev[newTaskStatus] || []), newTaskToAdd] }));
+    setTasksByStatus(prev => {
+        const newState = {...prev};
+        newState[newTaskStatus] = [...(newState[newTaskStatus] || []), newTaskToAdd];
+        return newState;
+    });
     toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added to ${statusToColumnTitle[newTaskStatus]}.` });
     resetAddTaskForm(); setIsAddTaskDialogOpen(false);
-  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast, setTasksByStatus]);
+  }, [newTaskTitle, newTaskDescription, newTaskStatus, newTaskDueDate, newTaskPriority, newTaskAssigneeName, newTaskTags, resetAddTaskForm, toast]);
 
   const openEditTaskDialog = useCallback((task: Task) => {
     setEditingTask(task);
@@ -234,18 +238,22 @@ export default function CrmTasksPage() {
       // Add/Update in new status list
       const targetList = newTasksByStatus[updatedTask.status] || [];
       const taskIndex = targetList.findIndex(t => t.id === updatedTask.id);
-      if (taskIndex > -1) {
-        targetList[taskIndex] = updatedTask;
-      } else {
-        targetList.push(updatedTask); // Add if it moved status and wasn't there
+
+      if (editingTask.status === updatedTask.status) { // If status hasn't changed, update in place
+        if (taskIndex > -1) {
+            targetList[taskIndex] = updatedTask;
+        }
+      } else { // If status changed, add to new list (already removed from old)
+         targetList.push(updatedTask);
       }
-      newTasksByStatus[updatedTask.status] = [...targetList]; // Ensure new array reference
+      newTasksByStatus[updatedTask.status] = [...targetList.sort((a,b) => (initialTasksData.findIndex(t => t.id === a.id) - initialTasksData.findIndex(t => t.id === b.id)))]; // Sort for consistent order, or use a proper sort key
+
       return newTasksByStatus;
     });
 
     toast({ title: "Task Updated", description: `Task "${updatedTask.title}" updated.` });
     setIsEditTaskDialogOpen(false); setEditingTask(null);
-  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast, setTasksByStatus]);
+  }, [editingTask, editFormTaskTitle, editFormTaskDescription, editFormTaskStatus, editFormTaskDueDate, editFormTaskPriority, editFormTaskAssigneeName, editFormTaskTags, toast]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
     let taskToDelete: Task | undefined;
@@ -265,38 +273,38 @@ export default function CrmTasksPage() {
     if (taskToDelete) {
       toast({ title: "Task Deleted (Demo)", description: `Task "${taskToDelete.title}" removed.` });
     }
-  }, [toast, setTasksByStatus]);
+  }, [toast]);
   
   const onDragEndTasks = useCallback((result: DropResult) => {
     const { source, destination, draggableId } = result;
 
-    if (!destination) return; // Dropped outside a valid area
+    if (!destination) return;
 
     const sourceStatus = source.droppableId as TaskStatus;
     const destinationStatus = destination.droppableId as TaskStatus;
 
-    setTasksByStatus(prev => {
-      const newTasksByStatus = { ...prev };
-      const sourceTasks = [...(newTasksByStatus[sourceStatus] || [])];
-      const taskToMove = sourceTasks.find(task => task.id === draggableId);
+    setTasksByStatus((prevTasksByStatus) => {
+      const newTasksByStatus = { ...prevTasksByStatus };
+      const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
+      const [movedTask] = sourceTasks.splice(source.index, 1);
 
-      if (!taskToMove) return prev; // Should not happen
+      if (!movedTask) return prevTasksByStatus;
 
-      // Remove from source
-      sourceTasks.splice(source.index, 1);
-      newTasksByStatus[sourceStatus] = sourceTasks;
-      
-      taskToMove.status = destinationStatus; // Update status
+      movedTask.status = destinationStatus;
 
-      // Add to destination
-      const destinationTasks = [...(newTasksByStatus[destinationStatus] || [])];
-      destinationTasks.splice(destination.index, 0, taskToMove);
-      newTasksByStatus[destinationStatus] = destinationTasks;
-      
+      if (sourceStatus === destinationStatus) {
+        sourceTasks.splice(destination.index, 0, movedTask);
+        newTasksByStatus[sourceStatus] = sourceTasks;
+      } else {
+        const destinationTasks = Array.from(newTasksByStatus[destinationStatus] || []);
+        destinationTasks.splice(destination.index, 0, movedTask);
+        newTasksByStatus[sourceStatus] = sourceTasks;
+        newTasksByStatus[destinationStatus] = destinationTasks;
+      }
       return newTasksByStatus;
     });
     toast({ title: "Task Moved", description: `Task moved to ${statusToColumnTitle[destinationStatus]}.` });
-  }, [toast, setTasksByStatus]);
+  }, [toast]);
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">

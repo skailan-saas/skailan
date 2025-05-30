@@ -92,7 +92,6 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
               </div>)}
             {project.progress !== undefined && (<div><div className="flex justify-between items-center mb-1"><p className="text-xs text-muted-foreground">Progreso:</p><p className="text-xs font-semibold text-primary">{project.progress}%</p></div><Progress value={project.progress} className="h-2" /></div>)}
           </CardContent>
-          {/* Removed CardFooter with GripVertical as drag handle is now the whole card */}
         </Card>
       )}
     </Draggable>
@@ -120,7 +119,7 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = React.memo(({ projectsBy
         <div className="flex-1 overflow-x-auto pb-4">
           <div className="flex gap-4 min-w-max h-full">
             {PROJECT_STATUSES.map((statusKey) => (
-              <Droppable key={statusKey} droppableId={statusKey} type="PROJECT">
+              <Droppable key={statusKey} droppableId={statusKey} type="PROJECT" isDropDisabled={false}>
                 {(provided, snapshot) => (
                   <div
                     ref={provided.innerRef}
@@ -200,10 +199,14 @@ export default function CrmProjectsPage() {
       status: newProjectStatus, clientName: newProjectClientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
       progress: progressValue, deadline: newProjectDeadline || undefined,
     };
-    setProjectsByStatus(prev => ({ ...prev, [newProjectStatus]: [...(prev[newProjectStatus] || []), newProjectToAdd] }));
+    setProjectsByStatus(prev => {
+        const newState = {...prev};
+        newState[newProjectStatus] = [...(newState[newProjectStatus] || []), newProjectToAdd];
+        return newState;
+    });
     toast({ title: "Project Added", description: `Project "${newProjectToAdd.name}" added.` });
     resetAddProjectForm(); setIsAddProjectDialogOpen(false);
-  }, [newProjectName, newProjectDescription, newProjectStatus, newProjectClientName, newProjectTeam, newProjectProgress, newProjectDeadline, resetAddProjectForm, toast, setProjectsByStatus]);
+  }, [newProjectName, newProjectDescription, newProjectStatus, newProjectClientName, newProjectTeam, newProjectProgress, newProjectDeadline, resetAddProjectForm, toast]);
 
   const openEditProjectDialog = useCallback((project: Project) => {
     setEditingProject(project);
@@ -234,18 +237,22 @@ export default function CrmProjectsPage() {
       }
       const targetList = newProjectsByStatus[updatedProject.status] || [];
       const projectIndex = targetList.findIndex(p => p.id === updatedProject.id);
-      if (projectIndex > -1) {
-        targetList[projectIndex] = updatedProject;
-      } else {
-        targetList.push(updatedProject);
+      
+      if (editingProject.status === updatedProject.status) { // If status hasn't changed, update in place
+        if (projectIndex > -1) {
+            targetList[projectIndex] = updatedProject;
+        }
+      } else { // If status changed, add to new list (already removed from old)
+         targetList.push(updatedProject);
       }
-      newProjectsByStatus[updatedProject.status] = [...targetList];
+      newProjectsByStatus[updatedProject.status] = [...targetList.sort((a,b) => (initialProjectsData.findIndex(p => p.id === a.id) - initialProjectsData.findIndex(p => p.id === b.id)))]; // Sort for consistent order
+
       return newProjectsByStatus;
     });
 
     toast({ title: "Project Updated", description: `Project "${updatedProject.name}" updated.` });
     setIsEditProjectDialogOpen(false); setEditingProject(null);
-  }, [editingProject, editFormProjectName, editFormProjectDescription, editFormProjectStatus, editFormProjectClientName, editFormProjectTeam, editFormProjectProgress, editFormProjectDeadline, toast, setProjectsByStatus]);
+  }, [editingProject, editFormProjectName, editFormProjectDescription, editFormProjectStatus, editFormProjectClientName, editFormProjectTeam, editFormProjectProgress, editFormProjectDeadline, toast]);
 
   const handleDeleteProject = useCallback((projectId: string) => {
     let projectToDelete: Project | undefined;
@@ -265,7 +272,7 @@ export default function CrmProjectsPage() {
      if (projectToDelete) {
       toast({ title: "Project Deleted (Demo)", description: `Project "${projectToDelete.name}" removed.` });
     }
-  }, [toast, setProjectsByStatus]);
+  }, [toast]);
 
   const onDragEndProjects = useCallback((result: DropResult) => {
     const { source, destination, draggableId } = result;
@@ -274,26 +281,28 @@ export default function CrmProjectsPage() {
     const sourceStatus = source.droppableId as ProjectStatus;
     const destinationStatus = destination.droppableId as ProjectStatus;
 
-    setProjectsByStatus(prev => {
-      const newProjectsByStatus = { ...prev };
-      const sourceProjects = [...(newProjectsByStatus[sourceStatus] || [])];
-      const projectToMove = sourceProjects.find(project => project.id === draggableId);
+    setProjectsByStatus(prevProjectsByStatus => {
+      const newProjectsByStatus = { ...prevProjectsByStatus };
+      const sourceProjects = Array.from(newProjectsByStatus[sourceStatus] || []);
+      const [movedProject] = sourceProjects.splice(source.index, 1);
 
-      if (!projectToMove) return prev;
+      if (!movedProject) return prevProjectsByStatus;
 
-      sourceProjects.splice(source.index, 1);
-      newProjectsByStatus[sourceStatus] = sourceProjects;
-      
-      projectToMove.status = destinationStatus;
+      movedProject.status = destinationStatus;
 
-      const destinationProjects = [...(newProjectsByStatus[destinationStatus] || [])];
-      destinationProjects.splice(destination.index, 0, projectToMove);
-      newProjectsByStatus[destinationStatus] = destinationProjects;
-      
+      if (sourceStatus === destinationStatus) {
+        sourceProjects.splice(destination.index, 0, movedProject);
+        newProjectsByStatus[sourceStatus] = sourceProjects;
+      } else {
+        const destinationProjects = Array.from(newProjectsByStatus[destinationStatus] || []);
+        destinationProjects.splice(destination.index, 0, movedProject);
+        newProjectsByStatus[sourceStatus] = sourceProjects;
+        newProjectsByStatus[destinationStatus] = destinationProjects;
+      }
       return newProjectsByStatus;
     });
     toast({ title: "Project Moved", description: `Project moved to ${projectStatusToColumnTitle[destinationStatus]}.` });
-  }, [toast, setProjectsByStatus]); 
+  }, [toast]); 
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
