@@ -12,20 +12,20 @@ datasource db {
 }
 
 model Tenant {
-  id          String    @id @default(cuid())
-  name        String
-  subdomain   String    @unique
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  users       User[]
-  channels    Channel[]
-  flows       Flow[]
-  leads       Lead[]
-  products    Product[]
-  quotes      Quote[]
-  tasks       Task[]
-  projects    Project[]
-  sdkConfig   SdkConfiguration?
+  id        String            @id @default(cuid())
+  name      String
+  subdomain String            @unique
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  users     User[]
+  channels  Channel[]
+  flows     Flow[]
+  leads     Lead[]
+  products  Product[]
+  quotes    Quote[]
+  tasks     Task[]
+  projects  Project[]
+  sdkConfig SdkConfiguration?
 
   // Relation to User (assuming a tenant can have multiple users)
   // users User[] already defined above
@@ -58,15 +58,15 @@ model Tenant {
 }
 
 model User {
-  id            String    @id // From Supabase auth.users.id
-  email         String?   @unique // From Supabase auth.users.email
+  id            String         @id // From Supabase auth.users.id
+  email         String?        @unique // From Supabase auth.users.email
   fullName      String? // Custom field, could be from user_metadata or this table
   roleId        String
   tenantId      String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  role          Role      @relation(fields: [roleId], references: [id])
-  tenant        Tenant    @relation(fields: [tenantId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  role          Role           @relation(fields: [roleId], references: [id])
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
   conversations Conversation[] // Agent assigned to conversations
   tasksAssigned Task[]         @relation("AssignedTasks")
 
@@ -114,15 +114,15 @@ enum ChannelType {
 }
 
 model Channel {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   tenantId      String
-  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
   type          ChannelType
   name          String // User-defined name for this channel instance
   configuration Json? // Store API keys, tokens, webhook URLs, etc.
-  isEnabled     Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  isEnabled     Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   conversations Conversation[]
 
   @@index([tenantId])
@@ -138,21 +138,21 @@ enum ConversationStatus {
 }
 
 model Conversation {
-  id        String             @id @default(cuid())
-  tenantId  String
-  tenant    Tenant             @relation(fields: [tenantId], references: [id])
-  channelId String
-  channel   Channel            @relation(fields: [channelId], references: [id])
-  contactId String // Identifier for the external contact (e.g., phone number, page-scoped ID)
-  status    ConversationStatus @default(OPEN)
-  assignedToId String? // User ID of the agent assigned
-  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
-  lastMessageAt DateTime       @default(now())
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  messages  Message[]
-  leadId    String?
-  lead      Lead?              @relation(fields: [leadId], references: [id])
+  id            String             @id @default(cuid())
+  tenantId      String
+  tenant        Tenant             @relation(fields: [tenantId], references: [id])
+  channelId     String
+  channel       Channel            @relation(fields: [channelId], references: [id])
+  contactId     String // Identifier for the external contact (e.g., phone number, page-scoped ID)
+  status        ConversationStatus @default(OPEN)
+  assignedToId  String? // User ID of the agent assigned
+  assignedTo    User?              @relation(fields: [assignedToId], references: [id])
+  lastMessageAt DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  messages      Message[]
+  leadId        String?
+  lead          Lead?              @relation(fields: [leadId], references: [id])
 
   @@index([tenantId])
   @@index([channelId])
@@ -274,41 +274,41 @@ enum QuoteStatus {
 }
 
 model Quote {
-  id           String      @id @default(cuid())
-  tenantId     String
-  tenant       Tenant      @relation(fields: [tenantId], references: [id])
-  leadId       String
-  lead         Lead        @relation(fields: [leadId], references: [id])
-  quoteNumber  String      @unique // e.g., Q-2024-001
-  status       QuoteStatus @default(BORRADOR)
-  issueDate    DateTime    @default(now())
-  expiryDate   DateTime?
-  subtotal     Decimal     @db.Decimal(12, 2)
-  discount     Decimal?    @db.Decimal(12, 2)
-  tax          Decimal?    @db.Decimal(12, 2)
-  total        Decimal     @db.Decimal(12, 2)
-  notes        String?
-  terms        String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  items        QuoteItem[]
+  id          String      @id @default(cuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  leadId      String
+  lead        Lead        @relation(fields: [leadId], references: [id])
+  quoteNumber String      @unique // e.g., Q-2024-001
+  status      QuoteStatus @default(BORRADOR)
+  issueDate   DateTime    @default(now())
+  expiryDate  DateTime?
+  subtotal    Decimal     @db.Decimal(12, 2)
+  discount    Decimal?    @db.Decimal(12, 2)
+  tax         Decimal?    @db.Decimal(12, 2)
+  total       Decimal     @db.Decimal(12, 2)
+  notes       String?
+  terms       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       QuoteItem[]
 
   @@index([tenantId])
   @@index([leadId])
 }
 
 model QuoteItem {
-  id        String  @id @default(cuid())
-  quoteId   String
-  quote     Quote   @relation(fields: [quoteId], references: [id])
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-  quantity  Int
-  unitPrice Decimal @db.Decimal(10, 2) // Price at the time of quote, could differ from current product price
-  totalPrice Decimal @db.Decimal(12, 2)
+  id          String   @id @default(cuid())
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id])
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2) // Price at the time of quote, could differ from current product price
+  totalPrice  Decimal  @db.Decimal(12, 2)
   description String? // Can override product description for this specific quote item
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([quoteId])
   @@index([productId])
@@ -322,22 +322,22 @@ enum TaskStatus {
 }
 
 model Task {
-  id           String     @id @default(cuid())
-  tenantId     String
-  tenant       Tenant     @relation(fields: [tenantId], references: [id])
-  title        String
-  description  String?
-  status       TaskStatus @default(PENDIENTE)
-  priority     String? // e.g., "High", "Medium", "Low"
-  dueDate      DateTime?
-  assignedToId String?
-  assignedTo   User?      @relation("AssignedTasks", fields: [assignedToId], references: [id])
-  relatedLeadId String?
-  relatedLead  Lead?      @relation(fields: [relatedLeadId], references: [id])
+  id               String     @id @default(cuid())
+  tenantId         String
+  tenant           Tenant     @relation(fields: [tenantId], references: [id])
+  title            String
+  description      String?
+  status           TaskStatus @default(PENDIENTE)
+  priority         String? // e.g., "High", "Medium", "Low"
+  dueDate          DateTime?
+  assignedToId     String?
+  assignedTo       User?      @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  relatedLeadId    String?
+  relatedLead      Lead?      @relation(fields: [relatedLeadId], references: [id])
   relatedProjectId String?
-  relatedProject Project?   @relation(fields: [relatedProjectId], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  relatedProject   Project?   @relation(fields: [relatedProjectId], references: [id])
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   @@index([tenantId])
   @@index([assignedToId])
@@ -354,19 +354,19 @@ enum ProjectStatus {
 }
 
 model Project {
-  id             String        @id @default(cuid())
-  tenantId       String
-  tenant         Tenant        @relation(fields: [tenantId], references: [id])
-  name           String
-  description    String?
-  status         ProjectStatus @default(PLANIFICACION)
-  startDate      DateTime?
-  endDate        DateTime?
-  relatedLeadId  String?
-  relatedLead    Lead?         @relation(fields: [relatedLeadId], references: [id])
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  tasks          Task[]
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  name          String
+  description   String?
+  status        ProjectStatus @default(PLANIFICACION)
+  startDate     DateTime?
+  endDate       DateTime?
+  relatedLeadId String?
+  relatedLead   Lead?         @relation(fields: [relatedLeadId], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  tasks         Task[]
 
   @@index([tenantId])
   @@index([relatedLeadId])
@@ -380,11 +380,9 @@ model SdkConfiguration {
   widgetPosition String?  @default("bottom-right") // "bottom-left"
   showGreeting   Boolean? @default(true)
   welcomeMessage String?  @default("Hi there! 👋 How can we help you today?")
-  defaultFlowId  String?  // ID of the Flow to start by default
+  defaultFlowId  String? // ID of the Flow to start by default
   proactiveChat  Boolean? @default(false)
   proactiveDelay Int?     @default(10) // seconds
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
-
-    
