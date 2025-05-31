@@ -9,6 +9,10 @@ export default {
   ],
   theme: {
   	extend: {
+      fontFamily: {
+        sans: ['var(--font-open-sans)', 'sans-serif'],
+        display: ['var(--font-montserrat)', 'sans-serif'], // For logo/titles if needed
+      },
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
