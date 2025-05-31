@@ -76,12 +76,14 @@ const parseWhatsAppDetailsString = (detailsStr?: string): Record<string, string>
   return result;
 };
 
-const formatWhatsAppDetailsToString = (detailsObj: {
-  whatsappPhoneNumberId: string,
-  whatsappPhoneNumber: string,
-  whatsappWabaId: string,
-  whatsappJwtStatus: string,
-}): string => {
+interface WhatsAppDetailsObject {
+  whatsappPhoneNumberId: string;
+  whatsappPhoneNumber: string;
+  whatsappWabaId: string;
+  whatsappJwtStatus: string;
+}
+
+const formatWhatsAppDetailsToString = (detailsObj: WhatsAppDetailsObject): string => {
   return [
     `PhoneID: ${detailsObj.whatsappPhoneNumberId}`,
     `Number: ${detailsObj.whatsappPhoneNumber}`,
@@ -97,10 +99,9 @@ export default function ChannelConnectionsPage() {
 
   const [isAddChannelDialogOpen, setIsAddChannelDialogOpen] = useState(false);
   const [newInstanceName, setNewInstanceName] = useState("");
-  const [newChannelDetails, setNewChannelDetails] = useState(""); // For generic channels
+  const [newChannelDetails, setNewChannelDetails] = useState(""); 
   const [selectedChannelTypeIdToAdd, setSelectedChannelTypeIdToAdd] = useState<ChannelTypeDefinition['id'] | undefined>(undefined);
   
-  // States for WhatsApp specific fields in Add/Edit dialog
   const [currentWhatsappPhoneNumberId, setCurrentWhatsappPhoneNumberId] = useState("");
   const [currentWhatsappPhoneNumber, setCurrentWhatsappPhoneNumber] = useState("");
   const [currentWhatsappWabaId, setCurrentWhatsappWabaId] = useState("");
@@ -113,7 +114,7 @@ export default function ChannelConnectionsPage() {
   const [isEditChannelDialogOpen, setIsEditChannelDialogOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<ConnectedChannelInstance | null>(null);
   const [editInstanceName, setEditInstanceName] = useState("");
-  const [editChannelDetails, setEditChannelDetails] = useState(""); // For generic channels
+  const [editChannelDetails, setEditChannelDetails] = useState(""); 
 
   const [isManageChannelDialogOpen, setIsManageChannelDialogOpen] = useState(false);
   const [channelToManage, setChannelToManage] = useState<ConnectedChannelInstance | null>(null);
@@ -161,8 +162,8 @@ export default function ChannelConnectionsPage() {
 
 
     if (channelType.id === 'whatsapp') {
-        if (!currentWhatsappPhoneNumberId.trim() || !currentWhatsappPhoneNumber.trim() || !currentWhatsappWabaId.trim()) {
-            toast({ title: "Error", description: "Please fill all WhatsApp specific fields.", variant: "destructive"});
+        if (!currentWhatsappPhoneNumberId.trim() || !currentWhatsappPhoneNumber.trim() || !currentWhatsappWabaId.trim() || !currentWhatsappJwtStatus.trim()) {
+            toast({ title: "Error", description: "Please fill all WhatsApp specific fields, including JWT Status.", variant: "destructive"});
             return;
         }
         finalDetails = formatWhatsAppDetailsToString({
@@ -176,7 +177,7 @@ export default function ChannelConnectionsPage() {
 
     if (channelType.usesWebhook) {
       webhookUrl = `https://your-tenant.conectahub.app/webhooks/${channelType.id}/${newId}`;
-      verifyToken = Math.random().toString(36).substring(2, 18).toUpperCase(); // Random token
+      verifyToken = Math.random().toString(36).substring(2, 18).toUpperCase(); 
       status = 'pending_webhook';
     }
 
@@ -201,12 +202,12 @@ export default function ChannelConnectionsPage() {
     setEditingChannel(channel);
     setEditInstanceName(channel.instanceName);
     if (channel.channelTypeId === 'whatsapp') {
-      const waDetails = parseWhatsAppDetailsString(channel.details);
-      setCurrentWhatsappPhoneNumberId(waDetails['PhoneID'] || "");
-      setCurrentWhatsappPhoneNumber(waDetails['Number'] || "");
-      setCurrentWhatsappWabaId(waDetails['WABA_ID'] || "");
-      setCurrentWhatsappJwtStatus(waDetails['JWT_Status'] || "");
-      setEditChannelDetails(""); // Clear generic details field
+      const waDetails = parseWhatsAppDetailsString(channel.details) as Partial<WhatsAppDetailsObject>;
+      setCurrentWhatsappPhoneNumberId(waDetails.whatsappPhoneNumberId || "");
+      setCurrentWhatsappPhoneNumber(waDetails.whatsappPhoneNumber || "");
+      setCurrentWhatsappWabaId(waDetails.whatsappWabaId || "");
+      setCurrentWhatsappJwtStatus(waDetails.whatsappJwtStatus || "");
+      setEditChannelDetails(""); 
     } else {
       setEditChannelDetails(channel.details || "");
       setCurrentWhatsappPhoneNumberId("");
@@ -225,8 +226,8 @@ export default function ChannelConnectionsPage() {
     }
     let finalDetails = editChannelDetails;
     if (editingChannel.channelTypeId === 'whatsapp') {
-         if (!currentWhatsappPhoneNumberId.trim() || !currentWhatsappPhoneNumber.trim() || !currentWhatsappWabaId.trim()) {
-            toast({ title: "Error", description: "Please fill all WhatsApp specific fields.", variant: "destructive"});
+         if (!currentWhatsappPhoneNumberId.trim() || !currentWhatsappPhoneNumber.trim() || !currentWhatsappWabaId.trim() || !currentWhatsappJwtStatus.trim()) {
+            toast({ title: "Error", description: "Please fill all WhatsApp specific fields, including JWT Status.", variant: "destructive"});
             return;
         }
         finalDetails = formatWhatsAppDetailsToString({
@@ -342,11 +343,11 @@ export default function ChannelConnectionsPage() {
                     <Input id="addWhatsappWabaId" placeholder="e.g., 987654321098765" value={currentWhatsappWabaId} onChange={e => setCurrentWhatsappWabaId(e.target.value)} required />
                   </div>
                   <div>
-                    <Label htmlFor="addWhatsappJwtStatus">JWT Status (Optional)</Label>
-                    <Input id="addWhatsappJwtStatus" placeholder="e.g., Configured / Not Configured" value={currentWhatsappJwtStatus} onChange={e => setCurrentWhatsappJwtStatus(e.target.value)} />
+                    <Label htmlFor="addWhatsappJwtStatus">JWT Status</Label>
+                    <Input id="addWhatsappJwtStatus" placeholder="e.g., Configured / Bearer Token" value={currentWhatsappJwtStatus} onChange={e => setCurrentWhatsappJwtStatus(e.target.value)} required />
                   </div>
                 </>
-              ) : selectedChannelTypeDefinition?.placeholderDetails ? (
+              ) : selectedChannelTypeDefinition?.placeholderDetails && selectedChannelTypeDefinition.id !== 'whatsapp' ? (
                 <div>
                     <Label htmlFor="addChannelDetails">{selectedChannelTypeDefinition.name} Details</Label>
                     <Input id="addChannelDetails" placeholder={selectedChannelTypeDefinition.placeholderDetails} value={newChannelDetails} onChange={e => setNewChannelDetails(e.target.value)} />
@@ -417,13 +418,13 @@ export default function ChannelConnectionsPage() {
                       channelInstance.status === 'connected' ? 'default' :
                       channelInstance.status === 'disconnected' ? 'secondary' :
                       channelInstance.status === 'pending_webhook' ? 'outline' : 
-                      'destructive' // for needs_attention
+                      'destructive' 
                     }
                     className={
                         channelInstance.status === 'connected' ? 'bg-green-100 text-green-700 border-green-300' :
                         channelInstance.status === 'disconnected' ? 'bg-gray-100 text-gray-700 border-gray-300' :
                         channelInstance.status === 'pending_webhook' ? 'bg-blue-100 text-blue-700 border-blue-300' :
-                        'bg-yellow-100 text-yellow-700 border-yellow-300' // for needs_attention
+                        'bg-yellow-100 text-yellow-700 border-yellow-300' 
                     }
                   >
                     {channelInstance.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
@@ -493,7 +494,7 @@ export default function ChannelConnectionsPage() {
                             <h4 className="text-sm font-semibold">WhatsApp Details:</h4>
                             {Object.entries(parseWhatsAppDetailsString(channelToManage.details)).map(([key, value]) => (
                                 value && <div key={key}>
-                                    <Label className="text-sm font-medium">{key.replace('_', ' ')}</Label>
+                                    <Label className="text-sm font-medium">{key.replace(/_/g, ' ')}</Label>
                                     <p className="text-sm text-muted-foreground">{value}</p>
                                 </div>
                             ))}
@@ -567,7 +568,7 @@ export default function ChannelConnectionsPage() {
       {/* Edit Channel Dialog */}
       <Dialog open={isEditChannelDialogOpen} onOpenChange={(isOpen) => {
         setIsEditChannelDialogOpen(isOpen);
-        if(!isOpen) setEditingChannel(null); // Clear editing state on close
+        if(!isOpen) setEditingChannel(null); 
       }}>
         <DialogContent className="sm:max-w-[525px]">
             <DialogHeader>
@@ -597,10 +598,10 @@ export default function ChannelConnectionsPage() {
                             </div>
                             <div>
                                 <Label htmlFor="editWhatsappJwtStatus">JWT Status</Label>
-                                <Input id="editWhatsappJwtStatus" value={currentWhatsappJwtStatus} onChange={e => setCurrentWhatsappJwtStatus(e.target.value)} />
+                                <Input id="editWhatsappJwtStatus" value={currentWhatsappJwtStatus} onChange={e => setCurrentWhatsappJwtStatus(e.target.value)} required />
                             </div>
                         </>
-                    ) : editingChannelTypeDefinition?.placeholderDetails ? (
+                    ) : editingChannelTypeDefinition?.placeholderDetails && editingChannelTypeDefinition.id !== 'whatsapp' ? (
                         <div>
                             <Label htmlFor="editChannelDetailsInput">
                                 {editingChannelTypeDefinition.name} Details
