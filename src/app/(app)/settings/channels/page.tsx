@@ -23,7 +23,7 @@ interface ChannelTypeDefinition {
   description: string;
   icon: React.ElementType;
   usesWebhook: boolean;
-  placeholderDetails?: string; // e.g., "Enter WhatsApp Number"
+  placeholderDetails?: string; 
 }
 
 interface ConnectedChannelInstance {
@@ -33,14 +33,13 @@ interface ConnectedChannelInstance {
   status: 'connected' | 'disconnected' | 'needs_attention' | 'pending_webhook';
   webhookUrl?: string;
   verifyToken?: string;
-  details?: string; // For storing things like Phone Number or Page ID
+  details?: string; 
 }
 
-// Using actual Send icon from lucide-react
-const SendIcon = Send; 
+const SendIcon = Send;
 
 const CHANNEL_TYPE_CATALOG: ChannelTypeDefinition[] = [
-  { id: 'whatsapp', name: 'WhatsApp Business API', description: 'Connect your official WhatsApp Business account.', icon: Smartphone, usesWebhook: true, placeholderDetails: "Enter WhatsApp Number (e.g., +15551234567)" },
+  { id: 'whatsapp', name: 'WhatsApp Business API', description: 'Connect your official WhatsApp Business account.', icon: Smartphone, usesWebhook: true, placeholderDetails: "Specific fields will appear below." },
   { id: 'messenger', name: 'Facebook Messenger', description: 'Integrate with your Facebook Page Messenger.', icon: MessageSquare, usesWebhook: true, placeholderDetails: "Enter Facebook Page ID" },
   { id: 'instagram', name: 'Instagram Direct', description: 'Manage Instagram Direct Messages.', icon: MessageSquare, usesWebhook: true, placeholderDetails: "Enter Instagram Handle" },
   { id: 'webchat', name: 'Website Chat Widget', description: 'Embed a chat widget on your website.', icon: Globe, usesWebhook: false, placeholderDetails: "Website Domain (e.g., example.com)" },
@@ -52,7 +51,8 @@ const CHANNEL_TYPE_CATALOG: ChannelTypeDefinition[] = [
 const initialConnectedChannels: ConnectedChannelInstance[] = [
   {
     id: 'wh-1', instanceName: 'Sales WhatsApp', channelTypeId: 'whatsapp', status: 'connected',
-    webhookUrl: 'https://example.com/webhooks/meta/wh-1', verifyToken: 'STRONG_TOKEN_WH1', details: '+15550001111'
+    webhookUrl: 'https://example.com/webhooks/meta/wh-1', verifyToken: 'STRONG_TOKEN_WH1', 
+    details: 'PhoneID: 123456789012345, Number: +15550001111, WABA_ID: 987654321098765, JWT_Status: Configured'
   },
   {
     id: 'msgr-1', instanceName: 'Support Page Messenger', channelTypeId: 'messenger', status: 'pending_webhook',
@@ -63,14 +63,49 @@ const initialConnectedChannels: ConnectedChannelInstance[] = [
   },
 ];
 
+// Helper functions for WhatsApp details
+const parseWhatsAppDetailsString = (detailsStr?: string): Record<string, string> => {
+  if (!detailsStr) return {};
+  const result: Record<string, string> = {};
+  detailsStr.split(',').forEach(part => {
+    const [key, ...valParts] = part.split(':');
+    if (key && valParts.length > 0) {
+      result[key.trim()] = valParts.join(':').trim();
+    }
+  });
+  return result;
+};
+
+const formatWhatsAppDetailsToString = (detailsObj: {
+  whatsappPhoneNumberId: string,
+  whatsappPhoneNumber: string,
+  whatsappWabaId: string,
+  whatsappJwtStatus: string,
+}): string => {
+  return [
+    `PhoneID: ${detailsObj.whatsappPhoneNumberId}`,
+    `Number: ${detailsObj.whatsappPhoneNumber}`,
+    `WABA_ID: ${detailsObj.whatsappWabaId}`,
+    `JWT_Status: ${detailsObj.whatsappJwtStatus}`,
+  ].join(', ');
+};
+
+
 export default function ChannelConnectionsPage() {
   const { toast } = useToast();
   const [connectedChannels, setConnectedChannels] = useState<ConnectedChannelInstance[]>(initialConnectedChannels);
 
   const [isAddChannelDialogOpen, setIsAddChannelDialogOpen] = useState(false);
   const [newInstanceName, setNewInstanceName] = useState("");
-  const [newChannelDetails, setNewChannelDetails] = useState("");
+  const [newChannelDetails, setNewChannelDetails] = useState(""); // For generic channels
   const [selectedChannelTypeIdToAdd, setSelectedChannelTypeIdToAdd] = useState<ChannelTypeDefinition['id'] | undefined>(undefined);
+  
+  // States for WhatsApp specific fields in Add/Edit dialog
+  const [currentWhatsappPhoneNumberId, setCurrentWhatsappPhoneNumberId] = useState("");
+  const [currentWhatsappPhoneNumber, setCurrentWhatsappPhoneNumber] = useState("");
+  const [currentWhatsappWabaId, setCurrentWhatsappWabaId] = useState("");
+  const [currentWhatsappJwtStatus, setCurrentWhatsappJwtStatus] = useState("");
+
 
   const [isViewWebhookDialogOpen, setIsViewWebhookDialogOpen] = useState(false);
   const [channelToViewWebhook, setChannelToViewWebhook] = useState<ConnectedChannelInstance | null>(null);
@@ -78,7 +113,7 @@ export default function ChannelConnectionsPage() {
   const [isEditChannelDialogOpen, setIsEditChannelDialogOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<ConnectedChannelInstance | null>(null);
   const [editInstanceName, setEditInstanceName] = useState("");
-  const [editChannelDetails, setEditChannelDetails] = useState("");
+  const [editChannelDetails, setEditChannelDetails] = useState(""); // For generic channels
 
   const [isManageChannelDialogOpen, setIsManageChannelDialogOpen] = useState(false);
   const [channelToManage, setChannelToManage] = useState<ConnectedChannelInstance | null>(null);
@@ -89,6 +124,21 @@ export default function ChannelConnectionsPage() {
   const selectedChannelTypeDefinition = useMemo(() => {
     return CHANNEL_TYPE_CATALOG.find(ct => ct.id === selectedChannelTypeIdToAdd);
   }, [selectedChannelTypeIdToAdd]);
+
+  const editingChannelTypeDefinition = useMemo(() => {
+    if (!editingChannel) return null;
+    return CHANNEL_TYPE_CATALOG.find(ct => ct.id === editingChannel.channelTypeId);
+  }, [editingChannel]);
+
+  const resetAddDialogFields = () => {
+    setNewInstanceName("");
+    setNewChannelDetails("");
+    setSelectedChannelTypeIdToAdd(undefined);
+    setCurrentWhatsappPhoneNumberId("");
+    setCurrentWhatsappPhoneNumber("");
+    setCurrentWhatsappWabaId("");
+    setCurrentWhatsappJwtStatus("");
+  }
 
 
   const handleAddChannelSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -105,7 +155,24 @@ export default function ChannelConnectionsPage() {
     }
 
     const newId = `${selectedChannelTypeIdToAdd}-${Date.now()}`;
-    let webhookUrl, verifyToken, status: ConnectedChannelInstance['status'] = 'disconnected';
+    let webhookUrl, verifyToken;
+    let finalDetails = newChannelDetails;
+    let status: ConnectedChannelInstance['status'] = 'disconnected';
+
+
+    if (channelType.id === 'whatsapp') {
+        if (!currentWhatsappPhoneNumberId.trim() || !currentWhatsappPhoneNumber.trim() || !currentWhatsappWabaId.trim()) {
+            toast({ title: "Error", description: "Please fill all WhatsApp specific fields.", variant: "destructive"});
+            return;
+        }
+        finalDetails = formatWhatsAppDetailsToString({
+            whatsappPhoneNumberId: currentWhatsappPhoneNumberId,
+            whatsappPhoneNumber: currentWhatsappPhoneNumber,
+            whatsappWabaId: currentWhatsappWabaId,
+            whatsappJwtStatus: currentWhatsappJwtStatus,
+        });
+    }
+
 
     if (channelType.usesWebhook) {
       webhookUrl = `https://your-tenant.conectahub.app/webhooks/${channelType.id}/${newId}`;
@@ -120,22 +187,33 @@ export default function ChannelConnectionsPage() {
       status,
       webhookUrl,
       verifyToken,
-      details: newChannelDetails,
+      details: finalDetails,
     };
 
     setConnectedChannels(prev => [newChannelInstance, ...prev]);
     toast({ title: "Channel Added", description: `${channelType.name} connection "${newInstanceName}" added.` });
 
-    setNewInstanceName("");
-    setNewChannelDetails("");
-    setSelectedChannelTypeIdToAdd(undefined);
+    resetAddDialogFields();
     setIsAddChannelDialogOpen(false);
   };
 
   const openEditDialog = (channel: ConnectedChannelInstance) => {
     setEditingChannel(channel);
     setEditInstanceName(channel.instanceName);
-    setEditChannelDetails(channel.details || "");
+    if (channel.channelTypeId === 'whatsapp') {
+      const waDetails = parseWhatsAppDetailsString(channel.details);
+      setCurrentWhatsappPhoneNumberId(waDetails['PhoneID'] || "");
+      setCurrentWhatsappPhoneNumber(waDetails['Number'] || "");
+      setCurrentWhatsappWabaId(waDetails['WABA_ID'] || "");
+      setCurrentWhatsappJwtStatus(waDetails['JWT_Status'] || "");
+      setEditChannelDetails(""); // Clear generic details field
+    } else {
+      setEditChannelDetails(channel.details || "");
+      setCurrentWhatsappPhoneNumberId("");
+      setCurrentWhatsappPhoneNumber("");
+      setCurrentWhatsappWabaId("");
+      setCurrentWhatsappJwtStatus("");
+    }
     setIsEditChannelDialogOpen(true);
   };
 
@@ -145,8 +223,22 @@ export default function ChannelConnectionsPage() {
          toast({ title: "Error", description: "Instance name cannot be empty.", variant: "destructive" });
         return;
     }
+    let finalDetails = editChannelDetails;
+    if (editingChannel.channelTypeId === 'whatsapp') {
+         if (!currentWhatsappPhoneNumberId.trim() || !currentWhatsappPhoneNumber.trim() || !currentWhatsappWabaId.trim()) {
+            toast({ title: "Error", description: "Please fill all WhatsApp specific fields.", variant: "destructive"});
+            return;
+        }
+        finalDetails = formatWhatsAppDetailsToString({
+            whatsappPhoneNumberId: currentWhatsappPhoneNumberId,
+            whatsappPhoneNumber: currentWhatsappPhoneNumber,
+            whatsappWabaId: currentWhatsappWabaId,
+            whatsappJwtStatus: currentWhatsappJwtStatus,
+        });
+    }
+
     setConnectedChannels(prev => prev.map(ch =>
-      ch.id === editingChannel.id ? { ...ch, instanceName: editInstanceName, details: editChannelDetails } : ch
+      ch.id === editingChannel.id ? { ...ch, instanceName: editInstanceName, details: finalDetails } : ch
     ));
     toast({ title: "Channel Updated", description: `Connection "${editInstanceName}" updated.`});
     setIsEditChannelDialogOpen(false);
@@ -203,7 +295,10 @@ export default function ChannelConnectionsPage() {
             Manage your communication channel instances.
           </p>
         </div>
-        <Dialog open={isAddChannelDialogOpen} onOpenChange={setIsAddChannelDialogOpen}>
+        <Dialog open={isAddChannelDialogOpen} onOpenChange={(isOpen) => {
+            setIsAddChannelDialogOpen(isOpen);
+            if (!isOpen) resetAddDialogFields();
+        }}>
           <DialogTrigger asChild>
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <PlusCircle className="mr-2 h-4 w-4" /> Add New Connection
@@ -231,12 +326,33 @@ export default function ChannelConnectionsPage() {
                 <Input id="addInstanceName" placeholder="e.g., Sales WhatsApp Line" value={newInstanceName} onChange={e => setNewInstanceName(e.target.value)} required />
                 <p className="text-xs text-muted-foreground mt-1">A friendly name to identify this specific connection.</p>
               </div>
-              {selectedChannelTypeDefinition?.placeholderDetails && (
+
+              {selectedChannelTypeIdToAdd === 'whatsapp' ? (
+                <>
+                  <div>
+                    <Label htmlFor="addWhatsappPhoneNumberId">Phone Number ID</Label>
+                    <Input id="addWhatsappPhoneNumberId" placeholder="e.g., 123456789012345" value={currentWhatsappPhoneNumberId} onChange={e => setCurrentWhatsappPhoneNumberId(e.target.value)} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="addWhatsappPhoneNumber">Phone Number</Label>
+                    <Input id="addWhatsappPhoneNumber" placeholder="e.g., +15551234567" value={currentWhatsappPhoneNumber} onChange={e => setCurrentWhatsappPhoneNumber(e.target.value)} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="addWhatsappWabaId">WABA ID (WhatsApp Business Account ID)</Label>
+                    <Input id="addWhatsappWabaId" placeholder="e.g., 987654321098765" value={currentWhatsappWabaId} onChange={e => setCurrentWhatsappWabaId(e.target.value)} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="addWhatsappJwtStatus">JWT Status (Optional)</Label>
+                    <Input id="addWhatsappJwtStatus" placeholder="e.g., Configured / Not Configured" value={currentWhatsappJwtStatus} onChange={e => setCurrentWhatsappJwtStatus(e.target.value)} />
+                  </div>
+                </>
+              ) : selectedChannelTypeDefinition?.placeholderDetails ? (
                 <div>
                     <Label htmlFor="addChannelDetails">{selectedChannelTypeDefinition.name} Details</Label>
                     <Input id="addChannelDetails" placeholder={selectedChannelTypeDefinition.placeholderDetails} value={newChannelDetails} onChange={e => setNewChannelDetails(e.target.value)} />
                 </div>
-              )}
+              ) : null}
+
               <DialogFooter>
                 <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
                 <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Add Connection</Button>
@@ -260,6 +376,8 @@ export default function ChannelConnectionsPage() {
         {connectedChannels.map((channelInstance) => {
           const typeInfo = CHANNEL_TYPE_CATALOG.find(ct => ct.id === channelInstance.channelTypeId);
           if (!typeInfo) return null;
+          const isWhatsApp = channelInstance.channelTypeId === 'whatsapp';
+          const waDetails = isWhatsApp ? parseWhatsAppDetailsString(channelInstance.details) : {};
 
           return (
             <Card key={channelInstance.id} className="shadow-lg hover:shadow-xl transition-shadow flex flex-col">
@@ -311,7 +429,14 @@ export default function ChannelConnectionsPage() {
                     {channelInstance.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                   </Badge>
                 </div>
-                {channelInstance.details && <p className="text-xs text-muted-foreground">Details: {channelInstance.details}</p>}
+                {isWhatsApp ? (
+                    <>
+                        {waDetails['Number'] && <p className="text-xs text-muted-foreground">Phone: {waDetails['Number']}</p>}
+                        {waDetails['PhoneID'] && <p className="text-xs text-muted-foreground">Phone ID: {waDetails['PhoneID']}</p>}
+                    </>
+                ) : channelInstance.details ? (
+                    <p className="text-xs text-muted-foreground">Details: {channelInstance.details}</p>
+                ) : null}
                  {channelInstance.status === 'pending_webhook' && (
                     <p className="text-xs text-blue-600">Webhook configuration pending. Click "View Webhook Info" and update your {typeInfo.name} settings.</p>
                 )}
@@ -361,12 +486,24 @@ export default function ChannelConnectionsPage() {
                         <Label className="text-sm font-medium">Status</Label>
                         <p className="text-sm text-muted-foreground capitalize">{channelToManage.status.replace('_', ' ')}</p>
                     </div>
-                    {channelToManage.details && (
+
+                    {channelToManage.channelTypeId === 'whatsapp' ? (
+                        <>
+                            <Separator />
+                            <h4 className="text-sm font-semibold">WhatsApp Details:</h4>
+                            {Object.entries(parseWhatsAppDetailsString(channelToManage.details)).map(([key, value]) => (
+                                value && <div key={key}>
+                                    <Label className="text-sm font-medium">{key.replace('_', ' ')}</Label>
+                                    <p className="text-sm text-muted-foreground">{value}</p>
+                                </div>
+                            ))}
+                        </>
+                    ) : channelToManage.details ? (
                         <div>
                             <Label className="text-sm font-medium">{CHANNEL_TYPE_CATALOG.find(ct => ct.id === channelToManage.channelTypeId)?.name} Details</Label>
                             <p className="text-sm text-muted-foreground">{channelToManage.details}</p>
                         </div>
-                    )}
+                    ): null}
                     <Separator />
                     <div className="space-y-2">
                         <Button variant="outline" className="w-full justify-start" onClick={() => toast({ title: "Action Placeholder", description: "Refresh Connection logic to be implemented."})}>
@@ -376,7 +513,7 @@ export default function ChannelConnectionsPage() {
                            <Eye className="mr-2 h-4 w-4"/> View Activity Logs
                         </Button>
                         {CHANNEL_TYPE_CATALOG.find(ct => ct.id === channelToManage.channelTypeId)?.usesWebhook && (
-                             <Button variant="outline" className="w-full justify-start" onClick={() => {setIsManageChannelDialogOpen(false); openViewWebhookDialog(channelToManage)}}>
+                             <Button variant="outline" className="w-full justify-start" onClick={() => {setIsManageChannelDialogOpen(false); channelToManage && openViewWebhookDialog(channelToManage)}}>
                                 <LinkIcon className="mr-2 h-4 w-4"/> View Webhook Info
                             </Button>
                         )}
@@ -428,7 +565,10 @@ export default function ChannelConnectionsPage() {
       </Dialog>
 
       {/* Edit Channel Dialog */}
-      <Dialog open={isEditChannelDialogOpen} onOpenChange={setIsEditChannelDialogOpen}>
+      <Dialog open={isEditChannelDialogOpen} onOpenChange={(isOpen) => {
+        setIsEditChannelDialogOpen(isOpen);
+        if(!isOpen) setEditingChannel(null); // Clear editing state on close
+      }}>
         <DialogContent className="sm:max-w-[525px]">
             <DialogHeader>
                 <DialogTitle>Edit Connection: {editingChannel?.instanceName}</DialogTitle>
@@ -440,17 +580,39 @@ export default function ChannelConnectionsPage() {
                         <Label htmlFor="editInstanceNameInput">Instance Name</Label>
                         <Input id="editInstanceNameInput" value={editInstanceName} onChange={e => setEditInstanceName(e.target.value)} required />
                     </div>
-                    <div>
-                        <Label htmlFor="editChannelDetailsInput">
-                            {CHANNEL_TYPE_CATALOG.find(ct => ct.id === editingChannel.channelTypeId)?.name} Details
-                        </Label>
-                        <Input 
-                            id="editChannelDetailsInput" 
-                            value={editChannelDetails} 
-                            onChange={e => setEditChannelDetails(e.target.value)} 
-                            placeholder={CHANNEL_TYPE_CATALOG.find(ct => ct.id === editingChannel.channelTypeId)?.placeholderDetails || "Enter details"}
-                        />
-                    </div>
+
+                    {editingChannel.channelTypeId === 'whatsapp' ? (
+                        <>
+                            <div>
+                                <Label htmlFor="editWhatsappPhoneNumberId">Phone Number ID</Label>
+                                <Input id="editWhatsappPhoneNumberId" value={currentWhatsappPhoneNumberId} onChange={e => setCurrentWhatsappPhoneNumberId(e.target.value)} required />
+                            </div>
+                            <div>
+                                <Label htmlFor="editWhatsappPhoneNumber">Phone Number</Label>
+                                <Input id="editWhatsappPhoneNumber" value={currentWhatsappPhoneNumber} onChange={e => setCurrentWhatsappPhoneNumber(e.target.value)} required />
+                            </div>
+                            <div>
+                                <Label htmlFor="editWhatsappWabaId">WABA ID</Label>
+                                <Input id="editWhatsappWabaId" value={currentWhatsappWabaId} onChange={e => setCurrentWhatsappWabaId(e.target.value)} required />
+                            </div>
+                            <div>
+                                <Label htmlFor="editWhatsappJwtStatus">JWT Status</Label>
+                                <Input id="editWhatsappJwtStatus" value={currentWhatsappJwtStatus} onChange={e => setCurrentWhatsappJwtStatus(e.target.value)} />
+                            </div>
+                        </>
+                    ) : editingChannelTypeDefinition?.placeholderDetails ? (
+                        <div>
+                            <Label htmlFor="editChannelDetailsInput">
+                                {editingChannelTypeDefinition.name} Details
+                            </Label>
+                            <Input 
+                                id="editChannelDetailsInput" 
+                                value={editChannelDetails} 
+                                onChange={e => setEditChannelDetails(e.target.value)} 
+                                placeholder={editingChannelTypeDefinition.placeholderDetails}
+                            />
+                        </div>
+                    ) : null }
                     <DialogFooter>
                         <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
                         <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
