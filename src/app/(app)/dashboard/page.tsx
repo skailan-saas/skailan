@@ -583,7 +583,7 @@ export default function AgentWorkspacePage() {
           </ScrollArea>
           <CardFooter className="p-4 border-t">
             <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Link href={`/crm/leads?search=${encodeURIComponent(selectedConversation.userName)}`}>
+              <Link href={`/crm/leads?search=${encodeURIComponent(selectedConversation.userName)}&viewLeadName=${encodeURIComponent(selectedConversation.userName)}`}>
                 View Full CRM Profile
               </Link>
             </Button>

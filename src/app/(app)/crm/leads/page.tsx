@@ -21,12 +21,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 
 // Aligned with prisma schema LeadStatus enum
-const LEAD_STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "CONVERTED_TO_OPPORTUNITY", "CLOSED_WON", "CLOSED_LOST", "UNQUALIFIED"] as const;
+const LEAD_STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "CONVERTED", "CLOSED_WON", "CLOSED_LOST", "UNQUALIFIED"] as const;
 type LeadStatus = typeof LEAD_STATUSES[number];
+
 
 const LEAD_SOURCES = ["WhatsApp", "Web Chat", "Messenger", "Instagram", "Manual", "Referral", "API"] as const;
 type LeadSource = typeof LEAD_SOURCES[number];
@@ -40,7 +41,7 @@ interface Lead {
   status: LeadStatus;
   assignedTo?: { name: string; avatarUrl: string; avatarFallback: string; dataAiHint?: string };
   lastContacted?: string;
-  companyName?: string; // Changed from company to companyName
+  companyName?: string; 
   tags?: string[];
   notes?: string;
   dataAiHint?: string;
@@ -62,7 +63,7 @@ type LeadFormValues = z.infer<typeof LeadFormSchema>;
 const initialLeads: Lead[] = [
   {
     id: "lead-1",
-    name: "Alice W.", // Matched to "Alice Wonderland" for search demo
+    name: "Alice Wonderland", 
     email: "alice.w@example.com",
     phone: "555-0101",
     source: "WhatsApp",
@@ -72,11 +73,11 @@ const initialLeads: Lead[] = [
     companyName: "Wonderland Inc.",
     tags: ["vip", "referral"],
     notes: "Interested in premium package. Follow up next week.",
-    dataAiHint: "female face",
+    dataAiHint: "female avatar",
   },
   {
     id: "lead-2",
-    name: "Bob T.", // Matched to "Bob The Builder"
+    name: "Bob The Builder", 
     email: "bob.t@example.com",
     source: "Messenger",
     status: "CONTACTED",
@@ -84,7 +85,7 @@ const initialLeads: Lead[] = [
     lastContacted: "2024-07-29",
     companyName: "Builders Co.",
     tags: ["construction", "b2b"],
-    dataAiHint: "male face",
+    dataAiHint: "male avatar",
   },
   {
     id: "lead-3",
@@ -102,6 +103,7 @@ const initialLeads: Lead[] = [
 
 export default function CrmLeadsPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [isAddLeadDialogOpen, setIsAddLeadDialogOpen] = useState(false);
@@ -137,7 +139,19 @@ export default function CrmLeadsPage() {
     if (querySearch) {
       setSearchTerm(querySearch);
     }
-  }, [searchParams]);
+    const leadNameToOpen = searchParams.get('viewLeadName');
+    if (leadNameToOpen) {
+      const decodedName = decodeURIComponent(leadNameToOpen);
+      const leadToView = leads.find(lead => lead.name.toLowerCase() === decodedName.toLowerCase());
+      if (leadToView) {
+        openViewLeadDialog(leadToView);
+        // Optional: Clean up the URL parameter to prevent re-opening on refresh
+        // const newParams = new URLSearchParams(searchParams.toString());
+        // newParams.delete('viewLeadName');
+        // router.replace(`/crm/leads?${newParams.toString()}`, { scroll: false });
+      }
+    }
+  }, [searchParams, leads]); // Add leads to dependency array if it can change
 
   const filteredLeads = useMemo(() => {
     if (!searchTerm.trim()) return leads;
@@ -588,8 +602,8 @@ export default function CrmLeadsPage() {
                 <p className="font-medium text-muted-foreground">Status:</p>
                 <div>
                   <Badge 
-                    variant={viewingLead.status === "CONVERTED_TO_OPPORTUNITY" || viewingLead.status === "CLOSED_WON" ? "default" : viewingLead.status === "QUALIFIED" ? "secondary" : viewingLead.status === "CLOSED_LOST" || viewingLead.status === "UNQUALIFIED" ? "destructive" : "outline"}
-                    className={viewingLead.status === "CONVERTED_TO_OPPORTUNITY" || viewingLead.status === "CLOSED_WON" ? "bg-green-600 text-white" : ""}
+                    variant={viewingLead.status === "CONVERTED" || viewingLead.status === "CLOSED_WON" ? "default" : viewingLead.status === "QUALIFIED" ? "secondary" : viewingLead.status === "CLOSED_LOST" || viewingLead.status === "UNQUALIFIED" ? "destructive" : "outline"}
+                    className={viewingLead.status === "CONVERTED" || viewingLead.status === "CLOSED_WON" ? "bg-green-600 text-white" : ""}
                   >
                     {viewingLead.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                   </Badge>
@@ -712,8 +726,8 @@ export default function CrmLeadsPage() {
                     </TableCell>
                     <TableCell>
                        <Badge 
-                        variant={lead.status === "CONVERTED_TO_OPPORTUNITY" || lead.status === "CLOSED_WON" ? "default" : lead.status === "QUALIFIED" ? "secondary" : lead.status === "CLOSED_LOST" || lead.status === "UNQUALIFIED" ? "destructive" : "outline"}
-                        className={lead.status === "CONVERTED_TO_OPPORTUNITY" || lead.status === "CLOSED_WON" ? "bg-green-600 text-white" : ""}
+                        variant={lead.status === "CONVERTED" || lead.status === "CLOSED_WON" ? "default" : lead.status === "QUALIFIED" ? "secondary" : lead.status === "CLOSED_LOST" || lead.status === "UNQUALIFIED" ? "destructive" : "outline"}
+                        className={lead.status === "CONVERTED" || lead.status === "CLOSED_WON" ? "bg-green-600 text-white" : ""}
                       >
                         {lead.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </Badge>
