@@ -21,16 +21,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { getProducts, createProduct, updateProduct, deleteProduct, type ProductFE, type ProductFormValues as ServerProductFormValues, ProductFormSchema as ServerProductFormSchema } from './actions';
+import { getProducts, createProduct, updateProduct, deleteProduct, type ProductFE } from './actions';
+import { ProductFormSchema, type ProductFormValues } from '@/lib/schemas/crm/product-schema';
 import type { ProductType as PrismaProductType } from '@prisma/client';
 
 
 const PRODUCT_TYPES_CLIENT = ["PRODUCTO", "SERVICIO"] as const;
 type ProductTypeClient = typeof PRODUCT_TYPES_CLIENT[number];
 
-// Client-side Zod schema for form validation
-const ProductFormSchemaClient = ServerProductFormSchema.extend({
-  type: z.enum(PRODUCT_TYPES_CLIENT) // Ensure client enum is used here
+// Client-side Zod schema for form validation, ensuring client-side enum matches
+const ProductFormSchemaClient = ProductFormSchema.extend({
+  type: z.enum(PRODUCT_TYPES_CLIENT)
 });
 type ProductFormValuesClient = z.infer<typeof ProductFormSchemaClient>;
 
@@ -57,7 +58,7 @@ export default function CrmProductsPage() {
   const editProductForm = useForm<ProductFormValuesClient>({
     resolver: zodResolver(ProductFormSchemaClient),
   });
-  
+
   const fetchProductsCallback = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -73,7 +74,7 @@ export default function CrmProductsPage() {
   useEffect(() => {
     fetchProductsCallback();
   }, [fetchProductsCallback]);
-  
+
   useEffect(() => {
     if (editingProduct) {
       editProductForm.reset({
@@ -91,7 +92,7 @@ export default function CrmProductsPage() {
   const handleActualAddProductSubmit = async (values: ProductFormValuesClient) => {
     try {
       addProductForm.control._formState.isSubmitting = true;
-      await createProduct(values as ServerProductFormValues); // Cast to server type if enums are stricter
+      await createProduct(values as ProductFormValues); // Cast to server type for the action
       toast({ title: "Product/Service Added", description: `${values.name} has been added.` });
       addProductForm.reset();
       setIsAddProductDialogOpen(false);
@@ -102,7 +103,7 @@ export default function CrmProductsPage() {
       addProductForm.control._formState.isSubmitting = false;
     }
   };
-  
+
   const openEditProductDialog = (product: ProductFE) => {
     setEditingProduct(product);
     setIsEditProductDialogOpen(true);
@@ -117,7 +118,7 @@ export default function CrmProductsPage() {
     if (!editingProduct) return;
     try {
       editProductForm.control._formState.isSubmitting = true;
-      await updateProduct(editingProduct.id, values as ServerProductFormValues);
+      await updateProduct(editingProduct.id, values as ProductFormValues);
       toast({ title: "Product/Service Updated", description: `${values.name} has been updated.` });
       setIsEditProductDialogOpen(false);
       setEditingProduct(null);
@@ -225,7 +226,7 @@ export default function CrmProductsPage() {
           )}
         </DialogContent>
       </Dialog>
-      
+
       <Dialog open={isViewProductDialogOpen} onOpenChange={setIsViewProductDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Product Details: {viewingProduct?.name}</DialogTitle><DialogDescription>Read-only view of the product/service information.</DialogDescription></DialogHeader>
@@ -265,7 +266,7 @@ export default function CrmProductsPage() {
         </CardHeader>
         <CardContent className="p-0 flex-1">
           <ScrollArea className="h-full">
-            {isLoading ? (<div className="text-center py-20 text-muted-foreground">Loading products...</div>) : 
+            {isLoading ? (<div className="text-center py-20 text-muted-foreground">Loading products...</div>) :
             products.length === 0 ? (
                 <div className="text-center py-20"><Package className="mx-auto h-12 w-12 text-muted-foreground mb-4" /><h3 className="text-xl font-semibold text-foreground">No Products or Services Found</h3><p className="text-muted-foreground">Add your first product or service to get started.</p></div>
             ) : (
@@ -304,6 +305,3 @@ export default function CrmProductsPage() {
     </div>
   );
 }
-
-
-    

@@ -3,24 +3,9 @@
 
 import { PrismaClient, type Prisma, ProductType as PrismaProductType } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
+import { ProductFormSchema, type ProductFormValues } from '@/lib/schemas/crm/product-schema';
 
 const prisma = new PrismaClient();
-
-// Define ProductType enum matching Prisma for validation
-const ProductTypeEnum = z.enum([PrismaProductType.PRODUCTO, PrismaProductType.SERVICIO]);
-
-export const ProductFormSchema = z.object({
-  name: z.string().min(1, "Product name is required"),
-  type: ProductTypeEnum,
-  description: z.string().optional(),
-  price: z.coerce.number().min(0, "Price must be a positive number"),
-  sku: z.string().optional().nullable(),
-  category: z.string().optional().nullable(),
-  isActive: z.boolean(),
-});
-
-export type ProductFormValues = z.infer<typeof ProductFormSchema>;
 
 // Frontend Product type, might differ slightly from PrismaProduct for UI needs
 export interface ProductFE {
@@ -41,12 +26,13 @@ export interface ProductFE {
 
 
 export async function getProducts(): Promise<ProductFE[]> {
-  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
+  // IMPORTANT: Replace with actual tenantId from user session or context
+  const tenantIdPlaceholder = "your-tenant-id";
   try {
     const productsFromDb = await prisma.product.findMany({
-      where: { 
+      where: {
         tenantId: tenantIdPlaceholder,
-        deletedAt: null 
+        deletedAt: null
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -63,8 +49,35 @@ export async function getProducts(): Promise<ProductFE[]> {
   }
 }
 
+export async function getProductsForSelect(): Promise<{ id: string; name: string; type: PrismaProductType; price: number }[]> {
+  // IMPORTANT: Replace with actual tenantId from user session or context
+  const tenantIdPlaceholder = "your-tenant-id";
+  try {
+    const productsFromDb = await prisma.product.findMany({
+      where: {
+        tenantId: tenantIdPlaceholder,
+        deletedAt: null,
+        isActive: true, // Only active products for selection
+      },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        price: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+    return productsFromDb;
+  } catch (error) {
+    console.error("Failed to fetch products for select:", error);
+    throw new Error("Could not fetch products for selection.");
+  }
+}
+
+
 export async function createProduct(data: ProductFormValues): Promise<ProductFE> {
-  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
+  // IMPORTANT: Replace with actual tenantId from user session or context
+  const tenantIdPlaceholder = "your-tenant-id";
   const validation = ProductFormSchema.safeParse(data);
   if (!validation.success) {
     throw new Error(`Invalid product data: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
@@ -105,7 +118,8 @@ export async function createProduct(data: ProductFormValues): Promise<ProductFE>
 }
 
 export async function updateProduct(id: string, data: ProductFormValues): Promise<ProductFE> {
-  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
+  // IMPORTANT: Replace with actual tenantId from user session or context
+  const tenantIdPlaceholder = "your-tenant-id";
   const validation = ProductFormSchema.safeParse(data);
   if (!validation.success) {
     throw new Error(`Invalid product data: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
@@ -137,7 +151,7 @@ export async function updateProduct(id: string, data: ProductFormValues): Promis
   } catch (error) {
     console.error(`Failed to update product ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') { 
+        if (error.code === 'P2025') {
             throw new Error(`Product with ID ${id} not found or has been deleted.`);
         }
         if (error.code === 'P2002' && (error.meta?.target as string[])?.includes('sku') && (error.meta?.target as string[])?.includes('tenantId')) {
@@ -149,7 +163,8 @@ export async function updateProduct(id: string, data: ProductFormValues): Promis
 }
 
 export async function deleteProduct(id: string): Promise<{ success: boolean; message?: string }> {
-  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
+  // IMPORTANT: Replace with actual tenantId from user session or context
+  const tenantIdPlaceholder = "your-tenant-id";
   try {
     await prisma.product.update({
       where: { id, tenantId: tenantIdPlaceholder, deletedAt: null },
@@ -165,5 +180,3 @@ export async function deleteProduct(id: string): Promise<{ success: boolean; mes
     return { success: false, message: "Could not delete product." };
   }
 }
-
-    
