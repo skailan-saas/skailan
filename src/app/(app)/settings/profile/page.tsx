@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { User } from "@supabase/supabase-js";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ShieldAlert, KeyRound } from "lucide-react";
+import { ShieldAlert, KeyRound, User as UserIcon, Clock } from "lucide-react"; // Added UserIcon, Clock
 
 export default function ProfilePage() {
   const { toast } = useToast();
@@ -20,6 +20,8 @@ export default function ProfilePage() {
   
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [userIdDisplay, setUserIdDisplay] = useState("");
+  const [lastSignInDisplay, setLastSignInDisplay] = useState("");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -37,7 +39,13 @@ export default function ProfilePage() {
       }
       setUser(currentUser);
       setEmail(currentUser?.email || "");
-      setFullName(currentUser?.user_metadata?.full_name || "");
+      setFullName(currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || "User");
+      setUserIdDisplay(currentUser?.id || "N/A");
+      if (currentUser?.last_sign_in_at) {
+        setLastSignInDisplay(new Date(currentUser.last_sign_in_at).toLocaleString());
+      } else {
+        setLastSignInDisplay("N/A");
+      }
       setLoading(false);
     };
     fetchUser();
@@ -57,9 +65,11 @@ export default function ProfilePage() {
       toast({ title: "Profile Update Failed", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Profile Updated", description: "Your profile has been updated successfully." });
-      // Optionally re-fetch user or update local state if metadata doesn't auto-refresh
-      const { data: { user: updatedUser } } = await supabase.auth.getUser();
-      setUser(updatedUser);
+      const { data: { user: updatedUser } } = await supabase.auth.getUser(); // Re-fetch to get updated metadata
+      if (updatedUser) {
+          setUser(updatedUser); // Update user state
+          setFullName(updatedUser.user_metadata?.full_name || updatedUser.email?.split('@')[0] || "User"); // Update local state from new metadata
+      }
     }
   };
 
@@ -75,11 +85,6 @@ export default function ProfilePage() {
     }
     setPasswordLoading(true);
     
-    // Supabase requires re-authentication for password change if not done recently or if MFA enabled.
-    // For simplicity, this example directly attempts update. A real app might need a re-auth step.
-    // Current password is not directly used by supabase.auth.updateUser for password change.
-    // If you need to verify currentPassword, you'd do it manually by trying to signIn with it.
-
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setPasswordLoading(false);
     if (error) {
@@ -96,7 +101,7 @@ export default function ProfilePage() {
     return <div className="p-6">Loading profile...</div>;
   }
 
-  if (!user) {
+  if (!user && !loading) {
     return <div className="p-6">Could not load user profile. Please try logging in again.</div>;
   }
 
@@ -105,7 +110,7 @@ export default function ProfilePage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-            <h1 className="text-3xl font-bold flex items-center"><ShieldAlert className="mr-3 h-8 w-8 text-primary"/>My Profile</h1>
+            <h1 className="text-3xl font-bold flex items-center"><UserIcon className="mr-3 h-8 w-8 text-primary"/>My Profile</h1>
             <p className="text-muted-foreground">Manage your personal information and security settings.</p>
         </div>
       </div>
@@ -113,7 +118,7 @@ export default function ProfilePage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Personal Information</CardTitle>
-          <CardDescription>Update your name and review your email address.</CardDescription>
+          <CardDescription>Update your name and review your account details.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleProfileUpdate} className="space-y-4">
@@ -125,6 +130,7 @@ export default function ProfilePage() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Your full name"
+                disabled={loading}
               />
             </div>
             <div className="space-y-1">
@@ -138,6 +144,28 @@ export default function ProfilePage() {
                 className="bg-muted/50"
               />
                <p className="text-xs text-muted-foreground">Email address cannot be changed here.</p>
+            </div>
+             <div className="space-y-1">
+              <Label htmlFor="userId">User ID</Label>
+              <Input 
+                id="userId" 
+                type="text" 
+                value={userIdDisplay}
+                readOnly 
+                disabled
+                className="bg-muted/50 font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="lastSignIn">Last Sign In</Label>
+              <Input 
+                id="lastSignIn" 
+                type="text" 
+                value={lastSignInDisplay}
+                readOnly 
+                disabled
+                className="bg-muted/50"
+              />
             </div>
             <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               {loading ? "Saving..." : "Save Profile Changes"}
@@ -155,18 +183,6 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handlePasswordUpdate} className="space-y-4">
-            {/* 
-            <div className="space-y-1">
-              <Label htmlFor="currentPassword">Current Password</Label>
-              <Input 
-                id="currentPassword" 
-                type="password" 
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter your current password"
-              />
-            </div>
-            */}
             <div className="space-y-1">
               <Label htmlFor="newPassword">New Password</Label>
               <Input 
@@ -176,6 +192,7 @@ export default function ProfilePage() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter new password (min. 6 characters)"
                 minLength={6}
+                disabled={passwordLoading}
               />
             </div>
             <div className="space-y-1">
@@ -187,6 +204,7 @@ export default function ProfilePage() {
                 onChange={(e) => setConfirmNewPassword(e.target.value)}
                 placeholder="Confirm new password"
                 minLength={6}
+                disabled={passwordLoading}
               />
             </div>
             <Button type="submit" disabled={passwordLoading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -199,4 +217,3 @@ export default function ProfilePage() {
     </ScrollArea>
   );
 }
-
