@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, Eye, Edit, Trash2, User, Users } from "lucide-react";
+import { PlusCircle, Briefcase, CalendarDays, MoreHorizontal, Eye, Edit, Trash2, Tag, Zap as OpportunityIcon } from "lucide-react"; // Added Tag, OpportunityIcon
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
@@ -23,8 +23,8 @@ import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
-
-const PROJECT_STATUSES = ["PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"] as const;
+// Aligned with prisma schema ProjectStatus enum
+const PROJECT_STATUSES = ["PLANNING", "ACTIVE", "COMPLETED", "ON_HOLD", "CANCELED"] as const;
 type ProjectStatus = typeof PROJECT_STATUSES[number];
 
 interface ProjectTeamMember { name: string; avatarUrl: string; avatarFallback: string; dataAiHint?: string; }
@@ -37,6 +37,9 @@ interface Project {
   team?: ProjectTeamMember[];
   progress?: number;
   deadline?: string;
+  tags?: string[];
+  opportunityId?: string;
+  opportunityName?: string; // For display
   dataAiHint?: string;
 }
 
@@ -44,15 +47,21 @@ type ProjectsByStatus = {
   [key in ProjectStatus]: Project[];
 };
 
+// Mock data for selection
+const mockOpportunitiesForSelect: {id: string, name: string}[] = [
+    {id: "opp-1", name: "Opportunity Alpha (Alice W.)"},
+    {id: "opp-2", name: "Opportunity Beta (Bob T.)"},
+];
+
 const initialProjectsData: Project[] = [
-  { id: "proj-1", name: "Lanzamiento App Móvil", description: "Desarrollo y lanzamiento de la app móvil.", status: "ACTIVO", clientName: "Interno", team: [ { name: "Elena V.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", avatarFallback: "EV" }, { name: "Marco C.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "asian man", avatarFallback: "MC" } ], progress: 65, deadline: "2024-10-31", dataAiHint: "mobile app"},
-  { id: "proj-2", name: "Integración CRM", status: "PLANIFICACION", clientName: "Cliente Alfa", progress: 10, deadline: "2024-11-15", dataAiHint: "crm system"},
-  { id: "proj-3", name: "Campaña Marketing Q4", description: "Planificación y ejecución de la campaña de marketing para el último trimestre.", status: "ACTIVO", clientName: "Marketing Dept.", team: [ { name: "Sofia L.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "latina woman", avatarFallback: "SL" } ], progress: 30, deadline: "2024-12-15", dataAiHint: "marketing campaign"},
-  { id: "proj-4", name: "Rediseño Web Corporativa", status: "COMPLETADO", clientName: "CEO Office", progress: 100, deadline: "2024-06-30", dataAiHint: "website design"},
+  { id: "proj-1", name: "Lanzamiento App Móvil", description: "Desarrollo y lanzamiento de la app móvil.", status: "ACTIVE", clientName: "Interno", team: [ { name: "Elena V.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", avatarFallback: "EV" }, { name: "Marco C.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "asian man", avatarFallback: "MC" } ], progress: 65, deadline: "2024-10-31", tags: ["mobile", "launch"], dataAiHint: "mobile app"},
+  { id: "proj-2", name: "Integración CRM", status: "PLANNING", clientName: "Cliente Alfa", progress: 10, deadline: "2024-11-15", tags: ["crm", "integration"], opportunityId: "opp-1", opportunityName: "Opportunity Alpha (Alice W.)", dataAiHint: "crm system"},
+  { id: "proj-3", name: "Campaña Marketing Q4", description: "Planificación y ejecución de la campaña de marketing para el último trimestre.", status: "ACTIVE", clientName: "Marketing Dept.", team: [ { name: "Sofia L.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "latina woman", avatarFallback: "SL" } ], progress: 30, deadline: "2024-12-15", tags: ["marketing"], dataAiHint: "marketing campaign"},
+  { id: "proj-4", name: "Rediseño Web Corporativa", status: "COMPLETED", clientName: "CEO Office", progress: 100, deadline: "2024-06-30", opportunityId: "opp-2", opportunityName: "Opportunity Beta (Bob T.)", dataAiHint: "website design"},
 ];
 
 const projectStatusToColumnTitle: Record<ProjectStatus, string> = {
-  PLANIFICACION: "Planificación", ACTIVO: "Activo", COMPLETADO: "Completado", EN_ESPERA: "En Espera", CANCELADO: "Cancelado",
+  PLANNING: "Planificación", ACTIVE: "Activo", COMPLETED: "Completado", ON_HOLD: "En Espera", CANCELED: "Cancelado",
 };
 
 const ProjectFormSchema = z.object({
@@ -60,9 +69,11 @@ const ProjectFormSchema = z.object({
     description: z.string().optional(),
     status: z.enum(PROJECT_STATUSES, { required_error: "Status is required" }),
     clientName: z.string().optional(),
-    teamMembers: z.string().optional(), // Comma-separated names for now
+    teamMembers: z.string().optional(), 
     progress: z.coerce.number().min(0).max(100).optional(),
     deadline: z.string().optional(),
+    tags: z.string().optional(),
+    opportunityId: z.string().optional(),
 });
 type ProjectFormValues = z.infer<typeof ProjectFormSchema>;
 
@@ -107,10 +118,22 @@ const ProjectCard: FC<ProjectCardProps> = React.memo(({ project, index, onEdit, 
           {project.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{project.description}</p>}
           {project.clientName && <p className="text-xs text-muted-foreground mb-1">Cliente: <span className="font-medium text-foreground">{project.clientName}</span></p>}
           {project.deadline && <p className="text-xs text-muted-foreground flex items-center mb-1"><CalendarDays className="h-3.5 w-3.5 mr-1"/>Fecha Límite: {project.deadline}</p>}
+          
+          {project.opportunityName && (
+            <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <OpportunityIcon className="h-3.5 w-3.5 text-blue-500"/><span>Originado de: {project.opportunityName}</span>
+            </div>
+          )}
+
           {project.team && project.team.length > 0 && (
-            <div className="flex items-center -space-x-2 mb-2">
+            <div className="flex items-center -space-x-2 my-2">
               {project.team.map(member => (<Avatar key={member.name} className="h-6 w-6 border-2 border-background"><AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint={member.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{member.avatarFallback}</AvatarFallback></Avatar>))}
               <span className="pl-3 text-xs text-muted-foreground">({project.team.length} {project.team.length === 1 ? 'miembro' : 'miembros'})</span>
+            </div>
+          )}
+          {project.tags && project.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 my-2">
+                {project.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}
             </div>
           )}
           {project.progress !== undefined && (
@@ -183,7 +206,7 @@ ProjectKanbanBoard.displayName = 'ProjectKanbanBoard';
 export default function CrmProjectsPage() {
   const { toast } = useToast();
   const [projectsByStatus, setProjectsByStatus] = useState<ProjectsByStatus>(() => {
-    const initial: ProjectsByStatus = { PLANIFICACION: [], ACTIVO: [], COMPLETADO: [], EN_ESPERA: [], CANCELADO: [] };
+    const initial: ProjectsByStatus = { PLANNING: [], ACTIVE: [], COMPLETED: [], ON_HOLD: [], CANCELED: [] };
     initialProjectsData.forEach(project => {
       if (initial[project.status]) {
         initial[project.status].push(project);
@@ -204,7 +227,7 @@ export default function CrmProjectsPage() {
 
   const addProjectForm = useForm<ProjectFormValues>({
     resolver: zodResolver(ProjectFormSchema),
-    defaultValues: { name: "", description: "", status: "PLANIFICACION", clientName: "", teamMembers: "", progress: 0, deadline: "" },
+    defaultValues: { name: "", description: "", status: "PLANNING", clientName: "", teamMembers: "", progress: 0, deadline: "", tags: "", opportunityId: "" },
   });
 
   const editProjectForm = useForm<ProjectFormValues>({
@@ -221,16 +244,22 @@ export default function CrmProjectsPage() {
             teamMembers: editingProject.team?.map(m => m.name).join(", ") || "",
             progress: editingProject.progress || 0,
             deadline: editingProject.deadline || "",
+            tags: editingProject.tags?.join(", ") || "",
+            opportunityId: editingProject.opportunityId || "",
         });
     }
   }, [editingProject, editProjectForm]);
 
   const handleActualAddProjectSubmit = useCallback((values: ProjectFormValues) => {
     const teamMembers: ProjectTeamMember[] = values.teamMembers?.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()})) || [];
+    const selectedOpp = mockOpportunitiesForSelect.find(o => o.id === values.opportunityId);
     const newProjectToAdd: Project = {
       id: `proj-${Date.now()}`, name: values.name, description: values.description || undefined,
       status: values.status, clientName: values.clientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
       progress: values.progress, deadline: values.deadline || undefined, dataAiHint: "project folder",
+      tags: values.tags?.split(',').map(tag => tag.trim()).filter(tag => tag) || [],
+      opportunityId: values.opportunityId || undefined,
+      opportunityName: selectedOpp?.name || undefined,
     };
     setProjectsByStatus(prev => {
         const newState = {...prev};
@@ -255,11 +284,15 @@ export default function CrmProjectsPage() {
   const handleActualEditProjectSubmit = useCallback((values: ProjectFormValues) => {
     if (!editingProject) return;
     const teamMembers: ProjectTeamMember[] = values.teamMembers?.split(',').map(name => name.trim()).filter(name => name).map(name => ({ name, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: name.substring(0,2).toUpperCase()})) || [];
+    const selectedOpp = mockOpportunitiesForSelect.find(o => o.id === values.opportunityId);
 
     const updatedProject: Project = {
       ...editingProject, name: values.name, description: values.description || undefined,
       status: values.status, clientName: values.clientName || undefined, team: teamMembers.length > 0 ? teamMembers : undefined,
       progress: values.progress, deadline: values.deadline || undefined,
+      tags: values.tags?.split(',').map(tag => tag.trim()).filter(tag => tag) || [],
+      opportunityId: values.opportunityId || undefined,
+      opportunityName: selectedOpp?.name || undefined,
     };
 
     setProjectsByStatus(prev => {
@@ -355,6 +388,8 @@ export default function CrmProjectsPage() {
                   <FormField control={addProjectForm.control} name="teamMembers" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Team</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., John, Jane" {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                   <FormField control={addProjectForm.control} name="progress" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Progress (%)</FormLabel><FormControl className="col-span-3"><Input type="number" placeholder="0-100" {...field} min="0" max="100"/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                   <FormField control={addProjectForm.control} name="deadline" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Deadline</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addProjectForm.control} name="tags" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Tags</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., marketing, Q4" {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addProjectForm.control} name="opportunityId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Opportunity</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to opportunity" /></SelectTrigger></FormControl><SelectContent>{mockOpportunitiesForSelect.map(opp => <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                 </div>
               </ScrollArea>
               <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={addProjectForm.formState.isSubmitting}>Save Project</Button></DialogFooter>
@@ -383,6 +418,8 @@ export default function CrmProjectsPage() {
                   <FormField control={editProjectForm.control} name="teamMembers" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Team</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                   <FormField control={editProjectForm.control} name="progress" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Progress (%)</FormLabel><FormControl className="col-span-3"><Input type="number" {...field} min="0" max="100"/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                   <FormField control={editProjectForm.control} name="deadline" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Deadline</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={editProjectForm.control} name="tags" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Tags</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={editProjectForm.control} name="opportunityId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Opportunity</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to opportunity" /></SelectTrigger></FormControl><SelectContent>{mockOpportunitiesForSelect.map(opp => <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                 </div>
               </ScrollArea>
               <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={editProjectForm.formState.isSubmitting}>Save Changes</Button></DialogFooter>
@@ -406,6 +443,7 @@ export default function CrmProjectsPage() {
               {viewingProject.description && (<div><p className="font-medium text-muted-foreground">Description:</p><p className="whitespace-pre-wrap">{viewingProject.description}</p></div>)}
               <div><p className="font-medium text-muted-foreground">Status:</p><div><Badge variant="outline">{projectStatusToColumnTitle[viewingProject.status]}</Badge></div></div>
               {viewingProject.clientName && (<div><p className="font-medium text-muted-foreground">Client:</p><p>{viewingProject.clientName}</p></div>)}
+              {viewingProject.opportunityName && (<div><p className="font-medium text-muted-foreground">Originating Opportunity:</p><div className="flex items-center gap-1"><OpportunityIcon className="h-4 w-4 text-blue-500"/><p>{viewingProject.opportunityName}</p></div></div>)}
               {viewingProject.team && viewingProject.team.length > 0 && (
                 <div><p className="font-medium text-muted-foreground">Team:</p>
                   <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -426,6 +464,13 @@ export default function CrmProjectsPage() {
                 </div>
               )}
               {viewingProject.deadline && (<div><p className="font-medium text-muted-foreground">Deadline:</p><p>{viewingProject.deadline}</p></div>)}
+              {viewingProject.tags && viewingProject.tags.length > 0 && (
+                 <div><p className="font-medium text-muted-foreground">Tags:</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {viewingProject.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}
+                  </div>
+                </div>
+              )}
             </div>
             </ScrollArea>
           )}
@@ -466,3 +511,6 @@ export default function CrmProjectsPage() {
     </div>
   );
 }
+
+
+    

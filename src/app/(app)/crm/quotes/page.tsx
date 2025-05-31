@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer } from "lucide-react";
+import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer, Zap as OpportunityIcon } from "lucide-react"; // Added OpportunityIcon
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, type FormEvent, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +21,8 @@ import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
-const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "CANCELED"] as const;
+// Aligned with prisma schema QuoteStatus enum
+const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED", "CANCELED"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
 
 interface Product {
@@ -39,17 +40,18 @@ const mockProducts: Product[] = [
   { id: "prod-5", name: "Graphic Design Package", price: 1200, type: "SERVICIO"},
 ];
 
-interface Lead {
-  id: string;
-  name: string;
+// Representing Opportunities for selection, derived from previous Lead concept
+interface OpportunityForQuote {
+  id: string; // This will be opportunityId
+  name: string; // Opportunity Name (e.g., "Opp Alpha (Lead Name)")
   dataAiHint?: string;
 }
 
-const mockLeads: Lead[] = [
-    { id: "lead-1", name: "Alice W. (Wonderland Inc.)", dataAiHint: "woman face" },
-    { id: "lead-2", name: "Bob T. (Builders Co.)", dataAiHint: "man face" },
-    { id: "lead-3", name: "Charlie Brown (Good Grief LLC)", dataAiHint: "boy face" },
-    { id: "lead-4", name: "Diana Prince (Themyscira Ventures)", dataAiHint: "woman hero" },
+const mockOpportunitiesForQuote: OpportunityForQuote[] = [
+    { id: "opp-1", name: "Opportunity Alpha (Alice W.)", dataAiHint: "woman face" },
+    { id: "opp-2", name: "Opportunity Beta (Bob T.)", dataAiHint: "man face" },
+    { id: "opp-3", name: "Opportunity Gamma (Charlie Brown)", dataAiHint: "boy face" },
+    { id: "opp-4", name: "Opportunity Delta (Diana Prince)", dataAiHint: "woman hero" },
 ];
 
 
@@ -65,8 +67,8 @@ export interface QuoteLineItem {
 export interface Quote {
   id: string;
   quoteNumber: string;
-  leadName: string;
-  leadId?: string;
+  opportunityName: string; // Changed from leadName
+  opportunityId: string; // Changed from leadId, now required
   dateCreated: string;
   expiryDate?: string;
   status: QuoteStatus;
@@ -79,8 +81,8 @@ const initialQuotesData: Quote[] = [
   {
     id: "quote-1",
     quoteNumber: "QT-2024-001",
-    leadName: "Alice W. (Wonderland Inc.)",
-    leadId: "lead-1",
+    opportunityName: "Opportunity Alpha (Alice W.)", // Updated
+    opportunityId: "opp-1", // Updated
     dateCreated: "2024-07-20",
     expiryDate: "2024-08-20",
     status: "SENT",
@@ -94,8 +96,8 @@ const initialQuotesData: Quote[] = [
   {
     id: "quote-2",
     quoteNumber: "QT-2024-002",
-    leadName: "Bob T. (Builders Co.)",
-    leadId: "lead-2",
+    opportunityName: "Opportunity Beta (Bob T.)", // Updated
+    opportunityId: "opp-2", // Updated
     dateCreated: "2024-07-22",
     expiryDate: "2024-08-22",
     status: "ACCEPTED",
@@ -109,10 +111,9 @@ const initialQuotesData: Quote[] = [
 ];
 
 const QuoteFormSchema = z.object({
-    leadId: z.string().min(1, "Lead/Customer is required"),
+    opportunityId: z.string().min(1, "Opportunity is required"), // Changed from leadId
     expiryDate: z.string().optional(),
     status: z.enum(QUOTE_STATUSES, { required_error: "Quote status is required" }),
-    // Line items will be managed separately in state, not directly by react-hook-form for simplicity here
 });
 type QuoteFormValues = z.infer<typeof QuoteFormSchema>;
 
@@ -123,7 +124,6 @@ export default function CrmQuotesPage() {
   const [isAddOrEditQuoteDialogOpen, setIsAddOrEditQuoteDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
 
-  // State for the form within the dialog
   const [currentLineItems, setCurrentLineItems] = useState<QuoteLineItem[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [itemQuantity, setItemQuantity] = useState<number | string>(1);
@@ -138,7 +138,7 @@ export default function CrmQuotesPage() {
   const quoteForm = useForm<QuoteFormValues>({
     resolver: zodResolver(QuoteFormSchema),
     defaultValues: {
-        leadId: "",
+        opportunityId: "", // Changed from leadId
         expiryDate: "",
         status: "DRAFT",
     }
@@ -150,7 +150,7 @@ export default function CrmQuotesPage() {
   }, [currentLineItems]);
 
   const resetDialogFormFields = () => {
-    quoteForm.reset({ leadId: "", expiryDate: "", status: "DRAFT" });
+    quoteForm.reset({ opportunityId: "", expiryDate: "", status: "DRAFT" });
     setCurrentLineItems([]);
     setSelectedProductId("");
     setItemQuantity(1);
@@ -161,7 +161,7 @@ export default function CrmQuotesPage() {
     if (isAddOrEditQuoteDialogOpen) {
       if (editingQuote) {
         quoteForm.reset({
-          leadId: editingQuote.leadId || "",
+          opportunityId: editingQuote.opportunityId || "", // Changed
           expiryDate: editingQuote.expiryDate || "",
           status: editingQuote.status,
         });
@@ -211,9 +211,9 @@ export default function CrmQuotesPage() {
   };
 
   const handleActualSaveQuote = (values: QuoteFormValues) => {
-    const selectedLead = mockLeads.find(l => l.id === values.leadId);
-    if (!selectedLead) { // Should be caught by Zod, but good to double check
-        toast({ title: "Missing Lead", description: "Please select a lead/customer.", variant: "destructive" });
+    const selectedOpp = mockOpportunitiesForQuote.find(l => l.id === values.opportunityId); // Changed from lead
+    if (!selectedOpp) { 
+        toast({ title: "Missing Opportunity", description: "Please select an opportunity.", variant: "destructive" });
         return;
     }
     if (currentLineItems.length === 0) {
@@ -222,8 +222,8 @@ export default function CrmQuotesPage() {
     }
 
     const quoteData = {
-      leadId: selectedLead.id,
-      leadName: selectedLead.name,
+      opportunityId: selectedOpp.id, // Changed
+      opportunityName: selectedOpp.name, // Changed
       expiryDate: values.expiryDate || undefined,
       status: values.status,
       lineItems: currentLineItems,
@@ -243,7 +243,7 @@ export default function CrmQuotesPage() {
         ...quoteData,
       };
       setQuotes(prevQuotes => [newQuoteToAdd, ...prevQuotes]);
-      toast({ title: "Quote Added", description: `Quote for ${newQuoteToAdd.leadName} has been added.` });
+      toast({ title: "Quote Added", description: `Quote for ${newQuoteToAdd.opportunityName} has been added.` });
     }
     
     setIsAddOrEditQuoteDialogOpen(false);
@@ -257,7 +257,7 @@ export default function CrmQuotesPage() {
   };
 
   const openAddQuoteDialog = () => {
-    setEditingQuote(null); // Ensure we're in "add" mode
+    setEditingQuote(null); 
     resetDialogFormFields();
     setIsAddOrEditQuoteDialogOpen(true);
   };
@@ -291,12 +291,12 @@ export default function CrmQuotesPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center"><FileText className="mr-3 h-8 w-8 text-primary"/>Quotes Management</h1>
           <p className="text-muted-foreground">
-            Create, send, and track your sales quotes.
+            Create, send, and track your sales quotes for opportunities.
           </p>
         </div>
         <Dialog open={isAddOrEditQuoteDialogOpen} onOpenChange={(isOpen) => {
           setIsAddOrEditQuoteDialogOpen(isOpen);
-          if (!isOpen) setEditingQuote(null); // Reset editing state on close
+          if (!isOpen) setEditingQuote(null); 
         }}>
           <DialogTrigger asChild>
             <Button onClick={openAddQuoteDialog} className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -315,17 +315,17 @@ export default function CrmQuotesPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                         control={quoteForm.control}
-                        name="leadId"
+                        name="opportunityId" // Changed
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Lead/Customer</FormLabel>
+                                <FormLabel>Opportunity</FormLabel>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                     <FormControl>
-                                        <SelectTrigger><SelectValue placeholder="Select a lead" /></SelectTrigger>
+                                        <SelectTrigger><SelectValue placeholder="Select an opportunity" /></SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                    {mockLeads.map(lead => (
-                                        <SelectItem key={lead.id} value={lead.id}>{lead.name}</SelectItem>
+                                    {mockOpportunitiesForQuote.map(opp => (
+                                        <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem>
                                     ))}
                                     </SelectContent>
                                 </Select>
@@ -463,7 +463,7 @@ export default function CrmQuotesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Quote #</TableHead>
-                  <TableHead>Lead / Customer</TableHead>
+                  <TableHead>Opportunity</TableHead> {/* Changed */}
                   <TableHead className="hidden md:table-cell">Date Created</TableHead>
                   <TableHead className="hidden lg:table-cell">Expiry Date</TableHead>
                   <TableHead>Status</TableHead>
@@ -475,7 +475,7 @@ export default function CrmQuotesPage() {
                 {quotes.map((quote) => (
                   <TableRow key={quote.id}>
                     <TableCell className="font-medium">{quote.quoteNumber}</TableCell>
-                    <TableCell>{quote.leadName}</TableCell>
+                    <TableCell>{quote.opportunityName}</TableCell> {/* Changed */}
                     <TableCell className="hidden md:table-cell">{quote.dateCreated}</TableCell>
                     <TableCell className="hidden lg:table-cell">{quote.expiryDate || "N/A"}</TableCell>
                     <TableCell>
@@ -483,7 +483,7 @@ export default function CrmQuotesPage() {
                         variant={
                             quote.status === "ACCEPTED" ? "default" :
                             quote.status === "SENT" ? "secondary" :
-                            quote.status === "REJECTED" || quote.status === "CANCELED" ? "destructive" :
+                            quote.status === "REJECTED" || quote.status === "CANCELED" || quote.status === "EXPIRED" ? "destructive" :
                             "outline"
                         }
                         className={quote.status === "ACCEPTED" ? "bg-green-600 text-white" : ""}
@@ -573,3 +573,6 @@ export default function CrmQuotesPage() {
     </div>
   );
 }
+
+
+    

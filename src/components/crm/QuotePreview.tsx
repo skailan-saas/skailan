@@ -5,7 +5,7 @@ import type { Quote } from "@/app/(app)/crm/quotes/page"; // Adjust path if need
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Logo } from "@/components/icons/logo"; // Assuming you have a logo component
+import { Logo } from "@/components/icons/logo"; 
 
 interface QuotePreviewProps {
   quote: Quote | null;
@@ -19,8 +19,6 @@ export function QuotePreview({ quote }: QuotePreviewProps) {
   // Placeholder tax rate
   const TAX_RATE = 0.07; // 7%
   const subtotal = quote.totalAmount / (1 + TAX_RATE); // Approximation if totalAmount includes tax
-  // Or if totalAmount is pre-tax:
-  // const subtotal = quote.totalAmount;
   const taxAmount = subtotal * TAX_RATE;
   const grandTotal = subtotal + taxAmount;
 
@@ -52,10 +50,8 @@ export function QuotePreview({ quote }: QuotePreviewProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
               <h3 className="font-semibold mb-1 text-foreground">Bill To:</h3>
-              <p className="text-sm text-muted-foreground">{quote.leadName}</p>
-              {/* Placeholder for more client details if available */}
-              {/* <p className="text-sm text-muted-foreground">Client Company XYZ</p>
-              <p className="text-sm text-muted-foreground">456 Client Ave, Otherville, USA 67890</p> */}
+              <p className="text-sm text-muted-foreground">{quote.opportunityName}</p> {/* Changed from leadName */}
+              {/* Placeholder for more client details if available via Opportunity */}
             </div>
           </div>
 
@@ -131,3 +127,6 @@ export function QuotePreview({ quote }: QuotePreviewProps) {
     </div>
   );
 }
+
+
+    

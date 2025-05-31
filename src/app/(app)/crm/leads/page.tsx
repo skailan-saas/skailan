@@ -10,9 +10,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's not used here
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Users, Search, Filter, MoreHorizontal, Edit, Trash2, Eye } from "lucide-react";
+import { PlusCircle, Users, Search, Filter, MoreHorizontal, Edit, Trash2, Eye, Tag, Building } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, type FormEvent, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -20,11 +20,14 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
 
 
-const LEAD_STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "LOST", "UNQUALIFIED"] as const;
+// Aligned with prisma schema LeadStatus enum
+const LEAD_STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "CONVERTED_TO_OPPORTUNITY", "CLOSED_WON", "CLOSED_LOST", "UNQUALIFIED"] as const;
 type LeadStatus = typeof LEAD_STATUSES[number];
-const LEAD_SOURCES = ["WhatsApp", "Web Chat", "Messenger", "Instagram", "Manual", "Referral"] as const;
+
+const LEAD_SOURCES = ["WhatsApp", "Web Chat", "Messenger", "Instagram", "Manual", "Referral", "API"] as const;
 type LeadSource = typeof LEAD_SOURCES[number];
 
 interface Lead {
@@ -36,7 +39,9 @@ interface Lead {
   status: LeadStatus;
   assignedTo?: { name: string; avatarUrl: string; avatarFallback: string; dataAiHint?: string };
   lastContacted?: string;
-  company?: string;
+  companyName?: string; // Changed from company to companyName
+  tags?: string[];
+  notes?: string;
   dataAiHint?: string;
 }
 
@@ -44,9 +49,11 @@ const LeadFormSchema = z.object({
   name: z.string().min(1, "Full name is required"),
   email: z.string().email("Invalid email address"),
   phone: z.string().optional(),
-  company: z.string().optional(),
+  companyName: z.string().optional(),
   source: z.enum(LEAD_SOURCES),
   status: z.enum(LEAD_STATUSES),
+  tags: z.string().optional(), // Comma-separated string
+  notes: z.string().optional(),
 });
 type LeadFormValues = z.infer<typeof LeadFormSchema>;
 
@@ -61,7 +68,9 @@ const initialLeads: Lead[] = [
     status: "QUALIFIED",
     assignedTo: { name: "John Doe", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "man face", avatarFallback: "JD" },
     lastContacted: "2024-07-28",
-    company: "Wonderland Inc.",
+    companyName: "Wonderland Inc.",
+    tags: ["vip", "referral"],
+    notes: "Interested in premium package. Follow up next week.",
     dataAiHint: "female face",
   },
   {
@@ -72,8 +81,21 @@ const initialLeads: Lead[] = [
     status: "CONTACTED",
     assignedTo: { name: "Jane Smith", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", avatarFallback: "JS" },
     lastContacted: "2024-07-29",
-    company: "Builders Co.",
+    companyName: "Builders Co.",
+    tags: ["construction", "b2b"],
     dataAiHint: "male face",
+  },
+  {
+    id: "lead-3",
+    name: "Carlos V.",
+    email: "carlos.v@example.com",
+    phone: "555-0102",
+    source: "Web Chat",
+    status: "NEW",
+    companyName: "Tech Solutions Ltd.",
+    tags: ["saas", "demo_requested"],
+    notes: "Scheduled a demo for Friday.",
+    dataAiHint: "latino man",
   },
 ];
 
@@ -95,9 +117,11 @@ export default function CrmLeadsPage() {
       name: "",
       email: "",
       phone: "",
-      company: "",
+      companyName: "",
       source: "Manual",
       status: "NEW",
+      tags: "",
+      notes: "",
     },
   });
 
@@ -111,9 +135,11 @@ export default function CrmLeadsPage() {
         name: editingLead.name,
         email: editingLead.email,
         phone: editingLead.phone || "",
-        company: editingLead.company || "",
+        companyName: editingLead.companyName || "",
         source: editingLead.source,
         status: editingLead.status,
+        tags: editingLead.tags?.join(", ") || "",
+        notes: editingLead.notes || "",
       });
     }
   }, [editingLead, editLeadForm]);
@@ -124,9 +150,11 @@ export default function CrmLeadsPage() {
       name: values.name,
       email: values.email,
       phone: values.phone || undefined,
-      company: values.company || undefined,
+      companyName: values.companyName || undefined,
       source: values.source,
       status: values.status,
+      tags: values.tags?.split(',').map(tag => tag.trim()).filter(tag => tag) || [],
+      notes: values.notes || undefined,
       lastContacted: new Date().toISOString().split('T')[0],
       dataAiHint: "person avatar" 
     };
@@ -154,9 +182,11 @@ export default function CrmLeadsPage() {
       name: values.name,
       email: values.email,
       phone: values.phone || undefined,
-      company: values.company || undefined,
+      companyName: values.companyName || undefined,
       source: values.source,
       status: values.status,
+      tags: values.tags?.split(',').map(tag => tag.trim()).filter(tag => tag) || [],
+      notes: values.notes || undefined,
       lastContacted: new Date().toISOString().split('T')[0], 
     };
 
@@ -252,7 +282,7 @@ export default function CrmLeadsPage() {
                   />
                   <FormField
                     control={addLeadForm.control}
-                    name="company"
+                    name="companyName"
                     render={({ field }) => (
                       <FormItem>
                         <div className="grid grid-cols-4 items-center gap-4">
@@ -297,9 +327,40 @@ export default function CrmLeadsPage() {
                               <SelectTrigger><SelectValue placeholder="Select lead status" /></SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {LEAD_STATUSES.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                              {LEAD_STATUSES.map(status => <SelectItem key={status} value={status}>{status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                        </div>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addLeadForm.control}
+                    name="tags"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormLabel className="text-right col-span-1">Tags</FormLabel>
+                          <FormControl className="col-span-3">
+                            <Input placeholder="e.g., vip, referral" {...field} />
+                          </FormControl>
+                        </div>
+                        <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={addLeadForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="grid grid-cols-4 items-start gap-4">
+                          <FormLabel className="text-right col-span-1 pt-2">Notes</FormLabel>
+                          <FormControl className="col-span-3">
+                            <Textarea placeholder="Add any relevant notes..." {...field} rows={3}/>
+                          </FormControl>
                         </div>
                         <FormMessage className="col-start-2 col-span-3" />
                       </FormItem>
@@ -373,7 +434,7 @@ export default function CrmLeadsPage() {
                   />
                   <FormField
                     control={editLeadForm.control}
-                    name="company"
+                    name="companyName"
                     render={({ field }) => (
                       <FormItem>
                         <div className="grid grid-cols-4 items-center gap-4">
@@ -416,9 +477,40 @@ export default function CrmLeadsPage() {
                               <SelectTrigger><SelectValue /></SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {LEAD_STATUSES.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                               {LEAD_STATUSES.map(status => <SelectItem key={status} value={status}>{status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                        </div>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={editLeadForm.control}
+                    name="tags"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormLabel className="text-right col-span-1">Tags</FormLabel>
+                          <FormControl className="col-span-3">
+                            <Input {...field} />
+                          </FormControl>
+                        </div>
+                        <p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p>
+                        <FormMessage className="col-start-2 col-span-3" />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={editLeadForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="grid grid-cols-4 items-start gap-4">
+                          <FormLabel className="text-right col-span-1 pt-2">Notes</FormLabel>
+                          <FormControl className="col-span-3">
+                            <Textarea {...field} rows={3}/>
+                          </FormControl>
                         </div>
                         <FormMessage className="col-start-2 col-span-3" />
                       </FormItem>
@@ -460,10 +552,10 @@ export default function CrmLeadsPage() {
                   <p>{viewingLead.phone}</p>
                 </div>
               )}
-              {viewingLead.company && (
+              {viewingLead.companyName && (
                 <div>
                   <p className="font-medium text-muted-foreground">Company:</p>
-                  <p>{viewingLead.company}</p>
+                  <p>{viewingLead.companyName}</p>
                 </div>
               )}
               <div>
@@ -474,10 +566,10 @@ export default function CrmLeadsPage() {
                 <p className="font-medium text-muted-foreground">Status:</p>
                 <div>
                   <Badge 
-                    variant={viewingLead.status === "CONVERTED" ? "default" : viewingLead.status === "QUALIFIED" ? "secondary" : viewingLead.status === "LOST" ? "destructive" : "outline"}
-                    className={viewingLead.status === "CONVERTED" ? "bg-green-600 text-white" : ""}
+                    variant={viewingLead.status === "CONVERTED_TO_OPPORTUNITY" || viewingLead.status === "CLOSED_WON" ? "default" : viewingLead.status === "QUALIFIED" ? "secondary" : viewingLead.status === "CLOSED_LOST" || viewingLead.status === "UNQUALIFIED" ? "destructive" : "outline"}
+                    className={viewingLead.status === "CONVERTED_TO_OPPORTUNITY" || viewingLead.status === "CLOSED_WON" ? "bg-green-600 text-white" : ""}
                   >
-                    {viewingLead.status}
+                    {viewingLead.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                   </Badge>
                 </div>
               </div>
@@ -497,6 +589,20 @@ export default function CrmLeadsPage() {
                 <div>
                   <p className="font-medium text-muted-foreground">Last Contacted:</p>
                   <p>{viewingLead.lastContacted}</p>
+                </div>
+              )}
+              {viewingLead.tags && viewingLead.tags.length > 0 && (
+                 <div>
+                  <p className="font-medium text-muted-foreground">Tags:</p>
+                   <div className="flex flex-wrap gap-1 mt-1">
+                    {viewingLead.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}
+                  </div>
+                </div>
+              )}
+              {viewingLead.notes && (
+                <div>
+                  <p className="font-medium text-muted-foreground">Notes:</p>
+                  <p className="whitespace-pre-wrap bg-muted/50 p-2 rounded-md">{viewingLead.notes}</p>
                 </div>
               )}
             </div>
@@ -550,13 +656,12 @@ export default function CrmLeadsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]"></TableHead>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Name &amp; Company</TableHead>
                   <TableHead className="hidden md:table-cell">Email</TableHead>
                   <TableHead className="hidden lg:table-cell">Phone</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="hidden md:table-cell">Assigned To</TableHead>
-                  <TableHead className="hidden lg:table-cell">Last Contacted</TableHead>
+                  <TableHead className="hidden md:table-cell">Tags</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -571,7 +676,7 @@ export default function CrmLeadsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">{lead.name}</div>
-                      <div className="text-xs text-muted-foreground hidden sm:block">{lead.company}</div>
+                      <div className="text-xs text-muted-foreground">{lead.companyName || "N/A"}</div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">{lead.email}</TableCell>
                     <TableCell className="hidden lg:table-cell">{lead.phone || "N/A"}</TableCell>
@@ -579,25 +684,20 @@ export default function CrmLeadsPage() {
                       <Badge variant="outline">{lead.source}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge 
-                        variant={lead.status === "CONVERTED" ? "default" : lead.status === "QUALIFIED" ? "secondary" : lead.status === "LOST" ? "destructive" : "outline"}
-                        className={lead.status === "CONVERTED" ? "bg-green-600 text-white" : ""}
+                       <Badge 
+                        variant={lead.status === "CONVERTED_TO_OPPORTUNITY" || lead.status === "CLOSED_WON" ? "default" : lead.status === "QUALIFIED" ? "secondary" : lead.status === "CLOSED_LOST" || lead.status === "UNQUALIFIED" ? "destructive" : "outline"}
+                        className={lead.status === "CONVERTED_TO_OPPORTUNITY" || lead.status === "CLOSED_WON" ? "bg-green-600 text-white" : ""}
                       >
-                        {lead.status}
+                        {lead.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {lead.assignedTo ? (
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-7 w-7">
-                            <AvatarImage src={lead.assignedTo.avatarUrl} alt={lead.assignedTo.name} data-ai-hint={lead.assignedTo.dataAiHint || "avatar person"} />
-                            <AvatarFallback>{lead.assignedTo.avatarFallback}</AvatarFallback>
-                          </Avatar>
-                          <span className="text-xs">{lead.assignedTo.name}</span>
+                        <div className="flex flex-wrap gap-1">
+                            {lead.tags?.slice(0,2).map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
+                            {lead.tags && lead.tags.length > 2 && <Badge variant="outline" className="text-xs">+{lead.tags.length - 2}</Badge>}
+                             {!lead.tags || lead.tags.length === 0 && <span className="text-xs text-muted-foreground">No tags</span>}
                         </div>
-                      ) : "Unassigned"}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell">{lead.lastContacted || "N/A"}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -637,3 +737,6 @@ export default function CrmLeadsPage() {
     </div>
   );
 }
+
+
+    
