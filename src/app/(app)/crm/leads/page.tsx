@@ -21,6 +21,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { useSearchParams } from "next/navigation";
 
 
 // Aligned with prisma schema LeadStatus enum
@@ -61,7 +62,7 @@ type LeadFormValues = z.infer<typeof LeadFormSchema>;
 const initialLeads: Lead[] = [
   {
     id: "lead-1",
-    name: "Alice W.",
+    name: "Alice W.", // Matched to "Alice Wonderland" for search demo
     email: "alice.w@example.com",
     phone: "555-0101",
     source: "WhatsApp",
@@ -75,7 +76,7 @@ const initialLeads: Lead[] = [
   },
   {
     id: "lead-2",
-    name: "Bob T.",
+    name: "Bob T.", // Matched to "Bob The Builder"
     email: "bob.t@example.com",
     source: "Messenger",
     status: "CONTACTED",
@@ -101,6 +102,7 @@ const initialLeads: Lead[] = [
 
 export default function CrmLeadsPage() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [isAddLeadDialogOpen, setIsAddLeadDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
@@ -109,6 +111,7 @@ export default function CrmLeadsPage() {
   const [leadToDeleteId, setLeadToDeleteId] = useState<string | null>(null);
   const [isViewLeadDialogOpen, setIsViewLeadDialogOpen] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
 
   const addLeadForm = useForm<LeadFormValues>({
@@ -128,6 +131,25 @@ export default function CrmLeadsPage() {
   const editLeadForm = useForm<LeadFormValues>({
     resolver: zodResolver(LeadFormSchema),
   });
+
+  useEffect(() => {
+    const querySearch = searchParams.get('search');
+    if (querySearch) {
+      setSearchTerm(querySearch);
+    }
+  }, [searchParams]);
+
+  const filteredLeads = useMemo(() => {
+    if (!searchTerm.trim()) return leads;
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    return leads.filter(lead =>
+      lead.name.toLowerCase().includes(lowerSearchTerm) ||
+      lead.email.toLowerCase().includes(lowerSearchTerm) ||
+      (lead.companyName && lead.companyName.toLowerCase().includes(lowerSearchTerm)) ||
+      (lead.phone && lead.phone.includes(lowerSearchTerm)) ||
+      (lead.tags && lead.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm)))
+    );
+  }, [leads, searchTerm]);
 
   useEffect(() => {
     if (editingLead) {
@@ -637,11 +659,16 @@ export default function CrmLeadsPage() {
       <Card className="shadow-lg flex-1 flex flex-col">
         <CardHeader className="border-b p-4">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
-            <CardTitle className="text-lg">All Leads ({leads.length})</CardTitle>
+            <CardTitle className="text-lg">All Leads ({filteredLeads.length})</CardTitle>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:flex-initial">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search leads..." className="pl-8 w-full sm:w-[200px] lg:w-[250px]" />
+                <Input 
+                  placeholder="Search leads..." 
+                  className="pl-8 w-full sm:w-[200px] lg:w-[250px]"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)} 
+                />
               </div>
               <Button variant="outline" size="icon">
                 <Filter className="h-4 w-4" />
@@ -666,7 +693,7 @@ export default function CrmLeadsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leads.map((lead) => (
+                {filteredLeads.map((lead) => (
                   <TableRow key={lead.id}>
                     <TableCell>
                        <Avatar className="h-9 w-9">
@@ -719,12 +746,12 @@ export default function CrmLeadsPage() {
                 ))}
               </TableBody>
             </Table>
-             {leads.length === 0 && (
+             {filteredLeads.length === 0 && (
                 <div className="text-center py-20">
                     <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-xl font-semibold text-foreground">No Leads Found</h3>
                     <p className="text-muted-foreground">
-                    Create your first lead using the "Add New Lead" button.
+                    {searchTerm ? "Try adjusting your search term." : "Create your first lead using the 'Add New Lead' button."}
                     </p>
                 </div>
             )}
@@ -732,7 +759,7 @@ export default function CrmLeadsPage() {
         </CardContent>
       </Card>
       <div className="text-xs text-muted-foreground text-center flex-shrink-0 py-2">
-        Showing {leads.length} of {leads.length} leads. Pagination and advanced filtering controls will be added here.
+        Showing {filteredLeads.length} of {leads.length} leads. Pagination and advanced filtering controls will be added here.
       </div>
     </div>
   );

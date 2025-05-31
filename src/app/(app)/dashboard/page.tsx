@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit2, Mail, MessageSquare, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link"; // Import Link
 import { useState, useEffect, useMemo, type FC } from "react";
 import { summarizeConversation, suggestResponse } from "@/ai/flows";
 import { useToast } from "@/hooks/use-toast";
@@ -581,7 +582,11 @@ export default function AgentWorkspacePage() {
             </CardContent>
           </ScrollArea>
           <CardFooter className="p-4 border-t">
-            <Button className="w-full">View Full CRM Profile</Button>
+            <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Link href={`/crm/leads?search=${encodeURIComponent(selectedConversation.userName)}`}>
+                View Full CRM Profile
+              </Link>
+            </Button>
           </CardFooter>
           </>
         ) : (
