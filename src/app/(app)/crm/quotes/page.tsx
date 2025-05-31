@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer, Zap as OpportunityIcon } from "lucide-react"; // Added OpportunityIcon
+import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer, Zap as OpportunityIcon } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, type FormEvent, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -67,8 +67,8 @@ export interface QuoteLineItem {
 export interface Quote {
   id: string;
   quoteNumber: string;
-  opportunityName: string; // Changed from leadName
-  opportunityId: string; // Changed from leadId, now required
+  opportunityName: string; 
+  opportunityId: string; 
   dateCreated: string;
   expiryDate?: string;
   status: QuoteStatus;
@@ -81,8 +81,8 @@ const initialQuotesData: Quote[] = [
   {
     id: "quote-1",
     quoteNumber: "QT-2024-001",
-    opportunityName: "Opportunity Alpha (Alice W.)", // Updated
-    opportunityId: "opp-1", // Updated
+    opportunityName: "Opportunity Alpha (Alice W.)", 
+    opportunityId: "opp-1", 
     dateCreated: "2024-07-20",
     expiryDate: "2024-08-20",
     status: "SENT",
@@ -96,8 +96,8 @@ const initialQuotesData: Quote[] = [
   {
     id: "quote-2",
     quoteNumber: "QT-2024-002",
-    opportunityName: "Opportunity Beta (Bob T.)", // Updated
-    opportunityId: "opp-2", // Updated
+    opportunityName: "Opportunity Beta (Bob T.)", 
+    opportunityId: "opp-2", 
     dateCreated: "2024-07-22",
     expiryDate: "2024-08-22",
     status: "ACCEPTED",
@@ -111,7 +111,7 @@ const initialQuotesData: Quote[] = [
 ];
 
 const QuoteFormSchema = z.object({
-    opportunityId: z.string().min(1, "Opportunity is required"), // Changed from leadId
+    opportunityId: z.string().min(1, "Opportunity is required"), 
     expiryDate: z.string().optional(),
     status: z.enum(QUOTE_STATUSES, { required_error: "Quote status is required" }),
 });
@@ -138,7 +138,7 @@ export default function CrmQuotesPage() {
   const quoteForm = useForm<QuoteFormValues>({
     resolver: zodResolver(QuoteFormSchema),
     defaultValues: {
-        opportunityId: "", // Changed from leadId
+        opportunityId: "", 
         expiryDate: "",
         status: "DRAFT",
     }
@@ -161,7 +161,7 @@ export default function CrmQuotesPage() {
     if (isAddOrEditQuoteDialogOpen) {
       if (editingQuote) {
         quoteForm.reset({
-          opportunityId: editingQuote.opportunityId || "", // Changed
+          opportunityId: editingQuote.opportunityId || "", 
           expiryDate: editingQuote.expiryDate || "",
           status: editingQuote.status,
         });
@@ -211,7 +211,7 @@ export default function CrmQuotesPage() {
   };
 
   const handleActualSaveQuote = (values: QuoteFormValues) => {
-    const selectedOpp = mockOpportunitiesForQuote.find(l => l.id === values.opportunityId); // Changed from lead
+    const selectedOpp = mockOpportunitiesForQuote.find(l => l.id === values.opportunityId); 
     if (!selectedOpp) { 
         toast({ title: "Missing Opportunity", description: "Please select an opportunity.", variant: "destructive" });
         return;
@@ -222,8 +222,8 @@ export default function CrmQuotesPage() {
     }
 
     const quoteData = {
-      opportunityId: selectedOpp.id, // Changed
-      opportunityName: selectedOpp.name, // Changed
+      opportunityId: selectedOpp.id, 
+      opportunityName: selectedOpp.name, 
       expiryDate: values.expiryDate || undefined,
       status: values.status,
       lineItems: currentLineItems,
@@ -315,7 +315,7 @@ export default function CrmQuotesPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                         control={quoteForm.control}
-                        name="opportunityId" // Changed
+                        name="opportunityId" 
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Opportunity</FormLabel>
@@ -463,7 +463,7 @@ export default function CrmQuotesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Quote #</TableHead>
-                  <TableHead>Opportunity</TableHead> {/* Changed */}
+                  <TableHead>Opportunity</TableHead>
                   <TableHead className="hidden md:table-cell">Date Created</TableHead>
                   <TableHead className="hidden lg:table-cell">Expiry Date</TableHead>
                   <TableHead>Status</TableHead>
@@ -475,7 +475,7 @@ export default function CrmQuotesPage() {
                 {quotes.map((quote) => (
                   <TableRow key={quote.id}>
                     <TableCell className="font-medium">{quote.quoteNumber}</TableCell>
-                    <TableCell>{quote.opportunityName}</TableCell> {/* Changed */}
+                    <TableCell>{quote.opportunityName}</TableCell>
                     <TableCell className="hidden md:table-cell">{quote.dateCreated}</TableCell>
                     <TableCell className="hidden lg:table-cell">{quote.expiryDate || "N/A"}</TableCell>
                     <TableCell>
@@ -573,6 +573,3 @@ export default function CrmQuotesPage() {
     </div>
   );
 }
-
-
-    
