@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, AlertCircle, Zap, PlusCircle, Settings, MessageSquare, Globe, Smartphone, MoreHorizontal, LinkIcon, Unlink, Pencil, Eye, Copy } from "lucide-react";
+import { CheckCircle, AlertCircle, Zap, PlusCircle, Settings, MessageSquare, Globe, Smartphone, MoreHorizontal, LinkIcon, Unlink, Pencil, Eye, Copy, Send } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -36,16 +36,17 @@ interface ConnectedChannelInstance {
   details?: string; // For storing things like Phone Number or Page ID
 }
 
+// Define SendIcon before its use in CHANNEL_TYPE_CATALOG
+const SendIcon = Send; // Using actual Send icon from lucide-react
+
 const CHANNEL_TYPE_CATALOG: ChannelTypeDefinition[] = [
   { id: 'whatsapp', name: 'WhatsApp Business API', description: 'Connect your official WhatsApp Business account.', icon: Smartphone, usesWebhook: true, placeholderDetails: "Enter WhatsApp Number (e.g., +15551234567)" },
   { id: 'messenger', name: 'Facebook Messenger', description: 'Integrate with your Facebook Page Messenger.', icon: MessageSquare, usesWebhook: true, placeholderDetails: "Enter Facebook Page ID" },
   { id: 'instagram', name: 'Instagram Direct', description: 'Manage Instagram Direct Messages.', icon: MessageSquare, usesWebhook: true, placeholderDetails: "Enter Instagram Handle" },
   { id: 'webchat', name: 'Website Chat Widget', description: 'Embed a chat widget on your website.', icon: Globe, usesWebhook: false, placeholderDetails: "Website Domain (e.g., example.com)" },
-  { id: 'telegram', name: 'Telegram Bot', description: 'Connect your Telegram Bot.', icon: SendIcon , usesWebhook: false, placeholderDetails: "Enter Telegram Bot Token" }, // Assuming SendIcon or similar for Telegram
+  { id: 'telegram', name: 'Telegram Bot', description: 'Connect your Telegram Bot.', icon: SendIcon , usesWebhook: false, placeholderDetails: "Enter Telegram Bot Token" },
   { id: 'api', name: 'Custom API Channel', description: 'Integrate via custom API.', icon: Zap, usesWebhook: true, placeholderDetails: "API Endpoint URL" },
 ];
-// Placeholder for SendIcon if not available, replace with actual if needed
-const SendIcon = Smartphone;
 
 
 const initialConnectedChannels: ConnectedChannelInstance[] = [
@@ -358,7 +359,7 @@ export default function ChannelConnectionsPage() {
               <p className="text-xs text-muted-foreground mt-1">Use this token to verify webhook requests from your provider.</p>
             </div>
             {channelToViewWebhook?.status === 'pending_webhook' && (
-                <Button onClick={() => handleSimulateConnect(channelToViewWebhook.id)} className="w-full bg-green-600 hover:bg-green-700">
+                <Button onClick={() => channelToViewWebhook && handleSimulateConnect(channelToViewWebhook.id)} className="w-full bg-green-600 hover:bg-green-700">
                     <CheckCircle className="mr-2 h-4 w-4"/> Mark as Configured & Connect (Simulate)
                 </Button>
             )}
@@ -425,5 +426,3 @@ export default function ChannelConnectionsPage() {
     </ScrollArea>
   );
 }
-
-    
