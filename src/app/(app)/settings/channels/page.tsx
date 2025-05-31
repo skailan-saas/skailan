@@ -36,8 +36,8 @@ interface ConnectedChannelInstance {
   details?: string; // For storing things like Phone Number or Page ID
 }
 
-// Define SendIcon before its use in CHANNEL_TYPE_CATALOG
-const SendIcon = Send; // Using actual Send icon from lucide-react
+// Using actual Send icon from lucide-react
+const SendIcon = Send; 
 
 const CHANNEL_TYPE_CATALOG: ChannelTypeDefinition[] = [
   { id: 'whatsapp', name: 'WhatsApp Business API', description: 'Connect your official WhatsApp Business account.', icon: Smartphone, usesWebhook: true, placeholderDetails: "Enter WhatsApp Number (e.g., +15551234567)" },
@@ -80,6 +80,8 @@ export default function ChannelConnectionsPage() {
   const [editInstanceName, setEditInstanceName] = useState("");
   const [editChannelDetails, setEditChannelDetails] = useState("");
 
+  const [isManageChannelDialogOpen, setIsManageChannelDialogOpen] = useState(false);
+  const [channelToManage, setChannelToManage] = useState<ConnectedChannelInstance | null>(null);
 
   const [isDisconnectConfirmOpen, setIsDisconnectConfirmOpen] = useState(false);
   const [channelToDisconnect, setChannelToDisconnect] = useState<ConnectedChannelInstance | null>(null);
@@ -151,6 +153,10 @@ export default function ChannelConnectionsPage() {
     setEditingChannel(null);
   };
 
+  const openManageDialog = (channel: ConnectedChannelInstance) => {
+    setChannelToManage(channel);
+    setIsManageChannelDialogOpen(true);
+  };
 
   const openViewWebhookDialog = (channel: ConnectedChannelInstance) => {
     setChannelToViewWebhook(channel);
@@ -292,7 +298,7 @@ export default function ChannelConnectionsPage() {
                   <Badge variant={
                       channelInstance.status === 'connected' ? 'default' :
                       channelInstance.status === 'disconnected' ? 'secondary' :
-                      channelInstance.status === 'pending_webhook' ? 'outline' : // custom or use existing
+                      channelInstance.status === 'pending_webhook' ? 'outline' : 
                       'destructive' // for needs_attention
                     }
                     className={
@@ -317,7 +323,7 @@ export default function ChannelConnectionsPage() {
                     </Button>
                 )}
                 {channelInstance.status === 'connected' && (
-                    <Button variant="outline" className="w-full" size="sm" onClick={() => { /* Potentially open manage dialog */ toast({title: "Manage Clicked", description: "Implement manage dialog/page."})}}>
+                    <Button variant="outline" className="w-full" size="sm" onClick={() => openManageDialog(channelInstance)}>
                     <Settings className="mr-2 h-4 w-4" /> Manage
                     </Button>
                 )}
@@ -331,6 +337,57 @@ export default function ChannelConnectionsPage() {
           );
         })}
       </div>
+
+      {/* Manage Channel Dialog */}
+      <Dialog open={isManageChannelDialogOpen} onOpenChange={setIsManageChannelDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Manage: {channelToManage?.instanceName}</DialogTitle>
+                <DialogDescription>
+                    Manage settings and view details for this {CHANNEL_TYPE_CATALOG.find(ct => ct.id === channelToManage?.channelTypeId)?.name} connection.
+                </DialogDescription>
+            </DialogHeader>
+            {channelToManage && (
+                <div className="space-y-4 py-4">
+                    <div>
+                        <Label className="text-sm font-medium">Instance Name</Label>
+                        <p className="text-sm text-muted-foreground">{channelToManage.instanceName}</p>
+                    </div>
+                    <div>
+                        <Label className="text-sm font-medium">Channel Type</Label>
+                        <p className="text-sm text-muted-foreground">{CHANNEL_TYPE_CATALOG.find(ct => ct.id === channelToManage.channelTypeId)?.name}</p>
+                    </div>
+                    <div>
+                        <Label className="text-sm font-medium">Status</Label>
+                        <p className="text-sm text-muted-foreground capitalize">{channelToManage.status.replace('_', ' ')}</p>
+                    </div>
+                    {channelToManage.details && (
+                        <div>
+                            <Label className="text-sm font-medium">{CHANNEL_TYPE_CATALOG.find(ct => ct.id === channelToManage.channelTypeId)?.name} Details</Label>
+                            <p className="text-sm text-muted-foreground">{channelToManage.details}</p>
+                        </div>
+                    )}
+                    <Separator />
+                    <div className="space-y-2">
+                        <Button variant="outline" className="w-full justify-start" onClick={() => toast({ title: "Action Placeholder", description: "Refresh Connection logic to be implemented."})}>
+                           <Zap className="mr-2 h-4 w-4"/> Refresh Connection
+                        </Button>
+                        <Button variant="outline" className="w-full justify-start" onClick={() => toast({ title: "Action Placeholder", description: "View Activity Logs logic to be implemented."})}>
+                           <Eye className="mr-2 h-4 w-4"/> View Activity Logs
+                        </Button>
+                        {CHANNEL_TYPE_CATALOG.find(ct => ct.id === channelToManage.channelTypeId)?.usesWebhook && (
+                             <Button variant="outline" className="w-full justify-start" onClick={() => {setIsManageChannelDialogOpen(false); openViewWebhookDialog(channelToManage)}}>
+                                <LinkIcon className="mr-2 h-4 w-4"/> View Webhook Info
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            )}
+            <DialogFooter>
+                <DialogClose asChild><Button variant="outline" onClick={() => setIsManageChannelDialogOpen(false)}>Close</Button></DialogClose>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* View Webhook Info Dialog */}
       <Dialog open={isViewWebhookDialogOpen} onOpenChange={setIsViewWebhookDialogOpen}>
@@ -426,3 +483,4 @@ export default function ChannelConnectionsPage() {
     </ScrollArea>
   );
 }
+
