@@ -37,7 +37,11 @@ type Message = {
 };
 
 type ConversationStatus = "active" | "assigned" | "closed" | "archived";
+const CONVERSATION_STATUSES_ARRAY: ConversationStatus[] = ["active", "assigned", "closed", "archived"];
+
 type Channel = "whatsapp" | "messenger" | "instagram" | "web";
+const CHANNELS_ARRAY: Channel[] = ["whatsapp", "messenger", "instagram", "web"];
+
 
 interface Conversation {
   id: string;
@@ -57,7 +61,7 @@ const initialConversations: Conversation[] = [
   { id: "1", userName: "Alice Wonderland", lastMessageSnippet: "Thanks for your help! It was a very complicated issue but your support team managed to resolve it quickly.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female avatar", unreadCount: 0, timestamp: "10:30 AM", channel: "whatsapp", tags: ["vip", "order_issue"], status: "closed", assignedAgentName: "Agent Smith" },
   { id: "2", userName: "Bob The Builder", lastMessageSnippet: "Can I get a quote for building a full e-commerce platform with custom integrations?", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "male avatar", unreadCount: 2, timestamp: "11:15 AM", channel: "messenger", status: "active" },
   { id: "3", userName: "Charlie Brown", lastMessageSnippet: "Is this item in stock? I need it urgently for a special occasion.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "person avatar", unreadCount: 0, timestamp: "09:00 AM", channel: "instagram", tags: ["new_lead"], status: "assigned", assignedAgentName: "Jane Doe" },
-  { id: "4", userName: "Diana Prince", lastMessageSnippet: "My order hasn't arrived and the tracking number isn't working.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", unreadCount: 1, timestamp: "Yesterday", channel: "web", tags: ["urgent"], status: "active" },
+  { id: "4", userName: "Diana Prince", lastMessageSnippet: "My order hasn't arrived and the tracking number isn't working.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman face", unreadCount: 1, timestamp: "Yesterday", channel: "web", status: "active" },
   { id: "5", userName: "Edward Scissorhands", lastMessageSnippet: "Need help with pruning my extensive topiary collection. It's quite a delicate job.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "goth man", unreadCount: 0, timestamp: "2 days ago", channel: "whatsapp", status: "archived" },
   { id: "6", userName: "Fiona Gallagher", lastMessageSnippet: "Issue with web login, I keep getting an error message about invalid credentials.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman red hair", unreadCount: 3, timestamp: "11:30 AM", channel: "web", status: "active" },
   { id: "7", userName: "Gomez Addams", lastMessageSnippet: "Enquiry about new AI features advertised on your website. Cara mia is very interested.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "man suit", unreadCount: 0, timestamp: "10:00 AM", channel: "messenger", status: "assigned", assignedAgentName: "Agent Smith" },
@@ -117,7 +121,6 @@ const initialMessages: Record<string, Message[]> = {
   ]
 };
 
-const CHANNELS_ARRAY: Channel[] = ["whatsapp", "messenger", "instagram", "web"];
 type StatusFilterOptionValue = ConversationStatus | "all_active";
 
 const STATUS_FILTER_OPTIONS: { value: StatusFilterOptionValue; label: string }[] = [
@@ -145,12 +148,14 @@ export default function AgentWorkspacePage() {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
       setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
+      // Generate random days ago only when conversation changes
       setContactDaysAgo(Math.floor(Math.random() * 5) + 1);
     } else {
       setMessages([]);
-      setContactDaysAgo(null);
+      setContactDaysAgo(null); // Reset if no conversation is selected
     }
   }, [selectedConversationId]);
+
 
   const selectedConversation = useMemo(() => {
     return conversations.find(c => c.id === selectedConversationId);
@@ -168,11 +173,17 @@ export default function AgentWorkspacePage() {
     if (selectedChannelFilter !== "all") {
       filtered = filtered.filter(c => c.channel === selectedChannelFilter);
     }
-    return filtered.sort((a, b) => {
+    return filtered.sort((a, b) => { // Example sort: active first, then by unread, then by status order
+        if (a.status === 'active' && b.status !== 'active') return -1;
+        if (b.status === 'active' && a.status !== 'active') return 1;
+        if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+        if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
+        
         const statusOrder = { active: 1, assigned: 2, closed: 3, archived: 4 };
         if (statusOrder[a.status] !== statusOrder[b.status]) {
             return statusOrder[a.status] - statusOrder[b.status];
         }
+        // Fallback to timestamp or name if needed for more stable sorting
         return 0; 
     });
 
@@ -295,7 +306,7 @@ export default function AgentWorkspacePage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={activeStatusFilter} onValueChange={(value) => setActiveStatusFilter(value as StatusFilterOptionValue)}>
+             <Select value={activeStatusFilter} onValueChange={(value) => setActiveStatusFilter(value as StatusFilterOptionValue)}>
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
@@ -307,7 +318,8 @@ export default function AgentWorkspacePage() {
             </Select>
           </CardHeader>
           <ScrollArea className="flex-1">
-            <CardContent className="flex flex-col p-4 space-y-3">
+            <CardContent className="p-2">
+              <div className="space-y-2">
                 {displayedConversations.length === 0 && (
                     <div className="text-center text-muted-foreground p-4">
                     <Inbox className="mx-auto h-10 w-10 mb-2"/>
@@ -320,7 +332,7 @@ export default function AgentWorkspacePage() {
                     variant={selectedConversationId === conv.id ? "secondary" : "ghost"}
                     className={cn(
                         "w-full justify-start p-3 text-left overflow-hidden relative",
-                        "h-24 flex items-center gap-3" // Ensure flex and gap for direct children
+                        "h-24 flex items-center gap-3" 
                     )}
                     onClick={() => setSelectedConversationId(conv.id)}
                     >
@@ -330,18 +342,13 @@ export default function AgentWorkspacePage() {
                     </Avatar>
                     
                     <div className="flex-1 flex flex-col justify-start overflow-hidden min-w-0 h-full gap-0.5">
-                        {/* Row 1: User Name and Timestamp */}
                         <div className="flex justify-between items-center min-w-0">
                             <h3 className="font-semibold truncate min-w-0 leading-tight">{conv.userName}</h3>
                             <span className="text-xs text-muted-foreground flex-shrink-0 ml-2 leading-tight">{conv.timestamp}</span>
                         </div>
-
-                        {/* Row 2: Last Message Snippet */}
                         <p className="text-sm text-muted-foreground truncate min-w-0 leading-tight">
                             {conv.lastMessageSnippet}
                         </p>
-
-                        {/* Row 3: Badges (Pushed to bottom) */}
                         <div className="flex items-center mt-auto gap-1 flex-nowrap overflow-hidden">
                             <Badge variant="outline" className="text-xs capitalize flex-shrink-0">{conv.channel}</Badge>
                             {conv.status === "assigned" && conv.assignedAgentName && (
@@ -360,6 +367,7 @@ export default function AgentWorkspacePage() {
                     )}
                     </Button>
                 ))}
+              </div>
             </CardContent>
           </ScrollArea>
         </Card>
@@ -590,5 +598,6 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
+    
 
     
