@@ -14,10 +14,11 @@ import {
   FileText,
   Zap, 
   UserCircle,
-  Package, // For Products/Services
-  FileText as QuoteIcon, // Explicitly alias for Quotes if FileText is used elsewhere
-  ClipboardCheck, // For Tasks
-  Briefcase, // For Projects
+  Package, 
+  FileText as QuoteIcon, 
+  ClipboardCheck, 
+  Briefcase, 
+  Building, // For Tenant Settings
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -48,6 +49,7 @@ const settingsNavItems = [
   { href: "/settings/roles", label: "Users & Roles", icon: Users },
   { href: "/settings/channels", label: "Channel Connections", icon: Zap },
   { href: "/settings/sdk", label: "Website SDK", icon: Code2 },
+  { href: "/settings/tenant", label: "Tenant Settings", icon: Building },
 ];
 
 const helpNavItems = [
@@ -66,10 +68,10 @@ export function AppSidebarNav() {
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
           asChild
-          isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics", "/settings/profile"].includes(item.href) )}
+          isActive={pathname === item.href || (item.href !== "/" && !item.href.includes('/settings/') && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics"].includes(item.href)) || (item.href.includes('/settings/') && pathname === item.href) }
           tooltip={item.label}
           className={cn(
-             (pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics", "/settings/profile"].includes(item.href) )) && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+             (pathname === item.href || (item.href !== "/" && !item.href.includes('/settings/') && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics"].includes(item.href)) || (item.href.includes('/settings/') && pathname === item.href) ) && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
           )}
         >
           <Link href={item.href}>

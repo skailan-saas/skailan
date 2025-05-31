@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -17,11 +18,11 @@ body {
     --popover: 0 0% 100%;
     --popover-foreground: 220 10% 15%;
 
-    --primary: 197 71% 52%; /* Vibrant Blue #29ABE2 */
-    --primary-foreground: 0 0% 100%; /* White text on blue */
+    --primary: hsl(var(--brand-primary, 197 71% 52%)); /* Vibrant Blue #29ABE2 or tenant specific */
+    --primary-foreground: hsl(var(--brand-primary-foreground, 0 0% 100%)); /* White text on blue or tenant specific */
 
-    --secondary: 220 10% 90%; /* Slightly darker gray for secondary elements */
-    --secondary-foreground: 197 71% 52%; /* Blue text on secondary */
+    --secondary: hsl(var(--brand-secondary, 220 10% 90%)); /* Slightly darker gray or tenant specific */
+    --secondary-foreground: hsl(var(--brand-secondary-foreground, var(--primary))); /* Blue text on secondary or tenant specific */
 
     --muted: 220 10% 85%;
     --muted-foreground: 220 10% 40%;
@@ -34,7 +35,7 @@ body {
 
     --border: 220 10% 80%;
     --input: 220 10% 88%;
-    --ring: 197 71% 52%; /* Blue for focus rings */
+    --ring: hsl(var(--brand-primary, 197 71% 52%)); /* Blue for focus rings or tenant specific */
     
     --chart-1: 197 71% 52%; /* Blue */
     --chart-2: 98 70% 56%;  /* Green */
@@ -47,12 +48,18 @@ body {
     /* Sidebar specific theme */
     --sidebar-background: 220 10% 12%; /* Darker background for sidebar */
     --sidebar-foreground: 0 0% 95%; /* Light text for sidebar */
-    --sidebar-primary: 197 71% 52%; /* Blue for active items in sidebar */
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: hsl(var(--brand-primary, 197 71% 52%)); /* Blue for active items in sidebar or tenant specific */
+    --sidebar-primary-foreground: hsl(var(--brand-primary-foreground, 0 0% 100%));
     --sidebar-accent: 220 10% 20%; /* Hover/accent for sidebar items */
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 220 10% 25%;
-    --sidebar-ring: 197 71% 52%;
+    --sidebar-ring: hsl(var(--brand-primary, 197 71% 52%));
+
+    /* Tenant specific brand colors (defaults provided) */
+    --brand-primary: 197 71% 52%;
+    --brand-primary-foreground: 0 0% 100%;
+    --brand-secondary: 220 10% 90%;
+    --brand-secondary-foreground: 197 71% 52%;
   }
 
   .dark {
@@ -65,11 +72,11 @@ body {
     --popover: 220 10% 15%;
     --popover-foreground: 0 0% 95%;
 
-    --primary: 197 71% 52%;
-    --primary-foreground: 0 0% 100%;
+    --primary: hsl(var(--brand-primary, 197 71% 52%));
+    --primary-foreground: hsl(var(--brand-primary-foreground, 0 0% 100%));
 
-    --secondary: 220 10% 25%;
-    --secondary-foreground: 0 0% 95%;
+    --secondary: hsl(var(--brand-secondary, 220 10% 25%));
+    --secondary-foreground: hsl(var(--brand-secondary-foreground, 0 0% 95%));
 
     --muted: 220 10% 20%;
     --muted-foreground: 0 0% 60%;
@@ -82,7 +89,7 @@ body {
 
     --border: 220 10% 25%;
     --input: 220 10% 22%;
-    --ring: 197 71% 52%;
+    --ring: hsl(var(--brand-primary, 197 71% 52%));
     
     --chart-1: 197 71% 52%;
     --chart-2: 98 70% 56%;
@@ -93,12 +100,19 @@ body {
     /* Dark Sidebar specific theme */
     --sidebar-background: 220 10% 8%;
     --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 197 71% 52%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: hsl(var(--brand-primary, 197 71% 52%));
+    --sidebar-primary-foreground: hsl(var(--brand-primary-foreground, 0 0% 100%));
     --sidebar-accent: 220 10% 15%;
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 220 10% 18%;
-    --sidebar-ring: 197 71% 52%;
+    --sidebar-ring: hsl(var(--brand-primary, 197 71% 52%));
+
+    /* Tenant specific brand colors (dark mode defaults) */
+    /* Ensure these are distinct or derived if needed for dark mode */
+    --brand-primary: 197 71% 52%; 
+    --brand-primary-foreground: 0 0% 100%;
+    --brand-secondary: 220 10% 25%;
+    --brand-secondary-foreground: 0 0% 95%;
   }
 }
 
@@ -151,13 +165,3 @@ body {
       background-color: transparent !important; /* Remove colored backgrounds */
   }
 }
-
-/* Custom utility class for react-beautiful-dnd draggable items - REMOVED as D&D is paused/changed */
-/*
-.rbd-draggable-card {
-  user-select: none; 
-  -webkit-user-select: none; 
-  -moz-user-select: none; 
-  -ms-user-select: none; 
-}
-*/
