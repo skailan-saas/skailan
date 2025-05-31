@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit2, Mail, MessageSquare, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Archive as ArchiveIcon, XCircle, UserPlus, Inbox, GripVertical } from "lucide-react";
+import { Edit2, Mail, MessageSquare, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect, useMemo, type FC } from "react";
 import { summarizeConversation, suggestResponse } from "@/ai/flows";
@@ -39,7 +39,7 @@ type Message = {
 type ConversationStatus = "active" | "assigned" | "closed" | "archived";
 type Channel = "whatsapp" | "messenger" | "instagram" | "web";
 
-type Conversation = {
+interface Conversation {
   id: string;
   userName: string;
   lastMessageSnippet: string;
@@ -51,7 +51,7 @@ type Conversation = {
   tags?: string[];
   status: ConversationStatus;
   assignedAgentName?: string;
-};
+}
 
 const initialConversations: Conversation[] = [
   { id: "1", userName: "Alice Wonderland", lastMessageSnippet: "Thanks for your help! It was a very complicated issue but your support team managed to resolve it quickly.", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female avatar", unreadCount: 0, timestamp: "10:30 AM", channel: "whatsapp", tags: ["vip", "order_issue"], status: "closed", assignedAgentName: "Agent Smith" },
@@ -145,10 +145,11 @@ export default function AgentWorkspacePage() {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
       setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
-      setContactDaysAgo(Math.floor(Math.random() * 5) + 1); 
+      // Generate random contact days when a conversation is selected
+      setContactDaysAgo(Math.floor(Math.random() * 5) + 1);
     } else {
       setMessages([]);
-      setContactDaysAgo(null);
+      setContactDaysAgo(null); // Clear if no conversation selected
     }
   }, [selectedConversationId]);
 
@@ -168,14 +169,11 @@ export default function AgentWorkspacePage() {
     if (selectedChannelFilter !== "all") {
       filtered = filtered.filter(c => c.channel === selectedChannelFilter);
     }
-    // Simple sort: active/assigned first, then by recency (assuming timestamp could be parsed)
-    // This is a basic sort, real-world would need proper date parsing and comparison
     return filtered.sort((a, b) => {
         const statusOrder = { active: 1, assigned: 2, closed: 3, archived: 4 };
         if (statusOrder[a.status] !== statusOrder[b.status]) {
             return statusOrder[a.status] - statusOrder[b.status];
         }
-        // Fallback sort or use actual timestamps if available
         return 0; 
     });
 
@@ -234,7 +232,7 @@ export default function AgentWorkspacePage() {
         const updatedConv: Conversation = { ...conv, status };
         if (agentName !== undefined) { 
           updatedConv.assignedAgentName = agentName || undefined;
-        } else if (status !== "assigned") { // Clear agent if not assigning
+        } else if (status !== "assigned") { 
             updatedConv.assignedAgentName = undefined;
         }
         return updatedConv;
@@ -245,7 +243,7 @@ export default function AgentWorkspacePage() {
 
   const handleAssignAction = () => {
     if (!selectedConversationId) return;
-    const demoAgent = "Agent Demo"; // Placeholder
+    const demoAgent = "Agent Demo"; 
     updateConversationStatus(selectedConversationId, "assigned", demoAgent);
     toast({ title: "Conversation Assigned", description: `Assigned to ${demoAgent}.` });
   };
@@ -262,12 +260,9 @@ export default function AgentWorkspacePage() {
     updateConversationStatus(selectedConversationId, "archived");
     toast({ title: "Conversation Archived" });
     
-    // Select next non-archived conversation or null
     const nextConvIndex = conversations.findIndex(c => c.id !== selectedConversationId && c.status !== 'archived');
     setSelectedConversationId(conversations[nextConvIndex]?.id || null);
 
-    // If the current filter was for the status that just got archived (and it's not 'archived' or 'all_active' filter)
-    // then reset filter to 'all_active' to avoid an empty list.
     if (activeStatusFilter === oldStatus && activeStatusFilter !== "all_active" && activeStatusFilter !== "archived") {
         setActiveStatusFilter("all_active");
     }
@@ -326,7 +321,7 @@ export default function AgentWorkspacePage() {
                     key={conv.id}
                     variant={selectedConversationId === conv.id ? "secondary" : "ghost"}
                     className={cn(
-                        "w-full justify-start p-3 text-left overflow-hidden relative",
+                        "w-full flex items-center justify-start p-3 text-left overflow-hidden relative",
                         "h-24" 
                     )}
                     onClick={() => setSelectedConversationId(conv.id)}
@@ -335,16 +330,22 @@ export default function AgentWorkspacePage() {
                         <AvatarImage src={conv.avatarUrl} alt={conv.userName} />
                         <AvatarFallback>{conv.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 overflow-hidden min-w-0"> {/* Added min-w-0 */}
-                        <div className="flex justify-between items-center">
-                        <h3 className="font-semibold truncate min-w-0">{conv.userName}</h3> {/* Added min-w-0 */}
-                        <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{conv.timestamp}</span>
+                    
+                    <div className="flex-1 flex flex-col justify-start overflow-hidden min-w-0 h-full gap-0.5">
+                        {/* Row 1: User Name and Timestamp */}
+                        <div className="flex justify-between items-center min-w-0">
+                            <h3 className="font-semibold truncate min-w-0 leading-tight">{conv.userName}</h3>
+                            <span className="text-xs text-muted-foreground flex-shrink-0 ml-2 leading-tight">{conv.timestamp}</span>
                         </div>
-                        <p className="text-sm text-muted-foreground truncate min-w-0">{conv.lastMessageSnippet}</p> {/* Added min-w-0 */}
-                        <div className="flex items-center mt-1 gap-1 flex-nowrap overflow-hidden">
-                            <Badge variant="outline" className="text-xs capitalize flex-shrink-0">
-                                {conv.channel}
-                            </Badge>
+
+                        {/* Row 2: Last Message Snippet */}
+                        <p className="text-sm text-muted-foreground truncate min-w-0 leading-tight">
+                            {conv.lastMessageSnippet}
+                        </p>
+
+                        {/* Row 3: Badges (Pushed to bottom) */}
+                        <div className="flex items-center gap-1 flex-nowrap overflow-hidden mt-auto">
+                            <Badge variant="outline" className="text-xs capitalize flex-shrink-0">{conv.channel}</Badge>
                             {conv.status === "assigned" && conv.assignedAgentName && (
                                 <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0 truncate">To: {conv.assignedAgentName}</Badge>
                             )}
@@ -353,6 +354,7 @@ export default function AgentWorkspacePage() {
                             )}
                         </div>
                     </div>
+
                     {conv.unreadCount > 0 && conv.status !== "archived" && (
                         <Badge variant="default" className="absolute top-3 right-3 bg-primary text-primary-foreground">
                             {conv.unreadCount}
@@ -373,13 +375,13 @@ export default function AgentWorkspacePage() {
                 <AvatarImage src={selectedConversation.avatarUrl} alt={selectedConversation.userName} />
                 <AvatarFallback>{selectedConversation.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0"> {/* Added min-w-0 */}
-                <h2 className="font-semibold text-lg truncate">{selectedConversation.userName}</h2> {/* Added truncate */}
-                <span className="text-xs text-muted-foreground capitalize truncate"> {/* Added truncate */}
+              <div className="flex-1 min-w-0">
+                <h2 className="font-semibold text-lg truncate">{selectedConversation.userName}</h2>
+                <span className="text-xs text-muted-foreground capitalize truncate">
                   {selectedConversation.channel} - {selectedConversation.status === "assigned" && selectedConversation.assignedAgentName ? `Asignada a ${selectedConversation.assignedAgentName}` : selectedConversation.status}
                 </span>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0"> {/* Added flex-shrink-0 */}
+              <div className="flex items-center gap-1 flex-shrink-0">
                 {selectedConversation.status !== "archived" && (
                   <>
                     <Tooltip>
@@ -514,15 +516,15 @@ export default function AgentWorkspacePage() {
           <>
           <CardHeader className="p-4 border-b">
             <div className="flex items-center gap-3">
-               <Avatar className="h-16 w-16 flex-shrink-0" data-ai-hint={selectedConversation.dataAiHint || "avatar person"}> {/* Added flex-shrink-0 */}
+               <Avatar className="h-16 w-16 flex-shrink-0" data-ai-hint={selectedConversation.dataAiHint || "avatar person"}>
                 <AvatarImage src={selectedConversation.avatarUrl} alt={selectedConversation.userName}/>
                 <AvatarFallback className="text-2xl">{selectedConversation.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0"> {/* Added min-w-0 */}
-                <CardTitle className="text-xl truncate">{selectedConversation.userName}</CardTitle> {/* Added truncate */}
-                <span className="text-sm text-muted-foreground truncate">Lead Score: 85 (Demo)</span> {/* Added truncate */}
+              <div className="flex-1 min-w-0">
+                <CardTitle className="text-xl truncate">{selectedConversation.userName}</CardTitle>
+                <span className="text-sm text-muted-foreground truncate">Lead Score: 85 (Demo)</span>
               </div>
-              <Button variant="ghost" size="icon" className="ml-auto flex-shrink-0"><Edit2 className="h-5 w-5" /></Button> {/* Added flex-shrink-0 */}
+              <Button variant="ghost" size="icon" className="ml-auto flex-shrink-0"><Edit2 className="h-5 w-5" /></Button>
             </div>
              <div className="mt-3 space-y-1">
                 <div className="flex justify-between text-sm">
@@ -550,8 +552,8 @@ export default function AgentWorkspacePage() {
               <div>
                 <h4 className="font-semibold text-sm mb-1">Contact Info</h4>
                 <div className="space-y-1 text-sm text-muted-foreground">
-                  <p className="flex items-center truncate"><Mail className="h-4 w-4 mr-2 text-sky-500 flex-shrink-0" /> {selectedConversation.userName.toLowerCase().replace(/\s+/g, ".")}@example.com</p> {/* Added truncate and flex-shrink-0 */}
-                  <p className="flex items-center truncate"><Phone className="h-4 w-4 mr-2 text-green-500 flex-shrink-0" /> +1 (555) 123-4567</p> {/* Added truncate and flex-shrink-0 */}
+                  <p className="flex items-center truncate"><Mail className="h-4 w-4 mr-2 text-sky-500 flex-shrink-0" /> {selectedConversation.userName.toLowerCase().replace(/\s+/g, ".")}@example.com</p>
+                  <p className="flex items-center truncate"><Phone className="h-4 w-4 mr-2 text-green-500 flex-shrink-0" /> +1 (555) 123-4567</p>
                 </div>
               </div>
               <Separator />
@@ -591,3 +593,6 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
+
+
+    
