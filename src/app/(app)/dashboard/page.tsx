@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit2, Mail, MessageSquare, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Star, Trash2, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
+import { Edit2, Mail, MessageSquare, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect, useMemo, type FC } from "react";
 import { summarizeConversation, suggestResponse } from "@/ai/flows";
@@ -117,7 +117,7 @@ const initialMessages: Record<string, Message[]> = {
   ]
 };
 
-const CHANNELS: Channel[] = ["whatsapp", "messenger", "instagram", "web"];
+const CHANNELS_ARRAY: Channel[] = ["whatsapp", "messenger", "instagram", "web"]; // Renamed to avoid conflict
 type StatusFilterOptionValue = ConversationStatus | "all_active";
 
 const STATUS_FILTER_OPTIONS: { value: StatusFilterOptionValue; label: string }[] = [
@@ -145,10 +145,11 @@ export default function AgentWorkspacePage() {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
       setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
+      // Generate random days ago when conversation changes
       setContactDaysAgo(Math.floor(Math.random() * 5) + 1); 
     } else {
       setMessages([]);
-      setContactDaysAgo(null); 
+      setContactDaysAgo(null); // Reset if no conversation is selected
     }
   }, [selectedConversationId]);
 
@@ -161,7 +162,7 @@ export default function AgentWorkspacePage() {
 
     if (activeStatusFilter === "all_active") {
       filtered = conversations.filter(c => c.status !== 'archived');
-    } else { // This covers "active", "assigned", "closed", "archived"
+    } else { 
       filtered = conversations.filter(c => c.status === activeStatusFilter);
     }
 
@@ -280,7 +281,7 @@ export default function AgentWorkspacePage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Channels</SelectItem>
-                {CHANNELS.map(channel => (
+                {CHANNELS_ARRAY.map(channel => (
                   <SelectItem key={channel} value={channel} className="capitalize">
                     {channel.charAt(0).toUpperCase() + channel.slice(1)}
                   </SelectItem>
@@ -311,8 +312,8 @@ export default function AgentWorkspacePage() {
                   key={conv.id}
                   variant={selectedConversationId === conv.id ? "secondary" : "ghost"}
                   className={cn(
-                    "w-full justify-start p-3 text-left overflow-hidden",
-                    "h-24" // Fixed height for the button
+                    "w-full justify-start p-3 text-left overflow-hidden relative", // Added relative
+                    "h-24" // Fixed height
                   )}
                   onClick={() => setSelectedConversationId(conv.id)}
                 >
@@ -326,7 +327,7 @@ export default function AgentWorkspacePage() {
                       <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{conv.timestamp}</span>
                     </div>
                     <p className="text-sm text-muted-foreground truncate">{conv.lastMessageSnippet}</p>
-                     <div className="flex items-center justify-between mt-1 gap-1 flex-nowrap overflow-hidden">
+                     <div className="flex items-center mt-1 gap-1 flex-nowrap overflow-hidden"> {/* Removed justify-between */}
                         <Badge variant="outline" className="text-xs capitalize flex-shrink-0">
                             {conv.channel}
                         </Badge>
@@ -339,7 +340,9 @@ export default function AgentWorkspacePage() {
                     </div>
                   </div>
                   {conv.unreadCount > 0 && conv.status !== "archived" && (
-                    <Badge variant="default" className="ml-2 bg-primary text-primary-foreground self-start mt-1 flex-shrink-0">{conv.unreadCount}</Badge>
+                    <Badge variant="default" className="absolute top-3 right-3 bg-primary text-primary-foreground"> {/* Positioned absolutely */}
+                        {conv.unreadCount}
+                    </Badge>
                   )}
                 </Button>
               ))}
@@ -573,3 +576,5 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
+
+    
