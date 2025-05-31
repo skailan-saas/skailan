@@ -9,110 +9,103 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Core Tenant and User Models
+// Authentication & Authorization
 model Tenant {
-  id                  String              @id @default(uuid())
-  name                String
-  subdomain           String              @unique
-  logoUrl             String?
-  primaryColor        String?
-  secondaryColor      String?
-  isActive            Boolean             @default(true)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  deletedAt           DateTime?
-  ownerId             String? // ID del User (de auth.users) que es el propietario original
+  id          String     @id @default(uuid())
+  name        String
+  subdomain   String     @unique
+  ownerId     String // Reference to a User ID (from Supabase Auth or a User model)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime? // For soft delete of a tenant
 
-  users               TenantUser[]
-  roles               Role[]
-  permissions         Permission[]
-  notifications       Notification[]
-  conversations       Conversation[]
-  messages            Message[]
-  leads               Lead[]
-  tags                Tag[]
-  contacts            Contact[]
-  opportunities       Opportunity[]
-  products            Product[]
-  quotes              Quote[]
-  tasks               Task[]
-  projects            Project[]
-  chatbotFlows        ChatbotFlow[]
-  chatMessages        ChatMessage[]
-  rolePermissions     RolePermission[] // Relación con la tabla de unión
-  projectTeamMembers  ProjectTeamMember[]
-  opportunityProducts OpportunityProduct[]
-  quoteLineItems      QuoteLineItem[]
-  taskTags            TaskTag[]
-  projectTags         ProjectTag[]
-  leadTags            LeadTag[]
+  users            TenantUser[]
+  roles            Role[]
+  permissions      Permission[]
+  conversations    Conversation[]
+  leads            Lead[]
+  companies        Company[]
+  opportunities    Opportunity[]
+  products         Product[]
+  quotes           Quote[]
+  tasks            Task[]
+  projects         Project[]
+  chatbotFlows     ChatbotFlow[]
+  tags             Tag[]
+  leadTags         LeadTag[] // Added for explicit relation
+  taskTags         TaskTag[] // Added for explicit relation
+  projectTags      ProjectTag[] // Added for explicit relation
+  rolePermissions  RolePermission[]
+  projectTeamMembers ProjectTeamMember[]
+  notifications    Notification[]
 }
 
 model TenantUser {
-  id                      String              @id @default(uuid())
-  authUserId              String              @unique // Foreign key to Supabase auth.users.id
-  tenantId                String
-  roleId                  String
-  fullName                String?
-  email                   String              @unique // Ensure email is unique across TenantUsers for invites, etc.
-  avatarUrl               String?
-  isActive                Boolean             @default(true)
-  lastLogin               DateTime?
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-  deletedAt               DateTime?
+  id                String     @id @default(uuid())
+  tenantId          String
+  authUserId        String // ID from Supabase Auth User
+  email             String // Email from Supabase Auth User, kept in sync
+  roleId            String
+  fullName          String?
+  avatarUrl         String?
+  isActive          Boolean    @default(true)
+  lastLogin         DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
 
-  tenant                  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  role                    Role                @relation(fields: [roleId, tenantId], references: [id, tenantId], onDelete: Restrict) // Un usuario tiene un rol dentro de un tenant
-  userSessions            UserSession[]
-  notifications           Notification[]      @relation("NotificationToUser")
-  assignedConversations   Conversation[]      @relation("AssignedConversationToUser")
-  assignedLeads           Lead[]              @relation("LeadAssignedToUser")
-  createdOpportunities    Opportunity[]       @relation("OpportunityCreator")
-  assignedOpportunities   Opportunity[]       @relation("OpportunityAssignedToUser")
-  createdQuotes           Quote[]             @relation("QuoteCreator")
-  assignedTasks           Task[]              @relation("TaskAssignedToUser")
-  ProjectTeamMember       ProjectTeamMember[]
+  tenant            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role              Role       @relation(fields: [roleId], references: [id]) // A user has one role within this tenant
+  assignedLeads     Lead[]     @relation("LeadAssignedToUser")
+  assignedTasks     Task[]     @relation("TaskAssignedToUser")
+  projectMembership ProjectTeamMember[]
+  notifications     Notification[] @relation("NotificationToUser")
+
+  @@unique([tenantId, authUserId])
+  @@unique([tenantId, email]) // Email should be unique within a tenant
+  @@index([tenantId])
+  @@index([authUserId])
 }
 
 model Role {
   id          String   @id @default(uuid())
   tenantId    String
-  name        String   // e.g., "Administrator", "Agent", "Supervisor"
+  name        String // e.g., "Administrator", "Agent Supervisor", "Agent"
   description String?
-  isSystemRole Boolean  @default(false) // True for predefined system roles, false for custom tenant roles
+  isSystemRole Boolean  @default(false) // True for predefined roles, false for custom roles
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   deletedAt   DateTime?
 
-  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  users            TenantUser[]       // Un rol puede tener muchos usuarios
-  rolePermissions  RolePermission[]   // Relación con la tabla de unión
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users           TenantUser[] // Users having this role
+  rolePermissions RolePermission[]
 
-  @@unique([tenantId, name]) // Role name must be unique within a tenant
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model Permission {
   id          String   @id @default(uuid())
-  tenantId    String?  // Permisos pueden ser globales (tenantId=null) o específicos del tenant
-  action      String   // e.g., "create", "read", "update", "delete", "manage"
-  resource    String   // e.g., "Lead", "Conversation", "User", "Billing"
+  // tenantId    String? // Permissions can be global (null tenantId) or tenant-specific
+  name        String   @unique // e.g., "manage_users", "view_conversations_all"
   description String?
+  category    String?  // e.g., "Users", "Conversations", "CRM"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
+  deletedAt   DateTime? // System permissions might not be soft-deletable
 
-  tenant            Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  rolePermissions   RolePermission[]   // Relación con la tabla de unión
+  // tenant          Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
 
-  @@unique([action, resource, tenantId])
+  // @@index([tenantId])
 }
 
 // Junction table for Role and Permission (Many-to-Many)
 model RolePermission {
   roleId       String
   permissionId String
-  tenantId     String   // To scope the RolePermission assignment to a tenant
+  tenantId     String // To scope this assignment to a tenant
   assignedAt   DateTime @default(now())
 
   role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
@@ -120,253 +113,110 @@ model RolePermission {
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId, tenantId])
-}
-
-model UserSession {
-  id           String   @id @default(uuid())
-  userId       String
-  tenantUserId String   // ID del TenantUser
-  token        String   @unique
-  expiresAt    DateTime
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
-
-  user TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
 }
 
 model Notification {
   id          String    @id @default(uuid())
   tenantId    String
-  userId      String    // TenantUser ID
+  userId      String? // Recipient User ID (TenantUser ID)
+  type        String    // e.g., 'new_lead', 'task_due', 'system_update'
   title       String
   message     String
+  link        String?   // Link to the relevant item
   isRead      Boolean   @default(false)
-  link        String?   // Optional link to navigate to
-  type        String?   // e.g., "new_lead", "task_reminder", "system_update"
-  icon        String?   // Optional icon identifier
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  user   TenantUser @relation("NotificationToUser", fields: [userId], references: [id], onDelete: Cascade)
-  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   TenantUser? @relation("NotificationToUser", fields: [userId], references: [id], onDelete:SetNull)
+
+  @@index([tenantId, userId, isRead])
 }
 
-// Communication Models
-enum ChannelType {
-  WHATSAPP
-  MESSENGER
-  INSTAGRAM
-  WEBCHAT // Renombrado de WEB_CHAT
-  TELEGRAM
-  API
-}
 
-model ConnectedChannel {
-  id            String      @id @default(uuid())
-  tenantId      String
-  instanceName  String      // e.g., "Sales WhatsApp", "Support Web Chat"
-  channelType   ChannelType
-  status        String      // e.g., "connected", "disconnected", "needs_attention", "pending_webhook"
-  webhookUrl    String?     @unique
-  verifyToken   String?
-  details       Json?       // Store specific config like API keys, Page IDs, Phone Number IDs
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  deletedAt     DateTime?
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-}
-
-enum ConversationStatus {
-  ACTIVE
-  ASSIGNED
-  CLOSED
-  ARCHIVED
-  // Valores antiguos como PENDING, RESOLVED, BOT, AGENT se eliminarán
-  // Asegúrate de que no haya datos en la BD con esos valores antes de migrar
-}
-
+// Communication Module
 model Conversation {
-  id                 String             @id @default(uuid())
-  channel            ChannelType
-  channelSpecificId  String?            // ID de la conversación en el canal específico (e.g., WhatsApp chat ID)
-  userName           String             // Nombre del contacto/lead
-  lastMessageSnippet String?
-  avatarUrl          String?
-  unreadCount        Int                @default(0)
-  lastMessageAt      DateTime           @default(now())
-  status             ConversationStatus @default(ACTIVE)
-  assignedToUserId   String?
-  tenantId           String
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  deletedAt          DateTime?
+  id                String   @id @default(uuid())
+  tenantId          String
+  channel           String   // e.g., "whatsapp", "messenger", "web"
+  channelSpecificId String?  // ID from the original channel (e.g., WhatsApp chat ID)
+  contactId         String?  // Link to CRM Contact if identified
+  lastMessageAt     DateTime @default(now())
+  status            String   // e.g., "active", "assigned", "closed", "archived"
+  assignedToUserId  String?  // TenantUser ID
+  unreadCount       Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
 
-  assignedTo         TenantUser?      @relation("AssignedConversationToUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
-  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  messages           Message[]
-  tags               ConversationTag[]
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact   Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  // assignedTo TenantUser? @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  messages  Message[]
 
   @@unique([tenantId, channel, channelSpecificId])
-}
-
-enum MessageType {
-  TEXT
-  IMAGE
-  PRODUCT
-  INTERACTIVE // Para botones y listas. Se eliminan BUTTONS, LIST
-  SYSTEM      // Mensajes generados por el sistema
-  FILE
-  AUDIO
-  VIDEO
-  LOCATION
-  CONTACT
-  TEMPLATE
-}
-
-enum MessageSender {
-  USER
-  AGENT
-  BOT
-  SYSTEM
+  @@index([tenantId, status, lastMessageAt])
 }
 
 model Message {
-  id              String        @id @default(uuid())
-  conversationId  String
-  sender          MessageSender
-  senderId        String?       // ID del TenantUser si sender es AGENT o BOT, o ID del usuario externo
-  content         String?       // Text content
-  type            MessageType
-  timestamp       DateTime      @default(now())
-  imageUrl        String?
-  productName     String?
-  productPrice    String?
-  productDescription String?
-  buttons         Json?         // Store button structure as JSON
-  listItems       Json?         // Store list items structure as JSON
-  metadata        Json?         // Para cualquier info adicional, e.g., message_id del proveedor
-  isReadByAgent   Boolean       @default(false)
-  tenantId        String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  deletedAt       DateTime?
+  id             String   @id @default(uuid())
+  conversationId String
+  tenantId       String   // Denormalized for easier querying per tenant if needed
+  senderType     String   // "user", "agent", "system", "bot"
+  senderId       String?  // TenantUser ID if agent/bot, Contact ID if user
+  messageType    String   // "text", "image", "file", "template", "interactive"
+  content        Json     // For text, or structured content like buttons, carousels
+  timestamp      DateTime @default(now())
+  isReadByAgent  Boolean  @default(false)
+  channelInfo    Json?    // Original message ID from channel, etc.
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, timestamp])
+  @@index([tenantId])
 }
 
-// CRM Models
-enum LeadSource {
-  WHATSAPP
-  WEBCHAT // Renombrado de WEB_CHAT
-  MESSENGER
-  INSTAGRAM
-  MANUAL
-  REFERRAL
-  API
-  FORM
-  EMAIL
-}
 
-enum LeadStatus {
-  NEW
-  CONTACTED
-  QUALIFIED
-  PROPOSAL
-  NEGOTIATION
-  CONVERTED // CONVERTED_TO_OPPORTUNITY
-  CLOSED_WON
-  CLOSED_LOST
-  UNQUALIFIED
-}
-
+// CRM Module
 model Lead {
-  id               String      @id @default(uuid())
-  tenantId         String
-  name             String
-  email            String?     @unique // Email debe ser único por tenant para evitar duplicados directos
-  phone            String?
-  companyName      String?
-  source           LeadSource
-  status           LeadStatus  @default(NEW)
-  assignedToUserId String?
-  lastContacted    DateTime?
-  notes            String?
-  potentialValue   Float?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  deletedAt        DateTime?
+  id                String     @id @default(uuid())
+  tenantId          String
+  name              String
+  email             String?
+  phone             String?
+  source            LeadSource
+  status            LeadStatus
+  notes             String?
+  companyId         String?
+  assignedToUserId  String?    // To TenantUser
+  opportunityId     String?    // If converted
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
 
-  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  assignedTo       TenantUser?   @relation("LeadAssignedToUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company          Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  assignedTo       TenantUser?  @relation("LeadAssignedToUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   tags             LeadTag[]
-  opportunities    Opportunity[] // Un lead puede convertirse en una o más oportunidades
-  contacts         Contact[]     // Un lead puede tener múltiples puntos de contacto
-}
+  quotes           Quote[] // A lead can have multiple quotes
+  chatbotFlowState Json? // Store current state if lead is in a chatbot flow
 
-model Tag {
-  id        String   @id @default(uuid())
-  tenantId  String
-  name      String   // Tag name, e.g., "vip", "follow-up", "product_x_interest"
-  color     String?  // Hex color for the tag, e.g., "#FF5733"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
-
-  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  leadTags      LeadTag[]
-  taskTags      TaskTag[]
-  projectTags   ProjectTag[]
-  conversationTags ConversationTag[]
-
-  @@unique([tenantId, name])
-}
-
-model LeadTag {
-  leadId    String
-  tagId     String
-  assignedAt DateTime @default(now())
-
-  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([leadId, tagId])
-}
-
-model Contact {
-  id            String   @id @default(uuid())
-  tenantId      String
-  leadId        String?  // Opcional, si el contacto se originó de un lead
-  companyId     String?  // Opcional, si el contacto está asociado a una empresa
-  firstName     String
-  lastName      String?
-  email         String?  @unique
-  phonePrimary  String?
-  phoneOther    String?
-  jobTitle      String?
-  addressStreet String?
-  addressCity   String?
-  addressState  String?
-  addressPostalCode String?
-  addressCountry String?
-  description   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  deletedAt     DateTime?
-
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lead    Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  @@unique([tenantId, email]) // Email is unique per tenant
+  @@index([tenantId])
+  // @@index([email]) // Replaced by compound unique index
 }
 
 model Company {
-  id                String   @id @default(uuid())
+  id                String     @id @default(uuid())
   tenantId          String
   name              String
-  email             String?  @unique // Company general email
+  email             String?
   phone             String?
   website           String?
   addressStreet     String?
@@ -378,131 +228,197 @@ model Company {
   industry          String?
   annualRevenue     Float?
   numberOfEmployees Int?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
   deletedAt         DateTime?
 
   tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contacts  Contact[] // Una empresa puede tener muchos contactos
-  opportunities Opportunity[] // Una empresa puede tener muchas oportunidades
+  contacts  Contact[]
+  leads     Lead[]
+  opportunities Opportunity[]
+
+  @@unique([tenantId, email]) // Email is unique per tenant if not null
+  @@index([tenantId])
+  @@index([tenantId, name]) // If name should be unique per tenant
 }
 
-enum OpportunityStatus {
-  QUALIFICATION
-  PROPOSAL
-  NEGOTIATION
-  CLOSED_WON
-  CLOSED_LOST
-  ON_HOLD
+model Tag {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  color     String? // e.g., hex code for UI
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadTags   LeadTag[]
+  taskTags   TaskTag[]
+  projectTags ProjectTag[]
+
+  @@unique([tenantId, name]) // Tag name is unique per tenant
+  @@index([tenantId])
+}
+
+// Junction table for Lead and Tag
+model LeadTag {
+  leadId    String
+  tagId     String
+  tenantId  String
+  assignedAt DateTime @default(now())
+
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: NoAction, map: "LeadTag_tenantId_fkey_noaction") // Avoid multiple cascade paths
+
+  @@id([leadId, tagId, tenantId])
+  @@index([tenantId])
+}
+
+model Contact {
+  id               String    @id @default(uuid())
+  tenantId         String
+  firstName        String
+  lastName         String?
+  email            String?   @unique // Should this be unique per tenant?
+  phone            String?
+  companyId        String?
+  roleInCompany    String?
+  lastContacted    DateTime?
+  leadSource       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company         Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  opportunities   Opportunity[]
+  // conversations Conversation[] // A contact can have multiple conversations
+
+  @@unique([tenantId, email]) // Email is unique per tenant if not null
+  @@index([tenantId])
 }
 
 model Opportunity {
-  id               String            @id @default(uuid())
-  tenantId         String
-  name             String            // e.g., "Website Redesign for Acme Corp"
-  leadId           String?           // Si se originó de un lead
-  companyId        String?           // Empresa asociada
-  status           OpportunityStatus @default(QUALIFICATION)
-  estimatedValue   Float?
-  closeDate        DateTime?         // Expected close date
-  probability      Float?            // 0.0 to 1.0
-  description      String?
-  createdById      String
-  assignedToUserId String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  deletedAt        DateTime?
+  id                 String            @id @default(uuid())
+  tenantId           String
+  name               String
+  companyId          String?
+  contactId          String?           // Primary contact for the opportunity
+  stageId            String            // Link to OpportunityStage
+  status             OpportunityStatus // e.g., OPEN, WON, LOST, ON_HOLD
+  amount             Float?
+  probability        Float?            // 0.0 to 1.0
+  expectedCloseDate  DateTime?
+  actualCloseDate    DateTime?
+  description        String?
+  assignedToUserId   String?           // TenantUser ID
+  leadSource         String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
 
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lead                  Lead?                  @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  company               Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  createdBy             TenantUser             @relation("OpportunityCreator", fields: [createdById], references: [id], onDelete:Restrict)
-  assignedTo            TenantUser?            @relation("OpportunityAssignedToUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
-  opportunityProducts   OpportunityProduct[]
-  quotes                Quote[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company          Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact          Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  stage            OpportunityStage  @relation(fields: [stageId], references: [id])
+  // assignedTo       TenantUser?       @relation("OpportunityAssignedToUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  products         OpportunityProduct[]
+  leads            Lead[] // Leads that converted to this opportunity
+  quotes           Quote[]
+  tasks            Task[]
+  projects         Project[]
+
+  @@index([tenantId])
+  @@index([tenantId, stageId])
 }
 
-enum ProductType {
-  PRODUCTO // Corregido de PRODUCT
-  SERVICIO
+model OpportunityStage {
+  id        String   @id @default(uuid())
+  tenantId  String   // Can be specific to a tenant if stages are customizable
+  name      String   // e.g., "Qualification", "Proposal", "Negotiation", "Closed Won", "Closed Lost"
+  order     Int      // For pipeline ordering
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // No deletedAt, stages are usually managed not soft-deleted.
+
+  // tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, order])
 }
 
 model Product {
-  id            String      @id @default(uuid())
-  tenantId      String
-  name          String
-  type          ProductType @default(PRODUCTO) // PRODUCTO, SERVICIO
-  description   String?
-  price         Float
-  sku           String?     @unique // Stock Keeping Unit, unique per tenant
-  category      String?
-  isActive      Boolean     @default(true)
-  attributes    Json?       // e.g., {"color": "Red", "size": "M"}
-  imageUrl      String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  deletedAt     DateTime?
+  id          String      @id @default(uuid())
+  tenantId    String
+  name        String
+  type        ProductType // "PRODUCTO", "SERVICIO"
+  description String?
+  price       Float
+  sku         String?     @unique // SKU might need to be unique per tenant, or globally if products are shared
+  category    String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
 
-  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  opportunityProducts OpportunityProduct[]
-  quoteLineItems      QuoteLineItem[]
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quotes            QuoteLineItem[]
+  opportunities     OpportunityProduct[]
+
+  @@unique([tenantId, sku]) // SKU is unique per tenant if not null
+  @@index([tenantId])
 }
 
+// Junction table for Opportunity and Product
 model OpportunityProduct {
   opportunityId String
   productId     String
+  tenantId      String // For tenant scoping
   quantity      Int
   unitPrice     Float    // Price at the time of adding to opportunity
-  totalPrice    Float
-  notes         String?
-  assignedAt DateTime @default(now())
+  total         Float
+  addedAt       DateTime @default(now())
 
   opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict) // Restrict deletion of product if used
-  tenant      Tenant      @relation(fields: [opportunityId, productId], references: [id, id]) // This relation might be complex due to composite key needs or just tenantId
-  // Consider if tenant relation is needed here or inherited via Opportunity. For simplicity, removed direct tenant relation needing composite keys on Product for now.
-  // If product is global, then direct tenantId on OpportunityProduct might be better.
-  // Let's assume Product is tenant-specific, so relation to tenant comes via Opportunity.
+  product     Product     @relation(fields: [productId], references: [id], onDelete:Restrict) // Prevent deleting product if in opportunity
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete:NoAction, map: "OpportunityProduct_tenantId_fkey_noaction")
 
-  @@id([opportunityId, productId])
-}
-
-enum QuoteStatus {
-  DRAFT     // BORRADOR
-  SENT      // ENVIADA
-  ACCEPTED  // ACEPTADA
-  REJECTED  // RECHAZADA
-  EXPIRED   // NUEVO, antes ANULADA o vencida
-  CANCELED  // NUEVO, para cancelación explícita
+  @@id([opportunityId, productId, tenantId])
+  @@index([tenantId])
 }
 
 model Quote {
   id              String      @id @default(uuid())
   tenantId        String
-  quoteNumber     String      // e.g., QT-2024-001, unique per tenant
-  opportunityId   String
-  createdById     String
-  issueDate       DateTime    @default(now())
+  quoteNumber     String      // e.g., QT-2024-001
+  opportunityId   String?     // Link to an Opportunity
+  leadId          String?     // Link to a Lead
+  dateCreated     DateTime    @default(now())
   expiryDate      DateTime?
-  status          QuoteStatus @default(DRAFT)
+  status          QuoteStatus // "DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"
   totalAmount     Float
   notes           String?
-  terms           String?
+  termsConditions String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   deletedAt       DateTime?
 
-  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  opportunity   Opportunity     @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  createdBy     TenantUser      @relation("QuoteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  lead          Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
   lineItems     QuoteLineItem[]
 
   @@unique([tenantId, quoteNumber])
+  @@index([tenantId])
 }
 
 model QuoteLineItem {
   id          String   @id @default(uuid())
   quoteId     String
+  tenantId    String   // Denormalized for easier tenant-scoped queries
   productId   String
   productName String   // Snapshot of product name at time of quote
   description String?  // Snapshot of product description
@@ -511,19 +427,211 @@ model QuoteLineItem {
   total       Float
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  deletedAt   DateTime? // Soft delete for line items if needed
+  // No deletedAt for line items, they are part of the quote's lifecycle
 
-  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
-  tenant  Tenant @relation(fields: [quoteId, productId], references: [id, id]) // Similar complexity as OpportunityProduct
-  // Again, tenant relation inherited is simpler.
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete:Restrict) // Prevent deleting product if in quote
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete:NoAction, map: "QuoteLineItem_tenantId_fkey_noaction")
+
+  @@index([quoteId])
+  @@index([tenantId])
+}
+
+
+model Task {
+  id              String       @id @default(uuid())
+  tenantId        String
+  title           String
+  description     String?
+  status          TaskStatus   // "PENDING", "IN_PROGRESS", "COMPLETED", "ARCHIVED"
+  priority        TaskPriority // "HIGH", "MEDIUM", "LOW"
+  dueDate         DateTime?
+  completedAt     DateTime?
+  assignedToUserId String?      // TenantUser ID
+  opportunityId   String?
+  projectId       String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedTo    TenantUser?   @relation("TaskAssignedToUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  opportunity   Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tags          TaskTag[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, assignedToUserId])
+}
+
+// Junction table for Task and Tag
+model TaskTag {
+  taskId   String
+  tagId    String
+  tenantId String
+  assignedAt DateTime @default(now())
+
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: NoAction, map: "TaskTag_tenantId_fkey_noaction")
+
+  @@id([taskId, tagId, tenantId])
+  @@index([tenantId])
+}
+
+
+model Project {
+  id              String        @id @default(uuid())
+  tenantId        String
+  name            String
+  description     String?
+  status          ProjectStatus // "PLANNING", "ACTIVE", "COMPLETED", "ON_HOLD", "CANCELED"
+  clientName      String?       // Or could link to a Company/Contact model
+  startDate       DateTime?
+  deadline        DateTime?
+  completedAt     DateTime?
+  budget          Float?
+  progress        Int?          // Percentage 0-100
+  opportunityId   String?       // If project originated from an opportunity
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity?        @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  teamMembers   ProjectTeamMember[]
+  tags          ProjectTag[]
+  tasks         Task[]
+
+  @@index([tenantId, status])
+}
+
+// Junction table for Project and TenantUser (Team Members)
+model ProjectTeamMember {
+  projectId    String
+  tenantUserId String
+  tenantId     String   // To scope this assignment to a tenant
+  roleInProject String?  // e.g., "Project Manager", "Developer"
+  assignedAt   DateTime @default(now())
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenantUser TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete:NoAction, map: "ProjectTeamMember_tenantId_fkey_noaction")
+
+  @@id([projectId, tenantUserId, tenantId])
+  @@index([tenantId])
+}
+
+// Junction table for Project and Tag
+model ProjectTag {
+  projectId String
+  tagId     String
+  tenantId  String
+  assignedAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete:NoAction, map: "ProjectTag_tenantId_fkey_noaction")
+
+  @@id([projectId, tagId, tenantId])
+  @@index([tenantId])
+}
+
+// Flow Builder Module
+model ChatbotFlow {
+  id             String   @id @default(uuid())
+  tenantId       String
+  name           String
+  description    String?
+  nodes          Json     // React Flow nodes
+  edges          Json     // React Flow edges
+  status         String   // "DRAFT", "PUBLISHED", "ARCHIVED"
+  triggerEvents  String[] // e.g., "new_user_webchat", "keyword_whatsapp:oferta"
+  version        Int      @default(1)
+  lastPublishedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+}
+
+// For SDK chat messages - might be simpler if direct integration
+model ChatMessage {
+  id         String    @id @default(uuid())
+  sessionId  String    // Unique ID for a chat session
+  tenantId   String
+  sender     String    // "USER" or "BOT"
+  message    String
+  timestamp  DateTime  @default(now())
+  flowId     String?   // If message handled by a flow
+  nodeId     String?   // Current node in the flow
+  metadata   Json?     // Any extra data
+  isResolved Boolean   @default(false)
+  deletedAt  DateTime?
+
+  // tenant Tenant @relation(fields: [tenantId], references: [id]) - Potentially redundant if sessionId is unique across tenants or tied to SDK config
+  // flow ChatbotFlow? @relation(fields: [flowId], references: [id])
+
+  @@index([sessionId, timestamp])
+  @@index([tenantId, timestamp])
+}
+
+
+// Enums
+enum LeadSource {
+  WhatsApp
+  WebChat
+  Messenger
+  Instagram
+  Manual
+  Referral
+  API
+  Other
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  CONVERTED // Converted to Opportunity/Customer
+  CLOSED_WON // If Lead can be won directly
+  CLOSED_LOST
+  UNQUALIFIED
+  ARCHIVED
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+  ON_HOLD
+  ARCHIVED
+}
+
+enum ProductType {
+  PRODUCTO
+  SERVICIO
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELED
 }
 
 enum TaskStatus {
-  PENDING     // PENDIENTE
-  IN_PROGRESS // EN_PROGRESO
-  COMPLETED   // COMPLETADA
-  ARCHIVED    // ARCHIVADA
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
 }
 
 enum TaskPriority {
@@ -532,135 +640,11 @@ enum TaskPriority {
   LOW
 }
 
-model Task {
-  id               String        @id @default(uuid())
-  tenantId         String
-  title            String
-  description      String?
-  status           TaskStatus    @default(PENDING)
-  priority         TaskPriority? @default(MEDIUM)
-  dueDate          DateTime?
-  completedAt      DateTime?
-  assignedToUserId String?
-  relatedToType    String?       // e.g., "Lead", "Opportunity", "Project", "Company"
-  relatedToId      String?       // ID of the related entity
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  deletedAt        DateTime?
-
-  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  assignee   TenantUser? @relation("TaskAssignedToUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
-  tags       TaskTag[]
-}
-
-model TaskTag {
-  taskId    String
-  tagId     String
-  assignedAt DateTime @default(now())
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([taskId, tagId])
-}
-
 enum ProjectStatus {
-  PLANNING    // PLANIFICACION
-  ACTIVE      // ACTIVO
-  COMPLETED   // COMPLETADO
-  ON_HOLD     // EN_ESPERA
-  CANCELED    // CANCELADO
-}
-
-model Project {
-  id              String        @id @default(uuid())
-  tenantId        String
-  name            String
-  description     String?
-  status          ProjectStatus @default(PLANNING)
-  startDate       DateTime?
-  endDate         DateTime?     // Planned end date
-  actualEndDate   DateTime?     // Actual end date
-  budget          Float?
-  opportunityId   String?       @unique // Si el proyecto se originó de una oportunidad
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  deletedAt       DateTime?
-
-  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  opportunity   Opportunity?        @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  tags          ProjectTag[]
-  teamMembers   ProjectTeamMember[]
-}
-
-model ProjectTag {
-  projectId String
-  tagId     String
-  assignedAt DateTime @default(now())
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([projectId, tagId])
-}
-
-model ProjectTeamMember {
-  projectId    String
-  tenantUserId String
-  roleInProject String?  // e.g., "Project Manager", "Developer"
-  assignedAt   DateTime @default(now())
-
-  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user         TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
-  tenant       Tenant     @relation(fields: [tenantUserId, projectId], references: [id, id]) // Inherited tenant
-
-  @@id([projectId, tenantUserId])
-}
-
-// Flow Builder & SDK Models
-model ChatbotFlow {
-  id             String   @id @default(uuid())
-  tenantId       String
-  name           String
-  description    String?
-  definitionJson Json     // Stores the ReactFlow JSON definition
-  status         String   // e.g., "DRAFT", "PUBLISHED", "ARCHIVED"
-  version        Int      @default(1)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  deletedAt      DateTime?
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-}
-
-model ChatMessage {
-  id           String   @id @default(uuid()) // From SDK
-  tenantId     String
-  sessionId    String   // Unique session ID for the chat on the website
-  visitorId    String   // Unique ID for the website visitor
-  senderType   String   // "visitor" or "bot" or "agent"
-  messageText  String?
-  messageType  String   // "text", "image", "button_click"
-  payload      Json?    // For button clicks or other structured data
-  timestamp    DateTime @default(now())
-  isReadByAgent Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  deletedAt    DateTime?
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId])
-  @@index([visitorId])
-}
-
-model ConversationTag {
-  conversationId String
-  tagId          String
-  assignedAt     DateTime @default(now())
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  tag          Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([conversationId, tagId])
+  PLANNING
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+  CANCELED
+  ARCHIVED
 }
