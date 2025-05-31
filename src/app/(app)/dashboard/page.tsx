@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit2, Mail, MessageSquare, Paperclip, SendHorizonal, Smile, Sparkles, UserCircle, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
+import { Edit2, Mail, MessageSquare, Paperclip, Phone, SendHorizonal, Smile, Sparkles, UserCircle, Video, Archive as ArchiveIcon, XCircle, UserPlus, Inbox } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect, useMemo, type FC } from "react";
 import { summarizeConversation, suggestResponse } from "@/ai/flows";
@@ -318,7 +318,7 @@ export default function AgentWorkspacePage() {
             </Select>
           </CardHeader>
           <ScrollArea className="flex-1">
-            <div className="flex flex-col p-4 space-y-3">
+            <div className="flex flex-col p-4 space-y-3"> {/* This div now has the desired layout styles */}
                 {displayedConversations.length === 0 && (
                     <div className="text-center text-muted-foreground py-10">
                     <Inbox className="mx-auto h-10 w-10 mb-2"/>
@@ -368,7 +368,6 @@ export default function AgentWorkspacePage() {
                 ))}
               </div>
           </ScrollArea>
-          
         </Card>
 
         {/* Chat View Panel */}
@@ -408,6 +407,14 @@ export default function AgentWorkspacePage() {
                       <TooltipContent><p>Desarchivar Conversación</p></TooltipContent>
                     </Tooltip>
                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild><Button variant="ghost" size="icon"><Phone className="h-5 w-5" /></Button></TooltipTrigger>
+                  <TooltipContent><p>Start Call</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild><Button variant="ghost" size="icon"><Video className="h-5 w-5" /></Button></TooltipTrigger>
+                  <TooltipContent><p>Start Video Call</p></TooltipContent>
+                </Tooltip>
               </div>
             </header>
             <ScrollArea className="flex-1 p-4 space-y-4 bg-muted/20">
@@ -549,7 +556,7 @@ export default function AgentWorkspacePage() {
                 <h4 className="font-semibold text-sm mb-1">Contact Info</h4>
                 <div className="space-y-1 text-sm text-muted-foreground">
                   <p className="flex items-center truncate"><Mail className="h-4 w-4 mr-2 text-sky-500 flex-shrink-0" /> {selectedConversation.userName.toLowerCase().replace(/\s+/g, ".")}@example.com</p>
-                  <p className="flex items-center truncate">< MessageSquare className="h-4 w-4 mr-2 text-green-500 flex-shrink-0" /> +1 (555) 123-4567 (Demo)</p>
+                  <p className="flex items-center truncate"><Phone className="h-4 w-4 mr-2 text-green-500 flex-shrink-0" /> +1 (555) 123-4567</p>
                 </div>
               </div>
               <Separator />
@@ -589,8 +596,6 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
-    
-
     
 
     

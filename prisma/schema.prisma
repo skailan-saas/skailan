@@ -1,7 +1,8 @@
+
 // prisma/schema.prisma
 
 datasource db {
-  provider = "postgresql" // Como se indica en tu migration_lock.toml
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -9,32 +10,185 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model ConnectedChannel {
-  id             String    @id @default(cuid())
-  instanceName   String
-  channelTypeId  String    // Ej: "whatsapp", "messenger", "webchat"
-  status         String    // Ej: "connected", "disconnected", "pending_webhook"
-  webhookUrl     String?
-  verifyToken    String?
-  details        String?   // Para detalles específicos del canal, podría ser JSON o texto formateado
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  
-  // Futuro: Añadir relación con un modelo Tenant si implementamos multi-tenancy completa aquí
-  // tenantId    String
-  // tenant      Tenant @relation(fields: [tenantId], references: [id])
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  subdomain String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  users    User[]
+  channels ConnectedChannel[]
+  leads    Lead[]
+  products Product[]
+  quotes   Quote[]
+  projects Project[]
+  tasks    Task[]
+  flows    Flow[]
 }
 
-// Futuro: Modelo Tenant (marcador de posición)
-// model Tenant {
-//   id             String    @id @default(cuid())
-//   name           String
-//   subdomain      String    @unique
-//   createdAt      DateTime  @default(now())
-//   updatedAt      DateTime  @updatedAt
-//   users          User[]    // Si los usuarios también se gestionan con Prisma
-//   channels       ConnectedChannel[]
-// }
+// Modelo User (representación para relaciones, Supabase Auth maneja la autenticación real)
+// Es crucial que el 'id' aquí sea el mismo que el id del usuario en Supabase Auth.
+model User {
+  id        String   @id 
+  email     String   @unique
+  fullName  String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-// Nota: El modelo User de Supabase Auth se gestiona por separado, 
-// pero podríamos sincronizar o referenciar usuarios aquí si es necesario.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // Relaciones
+  assignedLeads    Lead[]    @relation("AssignedLeads")
+  assignedProjects Project[] @relation("AssignedProjects")
+  assignedTasks    Task[]    @relation("AssignedTasks")
+  createdQuotes    Quote[]   @relation("CreatedQuotes")
+}
+
+model ConnectedChannel {
+  id             String   @id @default(cuid())
+  instanceName   String
+  channelTypeId  String   // Ej: "whatsapp", "messenger", "webchat"
+  status         String   // Ej: "connected", "disconnected", "pending_webhook"
+  webhookUrl     String?
+  verifyToken    String?
+  details        String?  // Para detalles específicos del canal, podría ser JSON o texto formateado
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model Lead {
+  id            String    @id @default(cuid())
+  name          String
+  email         String?   @unique
+  phone         String?
+  company       String?
+  source        String?   // Ej: "WhatsApp", "Web Chat"
+  status        String    // Ej: "NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "LOST"
+  lastContacted DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedLeads", fields: [assignedToId], references: [id])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // Ej: "PRODUCTO", "SERVICIO"
+  description String?
+  price       Float
+  sku         String?  @unique
+  category    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  quoteLineItems QuoteLineItem[]
+}
+
+model Quote {
+  id          String   @id @default(cuid())
+  quoteNumber String   @unique // Ej: QT-2024-001
+  leadName    String   // Nombre del cliente/lead en el momento de la cotización
+  dateCreated DateTime @default(now())
+  expiryDate  DateTime?
+  status      String   // Ej: "DRAFT", "SENT", "ACCEPTED", "REJECTED"
+  totalAmount Float    // Calculado al momento de guardar
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  leadId      String?  // Podría ser el ID del Lead si se desea una relación estricta
+  // lead        Lead?    @relation(fields: [leadId], references: [id]) // Descomentar si se usa leadId como FK
+
+  createdById String?
+  createdBy   User?    @relation("CreatedQuotes", fields: [createdById], references: [id])
+
+  lineItems QuoteLineItem[]
+}
+
+model QuoteLineItem {
+  id          String @id @default(cuid())
+  productName String // Nombre del producto en el momento de la cotización
+  quantity    Int
+  unitPrice   Float
+  total       Float  // quantity * unitPrice
+
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id])
+
+  // Referencia al producto original, pero productName/unitPrice en QuoteLineItem son los valores en el momento de la cotización
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  status      String    // Ej: "PLANIFICACION", "ACTIVO", "COMPLETADO", "EN_ESPERA", "CANCELADO"
+  clientName  String?
+  progress    Int?      @db.SmallInt // 0-100
+  deadline    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // assignedToId String? // Simplificado, podría ser una relación muchos a muchos con User
+  // assignedTo   User?   @relation("AssignedProjects", fields: [assignedToId], references: [id])
+  // Por ahora, podemos manejar asignaciones de equipo en la lógica de la aplicación o como un campo de texto/JSON.
+  teamMembersJson String? @db.Text // Almacenar miembros del equipo como JSON, [{name: "John", role: "Dev"}]
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  status      String    // Ej: "PENDIENTE", "EN_PROGRESO", "COMPLETADA", "ARCHIVADA"
+  dueDate     DateTime?
+  priority    String?   // Ej: "Alta", "Media", "Baja"
+  tagsJson    String?   @db.Text // Almacenar tags como JSON array de strings
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // projectId String? // Para asociar tareas a proyectos
+  // project   Project? @relation(fields: [projectId], references: [id])
+
+  assigneeId String?
+  assignee   User?   @relation("AssignedTasks", fields: [assigneeId], references: [id])
+}
+
+model Flow {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  status        String   // Ej: "Published", "Draft", "Archived"
+  nodesJson     String   @db.Text // Almacenar nodos como JSON
+  edgesJson     String   @db.Text // Almacenar ejes como JSON
+  lastModified  DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+}
