@@ -7,7 +7,7 @@ export default function HomePage() {
     <div className="flex flex-col items-center justify-center min-h-screen bg-background p-8">
       <Logo />
       <h1 className="mt-6 text-4xl font-bold text-center text-foreground">
-        Welcome to Conecta Hub
+        Welcome to Skailan
       </h1>
       <p className="mt-4 text-lg text-center text-muted-foreground max-w-2xl">
         Your unified platform for intelligent customer conversations across all channels.
