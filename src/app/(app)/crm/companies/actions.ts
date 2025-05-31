@@ -1,7 +1,7 @@
 
 'use server';
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import type { Company } from './page'; 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -27,13 +27,17 @@ type CompanyFormValues = z.infer<typeof CompanyFormSchema>;
 export async function getCompanies(): Promise<Company[]> {
   try {
     const companiesFromDb = await prisma.company.findMany({
+      where: {
+        deletedAt: null, // Only fetch non-deleted companies
+      },
       orderBy: {
         createdAt: 'desc', 
       },
     });
+    // Ensure all optional fields are handled correctly for the frontend interface
     return companiesFromDb.map(company => ({
         ...company,
-        id: company.id, // Ensure ID is always present
+        id: company.id,
         email: company.email ?? undefined,
         phone: company.phone ?? undefined,
         website: company.website ?? undefined,
@@ -45,6 +49,7 @@ export async function getCompanies(): Promise<Company[]> {
         description: company.description ?? undefined,
         createdAt: company.createdAt,
         updatedAt: company.updatedAt,
+        deletedAt: company.deletedAt ?? undefined, // Include deletedAt if needed by UI, otherwise can omit
     }));
   } catch (error) {
     console.error("Failed to fetch companies:", error);
@@ -60,6 +65,10 @@ export async function createCompany(data: CompanyFormValues): Promise<Company> {
 
   const { name, email, phone, website, addressStreet, addressCity, addressState, addressPostalCode, addressCountry, description } = validation.data;
 
+  // Assuming tenantId is handled by Prisma middleware or passed differently
+  // For now, this example doesn't explicitly set tenantId, relying on context or future setup
+  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
+
   try {
     const newCompany = await prisma.company.create({
       data: {
@@ -73,6 +82,7 @@ export async function createCompany(data: CompanyFormValues): Promise<Company> {
         addressPostalCode: addressPostalCode || null,
         addressCountry: addressCountry || null,
         description: description || null,
+        tenantId: tenantIdPlaceholder, // Placeholder: This needs to come from user session or context
       },
     });
     revalidatePath('/crm/companies');
@@ -90,9 +100,16 @@ export async function createCompany(data: CompanyFormValues): Promise<Company> {
         description: newCompany.description ?? undefined,
         createdAt: newCompany.createdAt,
         updatedAt: newCompany.updatedAt,
+        deletedAt: newCompany.deletedAt ?? undefined,
     };
   } catch (error) {
     console.error("Failed to create company:", error);
+    // Handle specific Prisma errors, e.g., unique constraint violation P2002
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002' && error.meta?.target === 'Company_email_key') {
+             throw new Error("A company with this email already exists.");
+        }
+    }
     throw new Error("Could not create company.");
   }
 }
@@ -107,7 +124,7 @@ export async function updateCompany(id: string, data: CompanyFormValues): Promis
 
   try {
     const updatedCompany = await prisma.company.update({
-      where: { id },
+      where: { id, deletedAt: null }, // Ensure we only update non-deleted companies
       data: {
         name,
         email: email || null,
@@ -119,10 +136,11 @@ export async function updateCompany(id: string, data: CompanyFormValues): Promis
         addressPostalCode: addressPostalCode || null,
         addressCountry: addressCountry || null,
         description: description || null,
+        updatedAt: new Date(), // Explicitly set updatedAt
       },
     });
     revalidatePath('/crm/companies');
-    return {
+     return {
         ...updatedCompany,
         id: updatedCompany.id,
         email: updatedCompany.email ?? undefined,
@@ -136,13 +154,39 @@ export async function updateCompany(id: string, data: CompanyFormValues): Promis
         description: updatedCompany.description ?? undefined,
         createdAt: updatedCompany.createdAt,
         updatedAt: updatedCompany.updatedAt,
+        deletedAt: updatedCompany.deletedAt ?? undefined,
     };
   } catch (error) {
     console.error(`Failed to update company ${id}:`, error);
-    // Consider Prisma error codes for more specific messages, e.g., P2025 for record not found
-    if ((error as any).code === 'P2025') {
-        throw new Error(`Company with ID ${id} not found.`);
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') { // Record to update not found
+            throw new Error(`Company with ID ${id} not found or has been deleted.`);
+        }
+         if (error.code === 'P2002' && error.meta?.target === 'Company_email_key') {
+             throw new Error("A company with this email already exists.");
+        }
     }
     throw new Error("Could not update company.");
+  }
+}
+
+
+export async function deleteCompany(id: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    await prisma.company.update({
+      where: { id, deletedAt: null }, // Ensure we only soft-delete non-deleted companies
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+    revalidatePath('/crm/companies');
+    return { success: true };
+  } catch (error) {
+    console.error(`Failed to delete company ${id}:`, error);
+     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        // Record to update not found (already deleted or never existed)
+        return { success: false, message: `Company with ID ${id} not found or already deleted.` };
+    }
+    return { success: false, message: "Could not delete company." };
   }
 }

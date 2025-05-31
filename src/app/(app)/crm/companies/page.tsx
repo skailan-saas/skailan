@@ -20,10 +20,11 @@ import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { getCompanies, createCompany, updateCompany } from './actions';
+import { getCompanies, createCompany, updateCompany, deleteCompany } from './actions'; // Added deleteCompany
 
 export interface Company {
   id: string;
+  tenantId?: string; // Added based on schema, might not be directly used in UI forms
   name: string;
   email?: string;
   phone?: string;
@@ -34,6 +35,10 @@ export interface Company {
   addressPostalCode?: string;
   addressCountry?: string;
   description?: string;
+  industry?: string;
+  annualRevenue?: number;
+  numberOfEmployees?: number;
+  deletedAt?: Date; 
   createdAt?: Date; 
   updatedAt?: Date; 
   dataAiHint?: string; 
@@ -50,6 +55,7 @@ const CompanyFormSchema = z.object({
   addressPostalCode: z.string().optional(),
   addressCountry: z.string().optional(),
   description: z.string().optional(),
+  // Fields like industry, annualRevenue, numberOfEmployees could be added here if needed in forms
 });
 
 export type CompanyFormValues = z.infer<typeof CompanyFormSchema>;
@@ -81,8 +87,8 @@ export default function CrmCompaniesPage() {
     try {
       const fetchedCompanies = await getCompanies();
       setCompanies(fetchedCompanies.map(c => ({...c, dataAiHint: "company office"}))); 
-    } catch (error) {
-      toast({ title: "Error", description: "Could not fetch companies.", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Could not fetch companies.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -156,12 +162,20 @@ export default function CrmCompaniesPage() {
     setIsDeleteConfirmOpen(true);
   };
 
-  const confirmDeleteCompany = () => {
+  const confirmDeleteCompany = async () => {
     if (!companyToDeleteId) return;
-    // TODO: Call deleteCompany server action
     const companyNameToDelete = companies.find(c => c.id === companyToDeleteId)?.name || "Company";
-    setCompanies(prevCompanies => prevCompanies.filter(company => company.id !== companyToDeleteId));
-    toast({ title: "Company Deleted", description: `Company "${companyNameToDelete}" has been removed.` });
+    try {
+        const result = await deleteCompany(companyToDeleteId);
+        if (result.success) {
+            toast({ title: "Company Deleted", description: `Company "${companyNameToDelete}" has been marked as deleted.` });
+            fetchCompanies(); // Refresh the list
+        } else {
+            toast({ title: "Error Deleting Company", description: result.message || "Could not delete company.", variant: "destructive" });
+        }
+    } catch (error: any) {
+         toast({ title: "Error Deleting Company", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
     setIsDeleteConfirmOpen(false);
     setCompanyToDeleteId(null);
   };
@@ -297,7 +311,7 @@ export default function CrmCompaniesPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone. This will permanently delete company "{companies.find(c => c.id === companyToDeleteId)?.name || 'this company'}".</AlertDialogDescription>
+            <AlertDialogDescription>This action cannot be undone. This will mark company "{companies.find(c => c.id === companyToDeleteId)?.name || 'this company'}" as deleted. It can be recovered by an administrator.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => {setCompanyToDeleteId(null); setIsDeleteConfirmOpen(false);}}>Cancel</AlertDialogCancel>
@@ -385,3 +399,4 @@ export default function CrmCompaniesPage() {
     </div>
   );
 }
+
