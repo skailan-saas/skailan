@@ -145,11 +145,10 @@ export default function AgentWorkspacePage() {
     if (selectedConversationId) {
       setMessages(initialMessages[selectedConversationId] || []);
       setConversations(prev => prev.map(c => c.id === selectedConversationId ? {...c, unreadCount: 0} : c));
-      // Generate random contact days when a conversation is selected
       setContactDaysAgo(Math.floor(Math.random() * 5) + 1);
     } else {
       setMessages([]);
-      setContactDaysAgo(null); // Clear if no conversation selected
+      setContactDaysAgo(null);
     }
   }, [selectedConversationId]);
 
@@ -308,8 +307,7 @@ export default function AgentWorkspacePage() {
             </Select>
           </CardHeader>
           <ScrollArea className="flex-1">
-            <CardContent className="p-0">
-                <div className="space-y-1 p-2">
+            <CardContent className="flex flex-col p-4 space-y-3">
                 {displayedConversations.length === 0 && (
                     <div className="text-center text-muted-foreground p-4">
                     <Inbox className="mx-auto h-10 w-10 mb-2"/>
@@ -321,12 +319,12 @@ export default function AgentWorkspacePage() {
                     key={conv.id}
                     variant={selectedConversationId === conv.id ? "secondary" : "ghost"}
                     className={cn(
-                        "w-full flex items-center justify-start p-3 text-left overflow-hidden relative",
-                        "h-24" 
+                        "w-full justify-start p-3 text-left overflow-hidden relative",
+                        "h-24 flex items-center gap-3" // Ensure flex and gap for direct children
                     )}
                     onClick={() => setSelectedConversationId(conv.id)}
                     >
-                    <Avatar className="mr-3 h-10 w-10 flex-shrink-0" data-ai-hint={conv.dataAiHint || "avatar person"}>
+                    <Avatar className="h-10 w-10 flex-shrink-0" data-ai-hint={conv.dataAiHint || "avatar person"}>
                         <AvatarImage src={conv.avatarUrl} alt={conv.userName} />
                         <AvatarFallback>{conv.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
@@ -344,7 +342,7 @@ export default function AgentWorkspacePage() {
                         </p>
 
                         {/* Row 3: Badges (Pushed to bottom) */}
-                        <div className="flex items-center gap-1 flex-nowrap overflow-hidden mt-auto">
+                        <div className="flex items-center mt-auto gap-1 flex-nowrap overflow-hidden">
                             <Badge variant="outline" className="text-xs capitalize flex-shrink-0">{conv.channel}</Badge>
                             {conv.status === "assigned" && conv.assignedAgentName && (
                                 <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0 truncate">To: {conv.assignedAgentName}</Badge>
@@ -362,7 +360,6 @@ export default function AgentWorkspacePage() {
                     )}
                     </Button>
                 ))}
-                </div>
             </CardContent>
           </ScrollArea>
         </Card>
@@ -593,6 +590,5 @@ export default function AgentWorkspacePage() {
     </TooltipProvider>
   );
 }
-
 
     
