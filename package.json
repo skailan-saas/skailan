@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "prisma:migrate:dev": "prisma migrate dev",
     "postinstall": "prisma generate"
   },
   "dependencies": {
