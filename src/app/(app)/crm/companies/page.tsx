@@ -20,9 +20,8 @@ import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { getCompanies, createCompany } from './actions'; // Import server actions
+import { getCompanies, createCompany, updateCompany } from './actions';
 
-// Keep the frontend interface, Prisma will return id, createdAt, updatedAt
 export interface Company {
   id: string;
   name: string;
@@ -35,9 +34,9 @@ export interface Company {
   addressPostalCode?: string;
   addressCountry?: string;
   description?: string;
-  createdAt?: Date; // Assuming Prisma adds this
-  updatedAt?: Date; // Assuming Prisma adds this
-  dataAiHint?: string; // For placeholder images, UI only
+  createdAt?: Date; 
+  updatedAt?: Date; 
+  dataAiHint?: string; 
 }
 
 const CompanyFormSchema = z.object({
@@ -81,7 +80,7 @@ export default function CrmCompaniesPage() {
     setIsLoading(true);
     try {
       const fetchedCompanies = await getCompanies();
-      setCompanies(fetchedCompanies.map(c => ({...c, dataAiHint: "company office"}))); // Add dataAiHint here
+      setCompanies(fetchedCompanies.map(c => ({...c, dataAiHint: "company office"}))); 
     } catch (error) {
       toast({ title: "Error", description: "Could not fetch companies.", variant: "destructive" });
     } finally {
@@ -118,7 +117,7 @@ export default function CrmCompaniesPage() {
       toast({ title: "Company Added", description: `${values.name} has been added successfully.` });
       addCompanyForm.reset();
       setIsAddCompanyDialogOpen(false);
-      fetchCompanies(); // Re-fetch to get the latest list including the new company
+      fetchCompanies(); 
     } catch (error: any) {
       toast({ title: "Error Adding Company", description: error.message || "Could not add company.", variant: "destructive" });
     } finally {
@@ -136,14 +135,20 @@ export default function CrmCompaniesPage() {
     setIsViewCompanyDialogOpen(true);
   };
 
-  const handleActualEditCompanySubmit = (values: CompanyFormValues) => {
-    if (!editingCompany) return;
-    // TODO: Call updateCompany server action
-    const updatedCompany: Company = { ...editingCompany, ...values };
-    setCompanies(prevCompanies => prevCompanies.map(c => c.id === editingCompany.id ? updatedCompany : c));
-    toast({ title: "Company Updated", description: `${updatedCompany.name} has been updated.` });
-    setIsEditCompanyDialogOpen(false);
-    setEditingCompany(null);
+  const handleActualEditCompanySubmit = async (values: CompanyFormValues) => {
+    if (!editingCompany || !editingCompany.id) return;
+    try {
+      editCompanyForm.control._formState.isSubmitting = true;
+      await updateCompany(editingCompany.id, values);
+      toast({ title: "Company Updated", description: `${values.name} has been updated successfully.` });
+      setIsEditCompanyDialogOpen(false);
+      setEditingCompany(null);
+      fetchCompanies();
+    } catch (error: any) {
+       toast({ title: "Error Updating Company", description: error.message || "Could not update company.", variant: "destructive" });
+    } finally {
+      editCompanyForm.control._formState.isSubmitting = false;
+    }
   };
   
   const triggerDeleteConfirmation = (id: string) => {

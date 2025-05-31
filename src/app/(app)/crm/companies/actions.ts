@@ -2,14 +2,12 @@
 'use server';
 
 import { PrismaClient } from '@prisma/client';
-import type { Company } from './page'; // Assuming Company type is exported from page.tsx or a shared types file
+import type { Company } from './page'; 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
 
-// Schema for validating company creation data from the client
-// This should match the CompanyFormSchema in page.tsx
 const CompanyFormSchema = z.object({
   name: z.string().min(1, "Company name is required"),
   email: z.string().email("Invalid email address").optional().or(z.literal('')),
@@ -30,15 +28,12 @@ export async function getCompanies(): Promise<Company[]> {
   try {
     const companiesFromDb = await prisma.company.findMany({
       orderBy: {
-        createdAt: 'desc', // Assuming createdAt field exists from Prisma's auto-timestamps
+        createdAt: 'desc', 
       },
     });
-    // Map Prisma's Company to the frontend Company type
-    // Note: Prisma might add id, createdAt, updatedAt automatically.
-    // Ensure the frontend Company type is compatible.
-    // For now, we'll cast, but a more robust mapping might be needed if types diverge.
     return companiesFromDb.map(company => ({
         ...company,
+        id: company.id, // Ensure ID is always present
         email: company.email ?? undefined,
         phone: company.phone ?? undefined,
         website: company.website ?? undefined,
@@ -48,8 +43,9 @@ export async function getCompanies(): Promise<Company[]> {
         addressPostalCode: company.addressPostalCode ?? undefined,
         addressCountry: company.addressCountry ?? undefined,
         description: company.description ?? undefined,
-        // dataAiHint is a UI concern, not stored in DB per current schema
-    })) as Company[];
+        createdAt: company.createdAt,
+        updatedAt: company.updatedAt,
+    }));
   } catch (error) {
     console.error("Failed to fetch companies:", error);
     throw new Error("Could not fetch companies.");
@@ -57,11 +53,9 @@ export async function getCompanies(): Promise<Company[]> {
 }
 
 export async function createCompany(data: CompanyFormValues): Promise<Company> {
-  // Validate data against schema (optional here if client already does, but good for safety)
   const validation = CompanyFormSchema.safeParse(data);
   if (!validation.success) {
-    // Simplified error handling for brevity
-    throw new Error(`Invalid company data: ${validation.error.flatten().fieldErrors}`);
+    throw new Error(`Invalid company data: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
   }
 
   const { name, email, phone, website, addressStreet, addressCity, addressState, addressPostalCode, addressCountry, description } = validation.data;
@@ -84,6 +78,7 @@ export async function createCompany(data: CompanyFormValues): Promise<Company> {
     revalidatePath('/crm/companies');
     return {
         ...newCompany,
+        id: newCompany.id,
         email: newCompany.email ?? undefined,
         phone: newCompany.phone ?? undefined,
         website: newCompany.website ?? undefined,
@@ -93,10 +88,61 @@ export async function createCompany(data: CompanyFormValues): Promise<Company> {
         addressPostalCode: newCompany.addressPostalCode ?? undefined,
         addressCountry: newCompany.addressCountry ?? undefined,
         description: newCompany.description ?? undefined,
-    } as Company;
+        createdAt: newCompany.createdAt,
+        updatedAt: newCompany.updatedAt,
+    };
   } catch (error) {
     console.error("Failed to create company:", error);
-    // Consider more specific error messages based on Prisma error codes
     throw new Error("Could not create company.");
+  }
+}
+
+export async function updateCompany(id: string, data: CompanyFormValues): Promise<Company> {
+  const validation = CompanyFormSchema.safeParse(data);
+  if (!validation.success) {
+    throw new Error(`Invalid company data: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
+  }
+
+  const { name, email, phone, website, addressStreet, addressCity, addressState, addressPostalCode, addressCountry, description } = validation.data;
+
+  try {
+    const updatedCompany = await prisma.company.update({
+      where: { id },
+      data: {
+        name,
+        email: email || null,
+        phone: phone || null,
+        website: website || null,
+        addressStreet: addressStreet || null,
+        addressCity: addressCity || null,
+        addressState: addressState || null,
+        addressPostalCode: addressPostalCode || null,
+        addressCountry: addressCountry || null,
+        description: description || null,
+      },
+    });
+    revalidatePath('/crm/companies');
+    return {
+        ...updatedCompany,
+        id: updatedCompany.id,
+        email: updatedCompany.email ?? undefined,
+        phone: updatedCompany.phone ?? undefined,
+        website: updatedCompany.website ?? undefined,
+        addressStreet: updatedCompany.addressStreet ?? undefined,
+        addressCity: updatedCompany.addressCity ?? undefined,
+        addressState: updatedCompany.addressState ?? undefined,
+        addressPostalCode: updatedCompany.addressPostalCode ?? undefined,
+        addressCountry: updatedCompany.addressCountry ?? undefined,
+        description: updatedCompany.description ?? undefined,
+        createdAt: updatedCompany.createdAt,
+        updatedAt: updatedCompany.updatedAt,
+    };
+  } catch (error) {
+    console.error(`Failed to update company ${id}:`, error);
+    // Consider Prisma error codes for more specific messages, e.g., P2025 for record not found
+    if ((error as any).code === 'P2025') {
+        throw new Error(`Company with ID ${id} not found.`);
+    }
+    throw new Error("Could not update company.");
   }
 }
