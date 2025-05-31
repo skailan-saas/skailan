@@ -13,15 +13,17 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { PlusCircle, Building, Search, Filter, MoreHorizontal, Edit, Trash2, Eye, Link as LinkIcon, Phone, Mail } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState, type FormEvent, useEffect, useMemo } from "react";
+import { useState, type FormEvent, useEffect, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { getCompanies, createCompany } from './actions'; // Import server actions
 
-interface Company {
+// Keep the frontend interface, Prisma will return id, createdAt, updatedAt
+export interface Company {
   id: string;
   name: string;
   email?: string;
@@ -33,7 +35,9 @@ interface Company {
   addressPostalCode?: string;
   addressCountry?: string;
   description?: string;
-  dataAiHint?: string; // For placeholder images
+  createdAt?: Date; // Assuming Prisma adds this
+  updatedAt?: Date; // Assuming Prisma adds this
+  dataAiHint?: string; // For placeholder images, UI only
 }
 
 const CompanyFormSchema = z.object({
@@ -49,47 +53,13 @@ const CompanyFormSchema = z.object({
   description: z.string().optional(),
 });
 
-type CompanyFormValues = z.infer<typeof CompanyFormSchema>;
+export type CompanyFormValues = z.infer<typeof CompanyFormSchema>;
 
-const initialCompanies: Company[] = [
-  {
-    id: "comp-1",
-    name: "Acme Innovations Ltd.",
-    email: "contact@acmeinnovations.com",
-    phone: "555-0100",
-    website: "https://acmeinnovations.com",
-    addressStreet: "123 Tech Road",
-    addressCity: "Silicon Valley",
-    addressState: "CA",
-    addressPostalCode: "94000",
-    addressCountry: "USA",
-    description: "Leading provider of innovative tech solutions.",
-    dataAiHint: "office building",
-  },
-  {
-    id: "comp-2",
-    name: "Builders Co-operative",
-    email: "info@builderscoop.com",
-    phone: "555-0200",
-    website: "https://builderscoop.com",
-    addressStreet: "456 Construct Ave",
-    addressCity: "Builderville",
-    description: "High-quality construction services for commercial projects.",
-    dataAiHint: "construction site",
-  },
-  {
-    id: "comp-3",
-    name: "Greenleaf Organics",
-    email: "support@greenleaf.org",
-    phone: "555-0300",
-    addressCity: "Farmington",
-    dataAiHint: "organic farm",
-  },
-];
 
 export default function CrmCompaniesPage() {
   const { toast } = useToast();
-  const [companies, setCompanies] = useState<Company[]>(initialCompanies);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAddCompanyDialogOpen, setIsAddCompanyDialogOpen] = useState(false);
   const [isEditCompanyDialogOpen, setIsEditCompanyDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
@@ -106,6 +76,23 @@ export default function CrmCompaniesPage() {
   const editCompanyForm = useForm<CompanyFormValues>({
     resolver: zodResolver(CompanyFormSchema),
   });
+
+  const fetchCompanies = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const fetchedCompanies = await getCompanies();
+      setCompanies(fetchedCompanies.map(c => ({...c, dataAiHint: "company office"}))); // Add dataAiHint here
+    } catch (error) {
+      toast({ title: "Error", description: "Could not fetch companies.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchCompanies();
+  }, [fetchCompanies]);
+
 
   useEffect(() => {
     if (editingCompany) {
@@ -124,16 +111,19 @@ export default function CrmCompaniesPage() {
     }
   }, [editingCompany, editCompanyForm]);
 
-  const handleActualAddCompanySubmit = (values: CompanyFormValues) => {
-    const newCompanyToAdd: Company = {
-      id: `comp-${Date.now()}`,
-      ...values,
-      dataAiHint: "company office",
-    };
-    setCompanies(prevCompanies => [newCompanyToAdd, ...prevCompanies]);
-    toast({ title: "Company Added", description: `${newCompanyToAdd.name} has been added.` });
-    addCompanyForm.reset();
-    setIsAddCompanyDialogOpen(false);
+  const handleActualAddCompanySubmit = async (values: CompanyFormValues) => {
+    try {
+      addCompanyForm.control._formState.isSubmitting = true;
+      await createCompany(values);
+      toast({ title: "Company Added", description: `${values.name} has been added successfully.` });
+      addCompanyForm.reset();
+      setIsAddCompanyDialogOpen(false);
+      fetchCompanies(); // Re-fetch to get the latest list including the new company
+    } catch (error: any) {
+      toast({ title: "Error Adding Company", description: error.message || "Could not add company.", variant: "destructive" });
+    } finally {
+       addCompanyForm.control._formState.isSubmitting = false;
+    }
   };
 
   const openEditCompanyDialog = (company: Company) => {
@@ -148,6 +138,7 @@ export default function CrmCompaniesPage() {
 
   const handleActualEditCompanySubmit = (values: CompanyFormValues) => {
     if (!editingCompany) return;
+    // TODO: Call updateCompany server action
     const updatedCompany: Company = { ...editingCompany, ...values };
     setCompanies(prevCompanies => prevCompanies.map(c => c.id === editingCompany.id ? updatedCompany : c));
     toast({ title: "Company Updated", description: `${updatedCompany.name} has been updated.` });
@@ -162,6 +153,7 @@ export default function CrmCompaniesPage() {
 
   const confirmDeleteCompany = () => {
     if (!companyToDeleteId) return;
+    // TODO: Call deleteCompany server action
     const companyNameToDelete = companies.find(c => c.id === companyToDeleteId)?.name || "Company";
     setCompanies(prevCompanies => prevCompanies.filter(company => company.id !== companyToDeleteId));
     toast({ title: "Company Deleted", description: `Company "${companyNameToDelete}" has been removed.` });
@@ -211,7 +203,9 @@ export default function CrmCompaniesPage() {
                 </ScrollArea>
                 <DialogFooter className="pt-4 border-t mt-2">
                   <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={addCompanyForm.formState.isSubmitting}>Save Company</Button>
+                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={addCompanyForm.formState.isSubmitting}>
+                    {addCompanyForm.formState.isSubmitting ? "Saving..." : "Save Company"}
+                  </Button>
                 </DialogFooter>
               </form>
             </FormProvider>
@@ -249,7 +243,9 @@ export default function CrmCompaniesPage() {
                 </ScrollArea>
                 <DialogFooter className="pt-4 border-t mt-2">
                   <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={editCompanyForm.formState.isSubmitting}>Save Changes</Button>
+                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={editCompanyForm.formState.isSubmitting}>
+                     {editCompanyForm.formState.isSubmitting ? "Saving..." : "Save Changes"}
+                  </Button>
                 </DialogFooter>
               </form>
             </FormProvider>
@@ -320,6 +316,15 @@ export default function CrmCompaniesPage() {
         </CardHeader>
         <CardContent className="p-0 flex-1">
           <ScrollArea className="h-full">
+            {isLoading ? (
+                 <div className="text-center py-20 text-muted-foreground">Loading companies...</div>
+            ) : companies.length === 0 ? (
+                <div className="text-center py-20">
+                    <Building className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-xl font-semibold text-foreground">No Companies Found</h3>
+                    <p className="text-muted-foreground">Create your first company using the "Add New Company" button.</p>
+                </div>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -337,7 +342,7 @@ export default function CrmCompaniesPage() {
                   <TableRow key={company.id}>
                     <TableCell>
                        <Avatar className="h-9 w-9">
-                        <AvatarImage src={`https://placehold.co/40x40.png?text=${company.name[0]}`} alt={company.name} data-ai-hint={company.dataAiHint || "building office"} />
+                        <AvatarImage src={`https://placehold.co/40x40.png?text=${company.name[0]}`} alt={company.name} data-ai-hint={company.dataAiHint || "company office"} />
                         <AvatarFallback>{company.name.substring(0,2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                     </TableCell>
@@ -365,12 +370,6 @@ export default function CrmCompaniesPage() {
                 ))}
               </TableBody>
             </Table>
-             {companies.length === 0 && (
-                <div className="text-center py-20">
-                    <Building className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-xl font-semibold text-foreground">No Companies Found</h3>
-                    <p className="text-muted-foreground">Create your first company using the "Add New Company" button.</p>
-                </div>
             )}
           </ScrollArea>
         </CardContent>
@@ -381,5 +380,3 @@ export default function CrmCompaniesPage() {
     </div>
   );
 }
-
-    
