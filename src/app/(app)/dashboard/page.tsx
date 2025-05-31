@@ -318,10 +318,9 @@ export default function AgentWorkspacePage() {
             </Select>
           </CardHeader>
           <ScrollArea className="flex-1">
-            <CardContent className="p-2">
-              <div className="space-y-2">
+            <div className="flex flex-col p-4 space-y-3"> {/* This div now has the desired layout styles */}
                 {displayedConversations.length === 0 && (
-                    <div className="text-center text-muted-foreground p-4">
+                    <div className="text-center text-muted-foreground py-10">
                     <Inbox className="mx-auto h-10 w-10 mb-2"/>
                     No conversations in this view.
                     </div>
@@ -341,7 +340,7 @@ export default function AgentWorkspacePage() {
                         <AvatarFallback>{conv.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     
-                    <div className="flex-1 flex flex-col justify-start overflow-hidden min-w-0 h-full gap-0.5">
+                    <div className="flex-1 flex flex-col justify-start h-full overflow-hidden min-w-0 gap-0.5">
                         <div className="flex justify-between items-center min-w-0">
                             <h3 className="font-semibold truncate min-w-0 leading-tight">{conv.userName}</h3>
                             <span className="text-xs text-muted-foreground flex-shrink-0 ml-2 leading-tight">{conv.timestamp}</span>
@@ -368,7 +367,6 @@ export default function AgentWorkspacePage() {
                     </Button>
                 ))}
               </div>
-            </CardContent>
           </ScrollArea>
         </Card>
 
