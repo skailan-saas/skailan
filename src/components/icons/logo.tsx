@@ -9,7 +9,7 @@ export function Logo(props: SVGProps<SVGSVGElement> & { collapsed?: boolean }) {
   return (
     <div className="flex items-center gap-2" {...rest}>
       <MessageSquareText className="h-8 w-8 text-primary" />
-      <span className="text-2xl font-bold text-primary whitespace-nowrap">Conecta Hub</span>
+      <span className="text-2xl font-bold text-primary whitespace-nowrap">Skailan</span>
     </div>
   );
 }

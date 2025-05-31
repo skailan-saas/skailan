@@ -19,6 +19,7 @@ import {
   ClipboardCheck, 
   Briefcase, 
   Building, // For Tenant Settings
+  BellRing, // For Notifications
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -34,6 +35,7 @@ const mainNavItems = [
   { href: "/dashboard", label: "Agent Workspace", icon: LayoutDashboard },
   { href: "/flows", label: "Flow Builder", icon: GitFork },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/notifications", label: "Notifications", icon: BellRing },
 ];
 
 const crmNavItems = [
@@ -68,10 +70,10 @@ export function AppSidebarNav() {
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
           asChild
-          isActive={pathname === item.href || (item.href !== "/" && !item.href.includes('/settings/') && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics"].includes(item.href)) || (item.href.includes('/settings/') && pathname === item.href) }
+          isActive={pathname === item.href || (item.href !== "/" && !item.href.includes('/settings/') && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics", "/notifications"].includes(item.href)) || (item.href.includes('/settings/') && pathname === item.href) }
           tooltip={item.label}
           className={cn(
-             (pathname === item.href || (item.href !== "/" && !item.href.includes('/settings/') && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics"].includes(item.href)) || (item.href.includes('/settings/') && pathname === item.href) ) && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+             (pathname === item.href || (item.href !== "/" && !item.href.includes('/settings/') && pathname.startsWith(item.href) && !["/dashboard", "/flows", "/analytics", "/notifications"].includes(item.href)) || (item.href.includes('/settings/') && pathname === item.href) ) && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
           )}
         >
           <Link href={item.href}>
