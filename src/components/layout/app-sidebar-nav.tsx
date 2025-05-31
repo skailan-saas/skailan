@@ -18,8 +18,9 @@ import {
   FileText as QuoteIcon, 
   ClipboardCheck, 
   Briefcase, 
-  Building, // For Tenant Settings
-  BellRing, // For Notifications
+  Building as CompanyIcon, // Changed to CompanyIcon
+  Landmark, // New icon for Tenant Settings
+  BellRing, 
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -40,6 +41,7 @@ const mainNavItems = [
 
 const crmNavItems = [
   { href: "/crm/leads", label: "Leads", icon: Users },
+  { href: "/crm/companies", label: "Companies", icon: CompanyIcon }, // Added Companies
   { href: "/crm/products", label: "Products & Services", icon: Package },
   { href: "/crm/quotes", label: "Quotes", icon: QuoteIcon },
   { href: "/crm/tasks", label: "Tasks", icon: ClipboardCheck },
@@ -51,7 +53,7 @@ const settingsNavItems = [
   { href: "/settings/roles", label: "Users & Roles", icon: Users },
   { href: "/settings/channels", label: "Channel Connections", icon: Zap },
   { href: "/settings/sdk", label: "Website SDK", icon: Code2 },
-  { href: "/settings/tenant", label: "Tenant Settings", icon: Building },
+  { href: "/settings/tenant", label: "Tenant Settings", icon: Landmark }, // Changed icon
 ];
 
 const helpNavItems = [
@@ -108,3 +110,5 @@ export function AppSidebarNav() {
     </>
   );
 }
+
+    
