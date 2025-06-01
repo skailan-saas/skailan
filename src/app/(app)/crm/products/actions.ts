@@ -44,8 +44,8 @@ export async function getProducts(): Promise<ProductFE[]> {
         deletedAt: p.deletedAt ?? undefined,
     }));
   } catch (error) {
-    console.error("Failed to fetch products:", error);
-    throw new Error("Could not fetch products.");
+    console.error("Prisma error in getProducts:", error);
+    throw new Error("Could not fetch products. Database operation failed.");
   }
 }
 
@@ -69,8 +69,8 @@ export async function getProductsForSelect(): Promise<{ id: string; name: string
     });
     return productsFromDb;
   } catch (error) {
-    console.error("Failed to fetch products for select:", error);
-    throw new Error("Could not fetch products for selection.");
+    console.error("Prisma error in getProductsForSelect:", error);
+    throw new Error("Could not fetch products for selection. Database operation failed.");
   }
 }
 
@@ -107,13 +107,13 @@ export async function createProduct(data: ProductFormValues): Promise<ProductFE>
         deletedAt: newProduct.deletedAt ?? undefined,
     };
   } catch (error) {
-    console.error("Failed to create product:", error);
+    console.error("Prisma error in createProduct:", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002' && (error.meta?.target as string[])?.includes('sku') && (error.meta?.target as string[])?.includes('tenantId')) {
              throw new Error("A product with this SKU already exists for this tenant.");
         }
     }
-    throw new Error("Could not create product.");
+    throw new Error("Could not create product. Database operation failed.");
   }
 }
 
@@ -149,7 +149,7 @@ export async function updateProduct(id: string, data: ProductFormValues): Promis
         deletedAt: updatedProduct.deletedAt ?? undefined,
     };
   } catch (error) {
-    console.error(`Failed to update product ${id}:`, error);
+    console.error(`Prisma error in updateProduct for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
             throw new Error(`Product with ID ${id} not found or has been deleted.`);
@@ -158,7 +158,7 @@ export async function updateProduct(id: string, data: ProductFormValues): Promis
              throw new Error("A product with this SKU already exists for this tenant.");
         }
     }
-    throw new Error("Could not update product.");
+    throw new Error("Could not update product. Database operation failed.");
   }
 }
 
@@ -173,10 +173,11 @@ export async function deleteProduct(id: string): Promise<{ success: boolean; mes
     revalidatePath('/crm/products');
     return { success: true };
   } catch (error) {
-    console.error(`Failed to delete product ${id}:`, error);
+    console.error(`Prisma error in deleteProduct for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         return { success: false, message: `Product with ID ${id} not found or already deleted.` };
     }
-    return { success: false, message: "Could not delete product." };
+    return { success: false, message: "Could not delete product. Database operation failed." };
   }
 }
+

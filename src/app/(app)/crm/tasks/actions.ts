@@ -61,7 +61,6 @@ async function manageTaskTags(prismaTx: Prisma.TransactionClient, taskId: string
 
 export async function getTasks(): Promise<TaskFE[]> {
   const tenantId = tenantIdPlaceholder;
-  console.log("Attempting to fetch tasks with tenantId:", tenantId);
   try {
     const tasksFromDb = await prisma.task.findMany({
       where: { tenantId: tenantId, deletedAt: null },
@@ -223,7 +222,7 @@ export async function updateTask(id: string, data: TaskFormValues): Promise<Task
     };
 
   } catch (error) {
-    console.error(`Prisma error in updateTask ${id}:`, error);
+    console.error(`Prisma error in updateTask for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new Error(`Task with ID ${id} not found or has been deleted.`);
     }
@@ -269,7 +268,7 @@ export async function updateTaskStatus(id: string, status: TaskStatus): Promise<
         dataAiHint: "task checkmark"
     };
     } catch (error) {
-      console.error(`Prisma error in updateTaskStatus for ${id}:`, error);
+      console.error(`Prisma error in updateTaskStatus for ID ${id}:`, error);
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new Error(`Task with ID ${id} not found or has been deleted.`);
       }
@@ -288,7 +287,7 @@ export async function deleteTask(id: string): Promise<{ success: boolean; messag
     revalidatePath('/crm/tasks');
     return { success: true };
   } catch (error) {
-    console.error(`Prisma error in deleteTask ${id}:`, error);
+    console.error(`Prisma error in deleteTask for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return { success: false, message: `Task with ID ${id} not found or already deleted.` };
     }
@@ -321,3 +320,4 @@ export async function getLeadsForTasks(): Promise<{ id: string; name: string }[]
 export async function getProjectsForTasks(): Promise<{ id: string; name: string }[]> {
     return getProjectsForSelectFromProjectsModule();
 }
+

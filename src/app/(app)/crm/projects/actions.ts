@@ -131,7 +131,7 @@ export async function getProjects(): Promise<ProjectFE[]> {
       dataAiHint: "project folder"
     }));
   } catch (error) {
-    console.error("ERROR DETAILED getProjects:", error);
+    console.error("Prisma error in getProjects:", error);
     throw new Error("Could not fetch projects. Database operation failed.");
   }
 }
@@ -204,7 +204,7 @@ export async function createProject(data: ProjectFormValues): Promise<ProjectFE>
     };
 
   } catch (error) {
-    console.error("ERROR DETAILED createProject:", error);
+    console.error("Prisma error in createProject:", error);
     throw new Error("Could not create project. Database operation failed.");
   }
 }
@@ -276,7 +276,7 @@ export async function updateProject(id: string, data: ProjectFormValues): Promis
     };
 
   } catch (error) {
-    console.error(`ERROR DETAILED updateProject ${id}:`, error);
+    console.error(`Prisma error in updateProject for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new Error(`Project with ID ${id} not found or has been deleted.`);
     }
@@ -328,7 +328,7 @@ export async function updateProjectStatus(id: string, status: ProjectStatus): Pr
         dataAiHint: "project folder"
     };
     } catch (error) {
-      console.error(`ERROR DETAILED updateProjectStatus for ${id}:`, error);
+      console.error(`Prisma error in updateProjectStatus for ID ${id}:`, error);
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new Error(`Project with ID ${id} not found or has been deleted.`);
       }
@@ -346,7 +346,7 @@ export async function deleteProject(id: string): Promise<{ success: boolean; mes
     revalidatePath('/crm/projects');
     return { success: true };
   } catch (error) {
-    console.error(`ERROR DETAILED deleteProject ${id}:`, error);
+    console.error(`Prisma error in deleteProject for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return { success: false, message: `Project with ID ${id} not found or already deleted.` };
     }
@@ -367,7 +367,7 @@ export async function getProjectsForSelect(): Promise<{ id: string; name: string
       });
       return projects;
     } catch (error) {
-      console.error("ERROR DETAILED getProjectsForSelect:", error);
+      console.error("Prisma error in getProjectsForSelect:", error);
       throw new Error("Could not fetch projects for selection. Database operation failed.");
     }
 }
@@ -390,7 +390,8 @@ export async function getUsersForSelect(): Promise<{ id: string; name: string | 
         name: tu.user.fullName || tu.user.email,
       }));
     } catch (error) {
-      console.error("ERROR DETAILED getUsersForSelect (in projects/actions.ts):", error);
+      console.error("Prisma error in getUsersForSelect (in projects/actions.ts):", error);
       throw new Error("Could not fetch users for selection. Database operation failed.");
     }
 }
+

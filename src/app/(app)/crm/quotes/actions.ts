@@ -5,7 +5,7 @@ const tenantIdPlaceholder = "your-tenant-id";
 
 import { PrismaClient, type Prisma, type QuoteStatus as PrismaQuoteStatus, type ProductType as PrismaProductType } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
-import { QuoteFormSchema, type QuoteFormValues } from '@/lib/schemas/crm/quote-schema'; // Updated import
+import { QuoteFormSchema, type QuoteFormValues } from '@/lib/schemas/crm/quote-schema';
 import { getLeadsForSelect as getLeadsForSelectFromLeadsModule } from '@/app/(app)/crm/leads/actions';
 import { getProductsForSelect as getProductsForSelectFromProductsModule } from '@/app/(app)/crm/products/actions';
 
@@ -39,7 +39,6 @@ export interface QuoteFE {
 // Server Actions
 export async function getQuotes(): Promise<QuoteFE[]> {
   const tenantId = tenantIdPlaceholder;
-  console.log("Attempting to fetch quotes with tenantId:", tenantId);
   try {
     const quotesFromDb = await prisma.quote.findMany({
       where: { tenantId, deletedAt: null },
@@ -223,7 +222,7 @@ export async function updateQuote(id: string, data: QuoteFormValues): Promise<Qu
     };
 
   } catch (error) {
-    console.error(`Prisma error in updateQuote ${id}:`, error);
+    console.error(`Prisma error in updateQuote for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new Error(`Quote with ID ${id} not found or has been deleted.`);
     }
@@ -247,7 +246,7 @@ export async function deleteQuote(id: string): Promise<{ success: boolean; messa
     revalidatePath('/crm/quotes');
     return { success: true };
   } catch (error) {
-    console.error(`Prisma error in deleteQuote ${id}:`, error);
+    console.error(`Prisma error in deleteQuote for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return { success: false, message: `Quote with ID ${id} not found or already deleted.` };
     }
@@ -264,3 +263,4 @@ export async function getLeadsForSelect(): Promise<{ id: string; name: string }[
 export async function getProductsForSelect(): Promise<{ id: string; name: string; type: PrismaProductType; price: number }[]> {
   return getProductsForSelectFromProductsModule();
 }
+

@@ -33,7 +33,7 @@ export type LeadFormValues = z.infer<typeof LeadFormSchema>;
 // Frontend Lead type, might differ slightly from PrismaLead for UI needs
 export interface LeadFE extends Omit<PrismaLead, 'companyId' | 'assignedToUserId' | 'chatbotFlowState' | 'tenantId'> {
   companyName?: string; // For display
-  assignedTo?: { id: string; name: string | null; } | null; // For display
+  assignedTo?: { id: string; name: string | null; avatarUrl?: string | null; } | null; // For display
   tags: string[]; // Array of tag names
   dataAiHint?: string; // For UI only
   // Explicitly include fields that might be null in Prisma but handled as undefined or string in FE
@@ -61,7 +61,7 @@ async function findOrCreateCompany(prismaTx: Prisma.TransactionClient, name: str
     }
     return company.id;
   } catch (error) {
-    console.error("Error finding or creating company:", error);
+    console.error("Prisma error in findOrCreateCompany (within leads/actions.ts):", error);
     return undefined; 
   }
 }
@@ -103,7 +103,7 @@ export async function getLeads(): Promise<LeadFE[]> {
       where: { tenantId: tenantIdPlaceholder, deletedAt: null },
       include: {
         company: { select: { name: true } },
-        assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true } } } },
+        assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true, avatarUrl: true } } } },
         tags: { include: { tag: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -122,15 +122,19 @@ export async function getLeads(): Promise<LeadFE[]> {
       opportunityValue: lead.opportunityValue,
       expectedCloseDate: lead.expectedCloseDate,
       companyName: lead.company?.name ?? undefined,
-      assignedTo: lead.assignedTo ? { id: lead.assignedTo.userId, name: lead.assignedTo.user.fullName || lead.assignedTo.user.email } : null,
+      assignedTo: lead.assignedTo ? { 
+        id: lead.assignedTo.userId, 
+        name: lead.assignedTo.user.fullName || lead.assignedTo.user.email,
+        avatarUrl: lead.assignedTo.user.avatarUrl 
+      } : null,
       tags: lead.tags.map(leadTag => leadTag.tag.name),
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
       deletedAt: lead.deletedAt ?? undefined,
     }));
   } catch (error) {
-    console.error("ERROR DETAILED getLeads:", error);
-    throw new Error("Could not fetch leads.");
+    console.error("Prisma error in getLeads:", error);
+    throw new Error("Could not fetch leads. Database operation failed.");
   }
 }
 
@@ -167,7 +171,7 @@ export async function createLead(data: LeadFormValues): Promise<LeadFE> {
         where: { id: newLead.id },
         include: {
             company: { select: { name: true } },
-            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true } } } },
+            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true, avatarUrl: true } } } },
             tags: { include: { tag: { select: { name: true } } } },
         }
     });
@@ -177,19 +181,23 @@ export async function createLead(data: LeadFormValues): Promise<LeadFE> {
         phone: result.phone ?? undefined,
         notes: result.notes ?? undefined,
         companyName: result.company?.name ?? undefined,
-        assignedTo: result.assignedTo ? { id: result.assignedTo.userId, name: result.assignedTo.user.fullName || result.assignedTo.user.email } : null,
+        assignedTo: result.assignedTo ? { 
+          id: result.assignedTo.userId, 
+          name: result.assignedTo.user.fullName || result.assignedTo.user.email,
+          avatarUrl: result.assignedTo.user.avatarUrl
+        } : null,
         tags: result.tags.map(leadTag => leadTag.tag.name),
         source: result.source as LeadSource,
         status: result.status as LeadStatus,
     };
   } catch (error) {
-    console.error("Failed to create lead:", error);
+    console.error("Prisma error in createLead:", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       if ((error.meta?.target as string[])?.includes('email') && (error.meta?.target as string[])?.includes('tenantId')) {
         throw new Error("A lead with this email already exists in this tenant.");
       }
     }
-    throw new Error("Could not create lead.");
+    throw new Error("Could not create lead. Database operation failed.");
   }
 }
 
@@ -226,7 +234,7 @@ export async function updateLead(id: string, data: LeadFormValues): Promise<Lead
         where: { id: updatedLead.id },
         include: {
             company: { select: { name: true } },
-            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true } } } },
+            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true, avatarUrl: true } } } },
             tags: { include: { tag: { select: { name: true } } } },
         }
     });
@@ -236,13 +244,17 @@ export async function updateLead(id: string, data: LeadFormValues): Promise<Lead
         phone: result.phone ?? undefined,
         notes: result.notes ?? undefined,
         companyName: result.company?.name ?? undefined,
-        assignedTo: result.assignedTo ? { id: result.assignedTo.userId, name: result.assignedTo.user.fullName || result.assignedTo.user.email } : null,
+        assignedTo: result.assignedTo ? { 
+          id: result.assignedTo.userId, 
+          name: result.assignedTo.user.fullName || result.assignedTo.user.email,
+          avatarUrl: result.assignedTo.user.avatarUrl
+        } : null,
         tags: result.tags.map(leadTag => leadTag.tag.name),
         source: result.source as LeadSource,
         status: result.status as LeadStatus,
     };
   } catch (error) {
-    console.error(`Failed to update lead ${id}:`, error);
+    console.error(`Prisma error in updateLead for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
             throw new Error(`Lead with ID ${id} not found or has been deleted.`);
@@ -251,7 +263,7 @@ export async function updateLead(id: string, data: LeadFormValues): Promise<Lead
            throw new Error("A lead with this email already exists in this tenant.");
         }
     }
-    throw new Error("Could not update lead.");
+    throw new Error("Could not update lead. Database operation failed.");
   }
 }
 
@@ -264,11 +276,11 @@ export async function deleteLead(id: string): Promise<{ success: boolean; messag
     revalidatePath('/crm/leads');
     return { success: true };
   } catch (error) {
-    console.error(`Failed to delete lead ${id}:`, error);
+    console.error(`Prisma error in deleteLead for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         return { success: false, message: `Lead with ID ${id} not found or already deleted.` };
     }
-    return { success: false, message: "Could not delete lead." };
+    return { success: false, message: "Could not delete lead. Database operation failed." };
   }
 }
 
@@ -287,7 +299,8 @@ export async function getLeadsForSelect(): Promise<{ id: string; name: string }[
       });
       return leads;
     } catch (error) {
-      console.error("Failed to fetch leads for select:", error);
-      throw new Error("Could not fetch leads for selection.");
+      console.error("Prisma error in getLeadsForSelect (within leads/actions.ts):", error);
+      throw new Error("Could not fetch leads for selection. Database operation failed.");
     }
 }
+

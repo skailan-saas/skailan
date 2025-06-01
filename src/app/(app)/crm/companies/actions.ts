@@ -52,8 +52,8 @@ export async function getCompanies(): Promise<Company[]> {
         deletedAt: company.deletedAt ?? undefined, // Include deletedAt if needed by UI, otherwise can omit
     }));
   } catch (error) {
-    console.error("Failed to fetch companies:", error);
-    throw new Error("Could not fetch companies.");
+    console.error("Prisma error in getCompanies:", error);
+    throw new Error("Could not fetch companies. Database operation failed.");
   }
 }
 
@@ -103,14 +103,14 @@ export async function createCompany(data: CompanyFormValues): Promise<Company> {
         deletedAt: newCompany.deletedAt ?? undefined,
     };
   } catch (error) {
-    console.error("Failed to create company:", error);
+    console.error("Prisma error in createCompany:", error);
     // Handle specific Prisma errors, e.g., unique constraint violation P2002
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002' && error.meta?.target === 'Company_email_key') {
+        if (error.code === 'P2002' && (error.meta?.target as string[])?.includes('email') && (error.meta?.target as string[])?.includes('tenantId')) {
              throw new Error("A company with this email already exists.");
         }
     }
-    throw new Error("Could not create company.");
+    throw new Error("Could not create company. Database operation failed.");
   }
 }
 
@@ -157,16 +157,16 @@ export async function updateCompany(id: string, data: CompanyFormValues): Promis
         deletedAt: updatedCompany.deletedAt ?? undefined,
     };
   } catch (error) {
-    console.error(`Failed to update company ${id}:`, error);
+    console.error(`Prisma error in updateCompany for ID ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') { // Record to update not found
             throw new Error(`Company with ID ${id} not found or has been deleted.`);
         }
-         if (error.code === 'P2002' && error.meta?.target === 'Company_email_key') {
+         if (error.code === 'P2002' && (error.meta?.target as string[])?.includes('email') && (error.meta?.target as string[])?.includes('tenantId')) {
              throw new Error("A company with this email already exists.");
         }
     }
-    throw new Error("Could not update company.");
+    throw new Error("Could not update company. Database operation failed.");
   }
 }
 
@@ -182,11 +182,12 @@ export async function deleteCompany(id: string): Promise<{ success: boolean; mes
     revalidatePath('/crm/companies');
     return { success: true };
   } catch (error) {
-    console.error(`Failed to delete company ${id}:`, error);
+    console.error(`Prisma error in deleteCompany for ID ${id}:`, error);
      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         // Record to update not found (already deleted or never existed)
         return { success: false, message: `Company with ID ${id} not found or already deleted.` };
     }
-    return { success: false, message: "Could not delete company." };
+    return { success: false, message: "Could not delete company. Database operation failed." };
   }
 }
+
