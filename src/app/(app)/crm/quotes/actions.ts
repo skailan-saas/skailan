@@ -18,12 +18,12 @@ const QuoteLineItemSchema = z.object({
   id: z.string().optional(), // Optional for new items
   productId: z.string().min(1, "Product is required"),
   productName: z.string(), // Included for convenience, but primarily derived from productId
-  quantity: z.number().min(1, "Quantity must be at least 1"),
-  unitPrice: z.number().min(0, "Unit price cannot be negative"),
+  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
+  unitPrice: z.coerce.number().min(0, "Unit price cannot be negative"),
   // total is calculated: quantity * unitPrice
 });
 
-const QuoteFormSchema = z.object({
+export const QuoteFormSchema = z.object({
   opportunityId: z.string().min(1, "Opportunity (Lead) is required"),
   expiryDate: z.string().optional().nullable(), // Date as string, convert in action
   status: QuoteStatusEnum,
@@ -156,10 +156,6 @@ export async function updateQuote(id: string, data: QuoteFormValues): Promise<Qu
   const { lineItems, expiryDate, ...quoteData } = validation.data;
 
   try {
-    // Prisma doesn't support directly updating nested line items in a way that removes old ones and adds new ones atomically
-    // without more complex logic (e.g., deleteMany then createMany in a transaction).
-    // Here, we'll update the main quote and then manage line items separately.
-    
     const updatedQuote = await prisma.$transaction(async (prismaTx) => {
       const q = await prismaTx.quote.update({
         where: { id, tenantId, deletedAt: null },
@@ -170,7 +166,6 @@ export async function updateQuote(id: string, data: QuoteFormValues): Promise<Qu
         },
       });
 
-      // Manage Line Items: Delete existing and create new ones
       await prismaTx.quoteLineItem.deleteMany({
         where: { quoteId: id, tenantId },
       });
@@ -190,7 +185,6 @@ export async function updateQuote(id: string, data: QuoteFormValues): Promise<Qu
 
 
     revalidatePath('/crm/quotes');
-    // Re-fetch the updated quote with relations
     const result = await prisma.quote.findUniqueOrThrow({
         where: { id },
         include: {
@@ -226,12 +220,10 @@ export async function updateQuote(id: string, data: QuoteFormValues): Promise<Qu
 export async function deleteQuote(id: string): Promise<{ success: boolean; message?: string }> {
   const tenantId = tenantIdPlaceholder;
   try {
-    // Soft delete line items first
     await prisma.quoteLineItem.updateMany({
       where: { quoteId: id, tenantId: tenantId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
-    // Soft delete the quote
     await prisma.quote.update({
       where: { id, tenantId: tenantId, deletedAt: null },
       data: { deletedAt: new Date() },
@@ -256,4 +248,3 @@ export async function getLeadsForSelect(): Promise<{ id: string; name: string }[
 export async function getProductsForSelect(): Promise<{ id: string; name: string; type: PrismaProductType; price: number }[]> {
   return getProductsForSelectFromProductsModule();
 }
-
