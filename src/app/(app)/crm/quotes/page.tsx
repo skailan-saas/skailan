@@ -10,22 +10,23 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer, Zap as OpportunityIcon } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect, useMemo, useCallback, type FormEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { QuotePreview } from "@/components/crm/QuotePreview"; 
+import { QuotePreview } from "@/components/crm/QuotePreview";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, FormProvider, Controller, useFieldArray } from "react-hook-form";
 import type { ProductType as PrismaProductType, QuoteStatus as PrismaQuoteStatus } from '@prisma/client';
-import { 
+import {
     getQuotes, createQuote, updateQuote, deleteQuote,
     getLeadsForSelect, getProductsForSelect,
-    type QuoteFE, type QuoteLineItemFE 
+    type QuoteFE, type QuoteLineItemFE
 } from './actions';
-import { QuoteFormSchema, type QuoteFormValues } from '@/lib/schemas/crm/quote-schema'; // Updated import
-import { Textarea } from "@/components/ui/textarea"; 
+import { QuoteFormSchema, type QuoteFormValues } from '@/lib/schemas/crm/quote-schema';
+import { Textarea } from "@/components/ui/textarea";
 
 // Client-side enum for form status, consistent with Prisma schema
 const QUOTE_STATUSES_CLIENT = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED", "CANCELED"] as const;
@@ -47,23 +48,23 @@ export default function CrmQuotesPage() {
   const { toast } = useToast();
   const [quotes, setQuotes] = useState<QuoteFE[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [productsForSelect, setProductsForSelect] = useState<ProductForSelect[]>([]);
   const [opportunitiesForSelect, setOpportunitiesForSelect] = useState<OpportunityForSelect[]>([]);
 
   const [isAddOrEditQuoteDialogOpen, setIsAddOrEditQuoteDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<QuoteFE | null>(null);
-  
+
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [quoteToPreview, setQuoteToPreview] = useState<QuoteFE | null>(null);
-  
+
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [quoteToDeleteId, setQuoteToDeleteId] = useState<string | null>(null);
 
-  const quoteForm = useForm<QuoteFormValues>({ // Use QuoteFormValues from lib
-    resolver: zodResolver(QuoteFormSchema), // Use QuoteFormSchema from lib
+  const quoteForm = useForm<QuoteFormValues>({
+    resolver: zodResolver(QuoteFormSchema),
     defaultValues: {
-        opportunityId: "", 
+        opportunityId: "",
         expiryDate: "",
         status: "DRAFT",
         lineItems: [],
@@ -108,11 +109,11 @@ export default function CrmQuotesPage() {
     if (isAddOrEditQuoteDialogOpen) {
       if (editingQuote) {
         quoteForm.reset({
-          opportunityId: editingQuote.opportunityId || "", 
+          opportunityId: editingQuote.opportunityId || "",
           expiryDate: editingQuote.expiryDate ? new Date(editingQuote.expiryDate).toISOString().split('T')[0] : "",
           status: editingQuote.status as QuoteStatusClient,
           lineItems: editingQuote.lineItems.map(li => ({
-            id: li.id, 
+            id: li.id,
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
@@ -121,13 +122,12 @@ export default function CrmQuotesPage() {
           notes: editingQuote.notes || "",
         });
       } else {
-        // Reset with potentially new default values if opportunities/products have loaded
-        quoteForm.reset({ 
-            opportunityId: opportunitiesForSelect.length > 0 ? opportunitiesForSelect[0].id : "", 
-            expiryDate: "", 
-            status: "DRAFT", 
-            lineItems: [], 
-            notes: "" 
+        quoteForm.reset({
+            opportunityId: opportunitiesForSelect.length > 0 ? opportunitiesForSelect[0].id : "",
+            expiryDate: "",
+            status: "DRAFT",
+            lineItems: [],
+            notes: ""
         });
       }
     }
@@ -137,9 +137,8 @@ export default function CrmQuotesPage() {
   const handleProductSelectionForLineItem = (index: number, productId: string) => {
     const product = productsForSelect.find(p => p.id === productId);
     if (product) {
-      // Use update from useFieldArray to correctly update the form state
       updateLineItem(index, {
-        ...currentLineItemsWatch[index], // Spread existing values of the item
+        ...currentLineItemsWatch[index],
         productId: product.id,
         productName: product.name,
         unitPrice: product.price,
@@ -150,14 +149,13 @@ export default function CrmQuotesPage() {
   const handleActualSaveQuote = async (values: QuoteFormValues) => {
     try {
       quoteForm.control._formState.isSubmitting = true;
-      // Ensure lineItems have product name before sending to server
       const processedValues: QuoteFormValues = {
         ...values,
         lineItems: values.lineItems.map(li => ({
             ...li,
             productName: productsForSelect.find(p => p.id === li.productId)?.name || li.productName || 'Unknown Product',
         })),
-        status: values.status as PrismaQuoteStatus, 
+        status: values.status as PrismaQuoteStatus,
       };
 
       if (editingQuote) {
@@ -167,10 +165,10 @@ export default function CrmQuotesPage() {
         await createQuote(processedValues);
         toast({ title: "Quote Added", description: `New quote has been added.` });
       }
-      
+
       setIsAddOrEditQuoteDialogOpen(false);
       setEditingQuote(null);
-      fetchPageData(); 
+      fetchPageData();
     } catch (error: any) {
       toast({ title: "Error Saving Quote", description: error.message || "Could not save quote.", variant: "destructive" });
     } finally {
@@ -184,8 +182,8 @@ export default function CrmQuotesPage() {
   };
 
   const openAddQuoteDialog = () => {
-    setEditingQuote(null); 
-    quoteForm.reset({ // Explicitly reset form for new quote
+    setEditingQuote(null);
+    quoteForm.reset({
         opportunityId: opportunitiesForSelect.length > 0 ? opportunitiesForSelect[0].id : "",
         expiryDate: "",
         status: "DRAFT",
@@ -207,7 +205,7 @@ export default function CrmQuotesPage() {
         const result = await deleteQuote(quoteToDeleteId);
         if (result.success) {
             toast({ title: "Quote Deleted", description: `Quote "${quoteNameToDelete}" has been marked as deleted.` });
-            fetchPageData(); 
+            fetchPageData();
         } else {
             toast({ title: "Error Deleting Quote", description: result.message || "Could not delete quote.", variant: "destructive" });
         }
@@ -226,8 +224,8 @@ export default function CrmQuotesPage() {
   const handlePrintQuote = () => {
     window.print();
   };
-  
-  if (isLoading && !quotes.length) { // Show loading only if quotes array is empty
+
+  if (isLoading && !quotes.length) {
     return <div className="p-6 text-center text-muted-foreground">Loading quotes...</div>;
   }
 
@@ -242,7 +240,7 @@ export default function CrmQuotesPage() {
         </div>
         <Dialog open={isAddOrEditQuoteDialogOpen} onOpenChange={(isOpen) => {
           setIsAddOrEditQuoteDialogOpen(isOpen);
-          if (!isOpen) setEditingQuote(null); 
+          if (!isOpen) setEditingQuote(null);
         }}>
           <DialogTrigger asChild>
             <Button onClick={openAddQuoteDialog} className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -263,7 +261,7 @@ export default function CrmQuotesPage() {
                     <FormField control={quoteForm.control} name="expiryDate" render={({ field }) => ( <FormItem> <FormLabel>Expiry Date</FormLabel> <div className="relative"> <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /> <FormControl><Input type="date" className="pl-10" {...field} value={field.value || ''} /></FormControl> </div> <FormMessage /> </FormItem> )}/>
                   </div>
                   <FormField control={quoteForm.control} name="status" render={({ field }) => ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} value={field.value}> <FormControl> <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger> </FormControl> <SelectContent>{QUOTE_STATUSES_CLIENT.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent> </Select> <FormMessage /> </FormItem> )}/>
-                  
+
                   <FormField control={quoteForm.control} name="notes" render={({ field }) => ( <FormItem> <FormLabel>Notes / Terms</FormLabel> <FormControl><Textarea placeholder="Enter any notes or terms and conditions for this quote..." {...field} value={field.value ?? ""} rows={3}/></FormControl> <FormMessage /> </FormItem> )}/>
 
                   <div className="space-y-3 pt-4 border-t mt-2">
@@ -297,7 +295,7 @@ export default function CrmQuotesPage() {
                     <Button type="button" variant="outline" size="sm" onClick={() => appendLineItem({ productId: "", productName: "", quantity: 1, unitPrice: 0})} className="w-full mt-2">
                         <PackagePlus className="mr-2 h-4 w-4"/> Add Line Item
                     </Button>
-                    
+
                     <div className="text-right font-bold text-lg mt-4">
                       Total Quote Amount: ${calculatedTotalAmount.toFixed(2)}
                     </div>
@@ -403,3 +401,5 @@ export default function CrmQuotesPage() {
     </div>
   );
 }
+
+    
