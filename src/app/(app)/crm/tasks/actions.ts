@@ -1,32 +1,16 @@
+
 'use server';
 
 import { PrismaClient, type Prisma, type TaskStatus, type TaskPriority } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
-import { getLeadsForSelect } from '@/app/(app)/crm/leads/actions'; // For opportunity linking
-import { getProjectsForSelect } from '@/app/(app)/crm/projects/actions'; // For project linking
+import { getLeadsForSelect as getLeadsForSelectFromLeadsModule } from '@/app/(app)/crm/leads/actions';
+import { getProjectsForSelect as getProjectsForSelectFromProjectsModule } from '@/app/(app)/crm/projects/actions';
+import { TaskFormSchema, type TaskFormValues } from '@/lib/schemas/crm/task-schema';
 
 const prisma = new PrismaClient();
 
 // IMPORTANT: Replace with actual tenantId from user session or context
-const tenantIdPlaceholder = "your-tenant-id"; 
-
-const TaskStatusEnum = z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "ARCHIVED"]);
-const TaskPriorityEnum = z.enum(["LOW", "MEDIUM", "HIGH"]);
-
-const TaskFormSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
-  status: TaskStatusEnum,
-  dueDate: z.string().optional().nullable(), // Dates as strings, convert in action
-  priority: TaskPriorityEnum.optional().nullable(),
-  assignedToUserId: z.string().optional().nullable(),
-  relatedToLeadId: z.string().optional().nullable(), // Lead ID acting as Opportunity ID
-  relatedToProjectId: z.string().optional().nullable(),
-  tagNames: z.string().optional(), // Comma-separated string for tags
-});
-
-export type TaskFormValues = z.infer<typeof TaskFormSchema>;
+const tenantIdPlaceholder = "your-tenant-id";
 
 export interface TaskFE {
   id: string;
@@ -45,8 +29,7 @@ export interface TaskFE {
 }
 
 // Helper function to manage tags (connect or create)
-async function manageTaskTags(prismaTx: Prisma.TransactionClient, taskId: string, tagNamesString: string | undefined, tenantId: string) {
-  // Delete existing tags for this task
+async function manageTaskTags(prismaTx: Prisma.TransactionClient, taskId: string, tagNamesString: string | undefined | null, tenantId: string) {
   await prismaTx.taskTag.deleteMany({
     where: { taskId, tenantId },
   });
@@ -77,12 +60,14 @@ async function manageTaskTags(prismaTx: Prisma.TransactionClient, taskId: string
 
 
 export async function getTasks(): Promise<TaskFE[]> {
+  const tenantId = tenantIdPlaceholder;
+  console.log("Attempting to fetch tasks with tenantId:", tenantId);
   try {
     const tasksFromDb = await prisma.task.findMany({
-      where: { tenantId: tenantIdPlaceholder, deletedAt: null },
+      where: { tenantId: tenantId, deletedAt: null },
       include: {
         assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true, avatarUrl: true } } } },
-        relatedToLead: { select: { id: true, name: true } }, // Lead (as Opportunity)
+        relatedToLead: { select: { id: true, name: true } },
         relatedToProject: { select: { id: true, name: true } },
         tags: { include: { tag: { select: { name: true } } } },
       },
@@ -96,8 +81,8 @@ export async function getTasks(): Promise<TaskFE[]> {
       status: task.status,
       dueDate: task.dueDate,
       priority: task.priority,
-      assignedTo: task.assignedTo ? { 
-        id: task.assignedTo.userId, 
+      assignedTo: task.assignedTo ? {
+        id: task.assignedTo.userId,
         name: task.assignedTo.user.fullName || task.assignedTo.user.email,
         avatarUrl: task.assignedTo.user.avatarUrl,
         dataAiHint: "avatar person"
@@ -107,17 +92,19 @@ export async function getTasks(): Promise<TaskFE[]> {
       tags: task.tags.map(tt => tt.tag.name),
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
-      dataAiHint: "task checkmark" 
+      dataAiHint: "task checkmark"
     }));
   } catch (error) {
-    console.error("ERROR DETAILED getTasks:", error);
-    throw new Error("Could not fetch tasks.");
+    console.error("Prisma error in getTasks:", error);
+    throw new Error("Could not fetch tasks. Database operation failed.");
   }
 }
 
 export async function createTask(data: TaskFormValues): Promise<TaskFE> {
+  const tenantId = tenantIdPlaceholder;
   const validation = TaskFormSchema.safeParse(data);
   if (!validation.success) {
+    console.error("CreateTask Validation Error:", validation.error.flatten().fieldErrors);
     throw new Error(`Invalid task data: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
   }
   const { tagNames, dueDate, ...taskData } = validation.data;
@@ -128,29 +115,60 @@ export async function createTask(data: TaskFormValues): Promise<TaskFE> {
         data: {
           ...taskData,
           dueDate: dueDate ? new Date(dueDate) : null,
-          tenantId: tenantIdPlaceholder,
+          tenantId: tenantId,
+          assignedToUserId: taskData.assignedToUserId || null,
+          relatedToLeadId: taskData.relatedToLeadId || null,
+          relatedToProjectId: taskData.relatedToProjectId || null,
+          priority: taskData.priority || null,
         },
       });
-      await manageTaskTags(prismaTx, created.id, tagNames, tenantIdPlaceholder);
+      await manageTaskTags(prismaTx, created.id, tagNames, tenantId);
       return created;
     });
-    
+
     revalidatePath('/crm/tasks');
     // Fetch the created task with relations to match TaskFE structure
-    const result = await getTasks(); // Re-fetch all to get the new one with populated relations
-    const found = result.find(t => t.id === newTask.id);
-    if (!found) throw new Error("Failed to retrieve created task with full details.");
-    return found;
+    const result = await prisma.task.findUniqueOrThrow({
+        where: { id: newTask.id },
+        include: {
+            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true, avatarUrl: true } } } },
+            relatedToLead: { select: { id: true, name: true } },
+            relatedToProject: { select: { id: true, name: true } },
+            tags: { include: { tag: { select: { name: true } } } },
+        }
+    });
+    return {
+        id: result.id,
+        title: result.title,
+        description: result.description,
+        status: result.status,
+        dueDate: result.dueDate,
+        priority: result.priority,
+        assignedTo: result.assignedTo ? {
+            id: result.assignedTo.userId,
+            name: result.assignedTo.user.fullName || result.assignedTo.user.email,
+            avatarUrl: result.assignedTo.user.avatarUrl,
+            dataAiHint: "avatar person"
+        } : null,
+        relatedToLead: result.relatedToLead ? { id: result.relatedToLead.id, name: result.relatedToLead.name } : null,
+        relatedToProject: result.relatedToProject ? { id: result.relatedToProject.id, name: result.relatedToProject.name } : null,
+        tags: result.tags.map(tt => tt.tag.name),
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+        dataAiHint: "task checkmark"
+    };
 
   } catch (error) {
-    console.error("Failed to create task:", error);
-    throw new Error("Could not create task.");
+    console.error("Prisma error in createTask:", error);
+    throw new Error("Could not create task. Database operation failed.");
   }
 }
 
 export async function updateTask(id: string, data: TaskFormValues): Promise<TaskFE> {
+  const tenantId = tenantIdPlaceholder;
   const validation = TaskFormSchema.safeParse(data);
   if (!validation.success) {
+    console.error("UpdateTask Validation Error:", validation.error.flatten().fieldErrors);
     throw new Error(`Invalid task data: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
   }
   const { tagNames, dueDate, ...taskData } = validation.data;
@@ -158,76 +176,131 @@ export async function updateTask(id: string, data: TaskFormValues): Promise<Task
   try {
     const updatedTask = await prisma.$transaction(async (prismaTx) => {
       const updated = await prismaTx.task.update({
-        where: { id, tenantId: tenantIdPlaceholder, deletedAt: null },
+        where: { id, tenantId: tenantId, deletedAt: null },
         data: {
           ...taskData,
           dueDate: dueDate ? new Date(dueDate) : null,
+          assignedToUserId: taskData.assignedToUserId || null,
+          relatedToLeadId: taskData.relatedToLeadId || null,
+          relatedToProjectId: taskData.relatedToProjectId || null,
+          priority: taskData.priority || null,
           updatedAt: new Date(),
         },
       });
-      await manageTaskTags(prismaTx, updated.id, tagNames, tenantIdPlaceholder);
+      await manageTaskTags(prismaTx, updated.id, tagNames, tenantId);
       return updated;
     });
 
     revalidatePath('/crm/tasks');
-    const result = await getTasks(); 
-    const found = result.find(t => t.id === updatedTask.id);
-    if (!found) throw new Error("Failed to retrieve updated task with full details.");
-    return found;
+    const result = await prisma.task.findUniqueOrThrow({
+        where: { id: updatedTask.id },
+        include: {
+            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true, avatarUrl: true } } } },
+            relatedToLead: { select: { id: true, name: true } },
+            relatedToProject: { select: { id: true, name: true } },
+            tags: { include: { tag: { select: { name: true } } } },
+        }
+    });
+    return {
+        id: result.id,
+        title: result.title,
+        description: result.description,
+        status: result.status,
+        dueDate: result.dueDate,
+        priority: result.priority,
+        assignedTo: result.assignedTo ? {
+            id: result.assignedTo.userId,
+            name: result.assignedTo.user.fullName || result.assignedTo.user.email,
+            avatarUrl: result.assignedTo.user.avatarUrl,
+            dataAiHint: "avatar person"
+        } : null,
+        relatedToLead: result.relatedToLead ? { id: result.relatedToLead.id, name: result.relatedToLead.name } : null,
+        relatedToProject: result.relatedToProject ? { id: result.relatedToProject.id, name: result.relatedToProject.name } : null,
+        tags: result.tags.map(tt => tt.tag.name),
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+        dataAiHint: "task checkmark"
+    };
 
   } catch (error) {
-    console.error(`Failed to update task ${id}:`, error);
+    console.error(`Prisma error in updateTask ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new Error(`Task with ID ${id} not found or has been deleted.`);
     }
-    throw new Error("Could not update task.");
+    throw new Error("Could not update task. Database operation failed.");
   }
 }
 
 export async function updateTaskStatus(id: string, status: TaskStatus): Promise<TaskFE> {
+    const tenantId = tenantIdPlaceholder;
     try {
       const updatedTask = await prisma.task.update({
-        where: { id, tenantId: tenantIdPlaceholder, deletedAt: null },
+        where: { id, tenantId: tenantId, deletedAt: null },
         data: { status, updatedAt: new Date() },
       });
       revalidatePath('/crm/tasks');
-      const result = await getTasks();
-      const found = result.find(t => t.id === updatedTask.id);
-      if (!found) throw new Error("Failed to retrieve task after status update.");
-      return found;
+      const result = await prisma.task.findUniqueOrThrow({
+        where: { id: updatedTask.id },
+        include: {
+            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true, avatarUrl: true } } } },
+            relatedToLead: { select: { id: true, name: true } },
+            relatedToProject: { select: { id: true, name: true } },
+            tags: { include: { tag: { select: { name: true } } } },
+        }
+    });
+    return {
+        id: result.id,
+        title: result.title,
+        description: result.description,
+        status: result.status,
+        dueDate: result.dueDate,
+        priority: result.priority,
+        assignedTo: result.assignedTo ? {
+            id: result.assignedTo.userId,
+            name: result.assignedTo.user.fullName || result.assignedTo.user.email,
+            avatarUrl: result.assignedTo.user.avatarUrl,
+            dataAiHint: "avatar person"
+        } : null,
+        relatedToLead: result.relatedToLead ? { id: result.relatedToLead.id, name: result.relatedToLead.name } : null,
+        relatedToProject: result.relatedToProject ? { id: result.relatedToProject.id, name: result.relatedToProject.name } : null,
+        tags: result.tags.map(tt => tt.tag.name),
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+        dataAiHint: "task checkmark"
+    };
     } catch (error) {
-      console.error(`Failed to update task status for ${id}:`, error);
+      console.error(`Prisma error in updateTaskStatus for ${id}:`, error);
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new Error(`Task with ID ${id} not found or has been deleted.`);
       }
-      throw new Error("Could not update task status.");
+      throw new Error("Could not update task status. Database operation failed.");
     }
 }
 
 
 export async function deleteTask(id: string): Promise<{ success: boolean; message?: string }> {
+  const tenantId = tenantIdPlaceholder;
   try {
     await prisma.task.update({
-      where: { id, tenantId: tenantIdPlaceholder, deletedAt: null },
+      where: { id, tenantId: tenantId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
     revalidatePath('/crm/tasks');
     return { success: true };
   } catch (error) {
-    console.error(`Failed to delete task ${id}:`, error);
+    console.error(`Prisma error in deleteTask ${id}:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return { success: false, message: `Task with ID ${id} not found or already deleted.` };
     }
-    return { success: false, message: "Could not delete task." };
+    return { success: false, message: "Could not delete task. Database operation failed." };
   }
 }
 
 export async function getUsersForTasks(): Promise<{ id: string; name: string | null }[]> {
-    // IMPORTANT: Replace with actual tenantId from user session or context
-    // const tenantIdPlaceholder = "your-tenant-id"; 
+    const tenantId = tenantIdPlaceholder;
     try {
       const users = await prisma.tenantUser.findMany({
-        where: { tenantId: tenantIdPlaceholder },
+        where: { tenantId: tenantId },
         select: { userId: true, user: { select: { fullName: true, email: true } } },
         orderBy: { user: { fullName: 'asc' } },
       });
@@ -236,15 +309,15 @@ export async function getUsersForTasks(): Promise<{ id: string; name: string | n
         name: tu.user.fullName || tu.user.email,
       }));
     } catch (error) {
-      console.error("Failed to fetch users for tasks:", error);
-      throw new Error("Could not fetch users for assignment.");
+      console.error("Prisma error in getUsersForTasks:", error);
+      throw new Error("Could not fetch users for assignment. Database operation failed.");
     }
 }
 
 export async function getLeadsForTasks(): Promise<{ id: string; name: string }[]> {
-    return getLeadsForSelect(); // Re-use existing function
+    return getLeadsForSelectFromLeadsModule();
 }
 
 export async function getProjectsForTasks(): Promise<{ id: string; name: string }[]> {
-    return getProjectsForSelect(); // Re-use from projects/actions
+    return getProjectsForSelectFromProjectsModule();
 }

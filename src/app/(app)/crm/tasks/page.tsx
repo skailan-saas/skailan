@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, type FC, type FormEvent, useEffect, useCallback } from 'react';
+import React, { useState, type FC, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -12,92 +12,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, Tag, Eye, Edit, Trash2, Briefcase, Zap as OpportunityIcon } from "lucide-react"; // Added Briefcase, OpportunityIcon
+import { PlusCircle, ClipboardCheck, CalendarDays, MoreHorizontal, Tag, Eye, Edit, Trash2, Briefcase, Zap as OpportunityIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, FormProvider } from "react-hook-form";
-import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import type { TaskStatus as PrismaTaskStatus, TaskPriority as PrismaTaskPriority } from '@prisma/client';
+import { TaskFormSchema, type TaskFormValues, TaskStatusEnumClient, TaskPriorityEnumClient } from '@/lib/schemas/crm/task-schema';
+import {
+    getTasks, createTask, updateTask, deleteTask, updateTaskStatus,
+    getUsersForTasks, getLeadsForTasks, getProjectsForTasks,
+    type TaskFE
+} from './actions';
 
-
-// Aligned with prisma schema TaskStatus enum
-const TASK_STATUSES = ["PENDING", "IN_PROGRESS", "COMPLETED", "ARCHIVED"] as const;
-type TaskStatus = typeof TASK_STATUSES[number];
-// Aligned with prisma schema TaskPriority enum
-const TASK_PRIORITIES = ["HIGH", "MEDIUM", "LOW"] as const;
-type TaskPriority = typeof TASK_PRIORITIES[number];
-
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  status: TaskStatus;
-  dueDate?: string;
-  priority?: TaskPriority;
-  assignee?: {
-    name: string;
-    avatarUrl: string;
-    avatarFallback: string;
-    dataAiHint?: string;
-  };
-  tags?: string[];
-  opportunityId?: string;
-  opportunityName?: string; // For display
-  projectId?: string;
-  projectName?: string; // For display
-}
 
 type TasksByStatus = {
-  [key in TaskStatus]: Task[];
+  [key in PrismaTaskStatus]: TaskFE[];
 };
 
-// Mock data for selection
-const mockOpportunitiesForSelect: {id: string, name: string}[] = [
-    {id: "opp-1", name: "Opportunity Alpha (Alice W.)"},
-    {id: "opp-2", name: "Opportunity Beta (Bob T.)"},
-];
-const mockProjectsForSelect: {id: string, name: string}[] = [
-    {id: "proj-1", name: "Lanzamiento App Móvil"},
-    {id: "proj-3", name: "Campaña Marketing Q4"},
-];
-
-
-const initialTasksData: Task[] = [
-  { id: "task-1", title: "Diseñar landing page", description: "Crear el diseño inicial para la nueva landing page del producto X.", status: "PENDING", dueDate: "2024-08-15", priority: "HIGH", assignee: { name: "Laura Gómez", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "female face", avatarFallback: "LG" }, tags: ["Diseño", "Web"], projectId: "proj-1", projectName: "Lanzamiento App Móvil" },
-  { id: "task-2", title: "Desarrollar API de autenticación", status: "IN_PROGRESS", dueDate: "2024-08-20", priority: "HIGH", assignee: { name: "Carlos Ruiz", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "male face", avatarFallback: "CR" }, tags: ["Backend", "API"], opportunityId: "opp-1", opportunityName: "Opportunity Alpha (Alice W.)" },
-  { id: "task-3", title: "Revisar feedback de usuarios", description: "Analizar los comentarios de la última encuesta y proponer mejoras.", status: "PENDING", dueDate: "2024-08-18", priority: "MEDIUM", assignee: { name: "Ana Torres", avatarUrl: "https://placehold.co/40x40.png", dataAiHint: "woman smiling", avatarFallback: "AT" }, tags: ["UX", "Investigación"], },
-  { id: "task-4", title: "Actualizar documentación técnica", status: "COMPLETED", dueDate: "2024-07-30", priority: "LOW", tags: ["Documentación"], projectId: "proj-3", projectName: "Campaña Marketing Q4" },
-];
-
-const statusToColumnTitle: Record<TaskStatus, string> = {
+const statusToColumnTitle: Record<PrismaTaskStatus, string> = {
   PENDING: "Pendiente", IN_PROGRESS: "En Progreso", COMPLETED: "Completada", ARCHIVED: "Archivada",
 };
-const priorityToDisplay: Record<TaskPriority, string> = {
+const priorityToDisplayClient: Record<PrismaTaskPriority, string> = {
   HIGH: "Alta", MEDIUM: "Media", LOW: "Baja",
 };
 
-
-const TaskFormSchema = z.object({
-    title: z.string().min(1, "Title is required"),
-    description: z.string().optional(),
-    status: z.enum(TASK_STATUSES, { required_error: "Status is required" }),
-    dueDate: z.string().optional(),
-    priority: z.enum(TASK_PRIORITIES).optional(),
-    assigneeName: z.string().optional(), 
-    tags: z.string().optional(), 
-    opportunityId: z.string().optional(),
-    projectId: z.string().optional(),
-});
-type TaskFormValues = z.infer<typeof TaskFormSchema>;
+interface SelectOption { id: string; name: string | null; }
 
 interface TaskCardProps {
-  task: Task;
-  index: number; 
-  onEdit: (task: Task) => void;
-  onView: (task: Task) => void;
+  task: TaskFE;
+  index: number;
+  onEdit: (task: TaskFE) => void;
+  onView: (task: TaskFE) => void;
   onDelete: (taskId: string) => void;
 }
 
@@ -109,14 +58,12 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onView, o
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          style={{
-            ...provided.draggableProps.style,
-            userSelect: "none", 
-          }}
+          style={{ ...provided.draggableProps.style, userSelect: "none" }}
           className={cn(
             "p-3 rounded-lg border bg-card text-card-foreground mb-3 shadow-md hover:shadow-lg transition-shadow rbd-draggable-card",
             snapshot.isDragging && "shadow-xl opacity-80"
           )}
+          data-ai-hint={task.dataAiHint || "task checkmark"}
         >
           <div className="flex justify-between items-start mb-2">
             <h4 className="text-sm font-semibold leading-tight">{task.title}</h4>
@@ -131,23 +78,23 @@ const TaskCard: FC<TaskCardProps> = React.memo(({ task, index, onEdit, onView, o
             </DropdownMenu>
           </div>
           {task.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 mb-2">{task.description}</p>}
-          {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {task.dueDate}</span></div>)}
-          {task.priority && (<Badge variant={task.priority === 'HIGH' ? 'destructive' : task.priority === 'MEDIUM' ? 'secondary' : 'outline'} className="text-xs mb-2">Prioridad: {priorityToDisplay[task.priority]}</Badge>)}
-          
-          {(task.opportunityName || task.projectName) && (
+          {task.dueDate && (<div className="flex items-center text-xs text-muted-foreground mb-2"><CalendarDays className="h-3.5 w-3.5 mr-1.5" /><span>Vence: {new Date(task.dueDate).toLocaleDateString()}</span></div>)}
+          {task.priority && (<Badge variant={task.priority === 'HIGH' ? 'destructive' : task.priority === 'MEDIUM' ? 'secondary' : 'outline'} className="text-xs mb-2">Prioridad: {priorityToDisplayClient[task.priority]}</Badge>)}
+
+          {(task.relatedToLead?.name || task.relatedToProject?.name) && (
             <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                {task.opportunityName && <><OpportunityIcon className="h-3 w-3 text-blue-500"/><span>{task.opportunityName}</span></>}
-                {task.opportunityName && task.projectName && <span className="mx-1">/</span>}
-                {task.projectName && <><Briefcase className="h-3 w-3 text-purple-500"/><span>{task.projectName}</span></>}
+                {task.relatedToLead?.name && <><OpportunityIcon className="h-3 w-3 text-blue-500"/><span>{task.relatedToLead.name}</span></>}
+                {task.relatedToLead?.name && task.relatedToProject?.name && <span className="mx-1">/</span>}
+                {task.relatedToProject?.name && <><Briefcase className="h-3 w-3 text-purple-500"/><span>{task.relatedToProject.name}</span></>}
             </div>
           )}
 
           {task.tags && task.tags.length > 0 && (<div className="flex flex-wrap gap-1 mb-2">{task.tags.map(tag => <Badge key={tag} variant="outline" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>)}
-          
-          {task.assignee && (
+
+          {task.assignedTo && (
             <div className="flex items-center gap-2 pt-2 border-t mt-2">
-                <Avatar className="h-6 w-6"><AvatarImage src={task.assignee.avatarUrl} alt={task.assignee.name} data-ai-hint={task.assignee.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{task.assignee.avatarFallback}</AvatarFallback></Avatar>
-                <span className="text-xs text-muted-foreground">{task.assignee.name}</span>
+                <Avatar className="h-6 w-6"><AvatarImage src={task.assignedTo.avatarUrl || `https://placehold.co/40x40.png`} alt={task.assignedTo.name || 'U'} data-ai-hint={task.assignedTo.dataAiHint || "avatar person"}/><AvatarFallback className="text-xs">{(task.assignedTo.name || 'U').substring(0,2).toUpperCase()}</AvatarFallback></Avatar>
+                <span className="text-xs text-muted-foreground">{task.assignedTo.name}</span>
             </div>
           )}
         </div>
@@ -160,8 +107,8 @@ TaskCard.displayName = 'TaskCard';
 interface TaskKanbanBoardProps {
   tasksByStatus: TasksByStatus;
   onDragEnd: (result: DropResult) => void;
-  onEditTask: (task: Task) => void;
-  onViewTask: (task: Task) => void;
+  onEditTask: (task: TaskFE) => void;
+  onViewTask: (task: TaskFE) => void;
   onDeleteTask: (taskId: string) => void;
 }
 
@@ -177,8 +124,8 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onDragEnd, o
     <DragDropContext onDragEnd={onDragEnd}>
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max h-full">
-          {TASK_STATUSES.map((statusKey) => (
-            <Droppable key={statusKey} droppableId={statusKey} type="TASK" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
+          {TaskStatusEnumClient.options.map((statusKey) => (
+            <Droppable key={statusKey} droppableId={statusKey} type="TASK">
               {(provided, snapshot) => (
                 <div
                   ref={provided.innerRef}
@@ -192,13 +139,15 @@ const TaskKanbanBoard: FC<TaskKanbanBoardProps> = ({ tasksByStatus, onDragEnd, o
                     <h3 className="text-md font-semibold">{statusToColumnTitle[statusKey]}</h3>
                     <Badge variant="secondary" className="text-xs">{(tasksByStatus[statusKey] || []).length}</Badge>
                   </div>
-                  <div className="flex-1 p-3 pr-1 space-y-0 overflow-y-auto">
+                  <ScrollArea className="flex-1">
+                  <div className="p-3 pr-1 space-y-0 ">
                     {(tasksByStatus[statusKey] || []).map((task, index) => (
                       <TaskCard key={task.id} task={task} index={index} onEdit={onEditTask} onView={onViewTask} onDelete={onDeleteTask} />
                     ))}
                     {provided.placeholder}
                     {(!tasksByStatus[statusKey] || tasksByStatus[statusKey].length === 0) && (<p className="text-xs text-muted-foreground text-center py-4">No hay tareas en este estado.</p>)}
                   </div>
+                  </ScrollArea>
                 </div>
               )}
             </Droppable>
@@ -213,176 +162,207 @@ TaskKanbanBoard.displayName = 'TaskKanbanBoard';
 
 export default function CrmTasksPage() {
   const { toast } = useToast();
-  const [tasksByStatus, setTasksByStatus] = useState<TasksByStatus>(() => {
-    const initial: TasksByStatus = { PENDING: [], IN_PROGRESS: [], COMPLETED: [], ARCHIVED: [] };
-    initialTasksData.forEach(task => {
-      if (initial[task.status]) {
-        initial[task.status].push(task);
-      }
-    });
-    return initial;
-  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [tasksByStatus, setTasksByStatus] = useState<TasksByStatus>({ PENDING: [], IN_PROGRESS: [], COMPLETED: [], ARCHIVED: [] });
+
+  const [usersForSelect, setUsersForSelect] = useState<SelectOption[]>([]);
+  const [opportunitiesForSelect, setOpportunitiesForSelect] = useState<SelectOption[]>([]);
+  const [projectsForSelect, setProjectsForSelect] = useState<SelectOption[]>([]);
 
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  
+  const [editingTask, setEditingTask] = useState<TaskFE | null>(null);
+
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [taskToDeleteId, setTaskToDeleteId] = useState<string | null>(null);
 
   const [isViewTaskDialogOpen, setIsViewTaskDialogOpen] = useState(false);
-  const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [viewingTask, setViewingTask] = useState<TaskFE | null>(null);
 
   const addTaskForm = useForm<TaskFormValues>({
     resolver: zodResolver(TaskFormSchema),
-    defaultValues: { title: "", description: "", status: "PENDING", dueDate: "", priority: "MEDIUM", assigneeName: "", tags: "", opportunityId: "", projectId: "" },
+    defaultValues: { title: "", description: "", status: "PENDING", dueDate: null, priority: "MEDIUM", assignedToUserId: null, tagNames: null, relatedToLeadId: null, relatedToProjectId: null },
   });
 
   const editTaskForm = useForm<TaskFormValues>({
     resolver: zodResolver(TaskFormSchema),
   });
 
+  const fetchPageData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [fetchedTasks, fetchedUsers, fetchedLeads, fetchedProjects] = await Promise.all([
+        getTasks(), getUsersForTasks(), getLeadsForTasks(), getProjectsForTasks()
+      ]);
+
+      const initialStatusMap: TasksByStatus = { PENDING: [], IN_PROGRESS: [], COMPLETED: [], ARCHIVED: [] };
+      fetchedTasks.forEach(task => {
+        const statusKey = task.status; // PrismaTaskStatus
+        if (initialStatusMap[statusKey]) {
+            initialStatusMap[statusKey].push(task);
+        } else { // Should not happen if initialStatusMap covers all PrismaTaskStatus
+            initialStatusMap[statusKey] = [task];
+        }
+      });
+      setTasksByStatus(initialStatusMap);
+      setUsersForSelect(fetchedUsers);
+      setOpportunitiesForSelect(fetchedLeads);
+      setProjectsForSelect(fetchedProjects);
+
+    } catch (error: any) {
+      toast({ title: "Error fetching data", description: error.message || "Could not load tasks data.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchPageData();
+  }, [fetchPageData]);
+
   useEffect(() => {
     if (editingTask) {
         editTaskForm.reset({
             title: editingTask.title,
-            description: editingTask.description || "",
+            description: editingTask.description || null,
             status: editingTask.status,
-            dueDate: editingTask.dueDate || "",
+            dueDate: editingTask.dueDate ? new Date(editingTask.dueDate).toISOString().split('T')[0] : null,
             priority: editingTask.priority || "MEDIUM",
-            assigneeName: editingTask.assignee?.name || "",
-            tags: editingTask.tags?.join(", ") || "",
-            opportunityId: editingTask.opportunityId || "",
-            projectId: editingTask.projectId || "",
+            assignedToUserId: editingTask.assignedTo?.id || null,
+            tagNames: editingTask.tags?.join(", ") || null,
+            relatedToLeadId: editingTask.relatedToLead?.id || null,
+            relatedToProjectId: editingTask.relatedToProject?.id || null,
         });
     }
   }, [editingTask, editTaskForm]);
 
+  const refreshTasks = useCallback(async () => {
+    // setIsLoading(true); // Optional: show loading indicator for refresh
+    try {
+        const fetchedTasks = await getTasks();
+        const newStatusMap: TasksByStatus = { PENDING: [], IN_PROGRESS: [], COMPLETED: [], ARCHIVED: [] };
+        fetchedTasks.forEach(task => {
+            const statusKey = task.status;
+            if (newStatusMap[statusKey]) {
+                newStatusMap[statusKey].push(task);
+            } else {
+                 newStatusMap[statusKey] = [task];
+            }
+        });
+        setTasksByStatus(newStatusMap);
+    } catch (error: any) {
+        toast({ title: "Error refreshing tasks", description: error.message || "Could not reload tasks.", variant: "destructive" });
+    } finally {
+        // setIsLoading(false);
+    }
+  }, [toast]);
 
-  const handleActualAddTaskSubmit = useCallback((values: TaskFormValues) => {
-    const selectedOpp = mockOpportunitiesForSelect.find(o => o.id === values.opportunityId);
-    const selectedProj = mockProjectsForSelect.find(p => p.id === values.projectId);
 
-    const newTaskToAdd: Task = {
-      id: `task-${Date.now()}`, title: values.title, description: values.description || undefined,
-      status: values.status, dueDate: values.dueDate || undefined, priority: values.priority || undefined,
-      assignee: values.assigneeName ? { name: values.assigneeName, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: values.assigneeName.substring(0,2).toUpperCase()} : undefined,
-      tags: values.tags?.split(',').map(tag => tag.trim()).filter(tag => tag),
-      opportunityId: values.opportunityId || undefined,
-      opportunityName: selectedOpp?.name || undefined,
-      projectId: values.projectId || undefined,
-      projectName: selectedProj?.name || undefined,
-    };
-    setTasksByStatus(prev => {
-        const newState = {...prev};
-        newState[values.status] = [...(newState[values.status] || []), newTaskToAdd];
-        return newState;
-    });
-    toast({ title: "Task Added", description: `Task "${newTaskToAdd.title}" added to ${statusToColumnTitle[values.status]}.` });
-    addTaskForm.reset(); 
-    setIsAddTaskDialogOpen(false);
-  }, [toast, addTaskForm, setTasksByStatus]);
+  const handleActualAddTaskSubmit = async (values: TaskFormValues) => {
+    try {
+      addTaskForm.control._formState.isSubmitting = true;
+      await createTask(values);
+      toast({ title: "Task Added", description: `Task "${values.title}" added.` });
+      addTaskForm.reset();
+      setIsAddTaskDialogOpen(false);
+      refreshTasks();
+    } catch (error: any) {
+        toast({ title: "Error Adding Task", description: error.message || "Could not add task.", variant: "destructive"});
+    } finally {
+        addTaskForm.control._formState.isSubmitting = false;
+    }
+  };
 
-  const openEditTaskDialog = useCallback((task: Task) => {
+  const openEditTaskDialog = useCallback((task: TaskFE) => {
     setEditingTask(task);
     setIsEditTaskDialogOpen(true);
   }, []);
 
-  const openViewTaskDialog = useCallback((task: Task) => {
+  const openViewTaskDialog = useCallback((task: TaskFE) => {
     setViewingTask(task);
     setIsViewTaskDialogOpen(true);
   }, []);
 
 
-  const handleActualEditTaskSubmit = useCallback((values: TaskFormValues) => {
+  const handleActualEditTaskSubmit = async (values: TaskFormValues) => {
     if (!editingTask) return;
-    const selectedOpp = mockOpportunitiesForSelect.find(o => o.id === values.opportunityId);
-    const selectedProj = mockProjectsForSelect.find(p => p.id === values.projectId);
-
-    const updatedTask: Task = {
-      ...editingTask, title: values.title, description: values.description || undefined,
-      status: values.status, dueDate: values.dueDate || undefined, priority: values.priority || undefined,
-      assignee: values.assigneeName ? { name: values.assigneeName, avatarUrl: `https://placehold.co/40x40.png`, dataAiHint: "avatar person", avatarFallback: values.assigneeName.substring(0,2).toUpperCase()} : undefined,
-      tags: values.tags?.split(',').map(tag => tag.trim()).filter(tag => tag),
-      opportunityId: values.opportunityId || undefined,
-      opportunityName: selectedOpp?.name || undefined,
-      projectId: values.projectId || undefined,
-      projectName: selectedProj?.name || undefined,
-    };
-
-    setTasksByStatus(prev => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prev)) as TasksByStatus; 
-      const oldStatus = editingTask.status;
-      const newStatus = updatedTask.status;
-
-      newTasksByStatus[oldStatus] = (newTasksByStatus[oldStatus] || []).filter((t: Task) => t.id !== editingTask.id);
-      newTasksByStatus[newStatus] = [...(newTasksByStatus[newStatus] || []), updatedTask];
-      newTasksByStatus[newStatus].sort((a: Task, b: Task) => (initialTasksData.findIndex(t => t.id === a.id) - initialTasksData.findIndex(t => t.id === b.id)));
-
-      return newTasksByStatus;
-    });
-
-    toast({ title: "Task Updated", description: `Task "${updatedTask.title}" updated.` });
-    setIsEditTaskDialogOpen(false); setEditingTask(null);
-  }, [editingTask, toast, setTasksByStatus]);
+    try {
+      editTaskForm.control._formState.isSubmitting = true;
+      await updateTask(editingTask.id, values);
+      toast({ title: "Task Updated", description: `Task "${values.title}" updated.` });
+      setIsEditTaskDialogOpen(false);
+      setEditingTask(null);
+      refreshTasks();
+    } catch (error: any) {
+        toast({ title: "Error Updating Task", description: error.message || "Could not update task.", variant: "destructive"});
+    } finally {
+        editTaskForm.control._formState.isSubmitting = false;
+    }
+  };
 
   const triggerDeleteConfirmation = useCallback((taskId: string) => {
     setTaskToDeleteId(taskId);
     setIsDeleteConfirmOpen(true);
   }, []);
 
-  const confirmDeleteTask = useCallback(() => {
+  const confirmDeleteTask = async () => {
     if (!taskToDeleteId) return;
-    let taskNameToDelete = "Task";
-    setTasksByStatus(prev => {
-      const newTasksByStatus = JSON.parse(JSON.stringify(prev)) as TasksByStatus;
-      for (const status of TASK_STATUSES) {
-        const list = newTasksByStatus[status] || [];
-        const taskIndex = list.findIndex((t: Task) => t.id === taskToDeleteId);
-        if (taskIndex > -1) {
-          taskNameToDelete = list[taskIndex].title;
-          newTasksByStatus[status] = list.filter((p: Task) => p.id !== taskToDeleteId);
-          break;
+    const taskToDelete = Object.values(tasksByStatus).flat().find(t => t.id === taskToDeleteId);
+    try {
+      const result = await deleteTask(taskToDeleteId);
+       if (result.success) {
+            toast({ title: "Task Deleted", description: `Task "${taskToDelete?.title || 'Task'}" marked as deleted.` });
+            refreshTasks();
+        } else {
+            toast({ title: "Error Deleting Task", description: result.message || "Could not delete task.", variant: "destructive" });
         }
-      }
-      return newTasksByStatus;
-    });
-    toast({ title: "Task Deleted", description: `Task "${taskNameToDelete}" removed.` });
+    } catch (error: any) {
+        toast({ title: "Error Deleting Task", description: error.message || "An unexpected error occurred.", variant: "destructive"});
+    }
     setIsDeleteConfirmOpen(false);
     setTaskToDeleteId(null);
-  }, [taskToDeleteId, toast, setTasksByStatus]);
+  };
 
-  
-  const onDragEndTasks = useCallback((result: DropResult) => {
+
+  const onDragEndTasks = async (result: DropResult) => {
     const { source, destination, draggableId } = result;
     if (!destination) return;
 
-    const sourceStatus = source.droppableId as TaskStatus;
-    const destStatus = destination.droppableId as TaskStatus;
+    const sourceStatus = source.droppableId as PrismaTaskStatus;
+    const destStatus = destination.droppableId as PrismaTaskStatus;
 
-    setTasksByStatus((prev) => {
-        const newTasksByStatus = { ...prev };
-        const sourceTasks = Array.from(newTasksByStatus[sourceStatus] || []);
-        const destTasks = sourceStatus === destStatus ? sourceTasks : Array.from(newTasksByStatus[destStatus] || []);
-        
-        const [movedTaskOriginal] = sourceTasks.splice(source.index, 1);
-        if (!movedTaskOriginal) return prev; 
+    if (sourceStatus === destStatus && source.index === destination.index) {
+      return; // No change
+    }
 
-        if (sourceStatus === destStatus) {
-            destTasks.splice(destination.index, 0, movedTaskOriginal);
-            newTasksByStatus[sourceStatus] = destTasks;
-            toast({ title: "Task Reordered", description: `Task "${movedTaskOriginal.title}" reordered.` });
-        } else {
-            const movedTaskCopy = { ...movedTaskOriginal, status: destStatus };
-            destTasks.splice(destination.index, 0, movedTaskCopy);
-            newTasksByStatus[sourceStatus] = sourceTasks;
-            newTasksByStatus[destStatus] = destTasks;
-            toast({ title: "Task Status Updated", description: `Task "${movedTaskOriginal.title}" moved to ${statusToColumnTitle[destStatus]}.` });
-        }
-        return newTasksByStatus;
-    });
-  }, [toast, setTasksByStatus]);
-  
+    const newTasksByStatus = JSON.parse(JSON.stringify(tasksByStatus)) as TasksByStatus;
+    const sourceList = newTasksByStatus[sourceStatus];
+    const [movedTaskOriginal] = sourceList.splice(source.index, 1);
+
+    if (!movedTaskOriginal) return;
+
+    movedTaskOriginal.status = destStatus;
+    const destList = newTasksByStatus[destStatus] || [];
+    destList.splice(destination.index, 0, movedTaskOriginal);
+
+    newTasksByStatus[sourceStatus] = sourceList;
+    newTasksByStatus[destStatus] = destList;
+
+    setTasksByStatus(newTasksByStatus); // Optimistic UI Update
+
+    try {
+        await updateTaskStatus(draggableId, destStatus);
+        toast({ title: "Task Status Updated", description: `Task "${movedTaskOriginal.title}" moved to ${statusToColumnTitle[destStatus]}.` });
+    } catch (error: any) {
+        toast({ title: "Error Updating Status", description: error.message || "Could not update task status.", variant: "destructive" });
+        refreshTasks(); // Revert optimistic update by re-fetching
+    }
+  };
+
+  if (isLoading && !Object.values(tasksByStatus).flat().length) {
+    return <div className="p-6 text-center text-muted-foreground">Loading tasks...</div>;
+  }
+
 
   return (
     <div className="p-6 space-y-6 h-[calc(100vh-4rem)] flex flex-col">
@@ -391,36 +371,38 @@ export default function CrmTasksPage() {
           <h1 className="text-3xl font-bold flex items-center"><ClipboardCheck className="mr-3 h-8 w-8 text-primary"/>Tasks Management</h1>
           <p className="text-muted-foreground">Organiza y haz seguimiento de las tareas.</p>
         </div>
-        <Dialog open={isAddTaskDialogOpen} onOpenChange={setIsAddTaskDialogOpen}>
-          <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => {addTaskForm.reset(); setIsAddTaskDialogOpen(true);}}><PlusCircle className="mr-2 h-4 w-4" /> Add New Task</Button></DialogTrigger>
+        <Dialog open={isAddTaskDialogOpen} onOpenChange={(isOpen) => {
+            if (!isOpen) addTaskForm.reset();
+            setIsAddTaskDialogOpen(isOpen);
+        }}>
+          <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-primary-foreground"><PlusCircle className="mr-2 h-4 w-4" /> Add New Task</Button></DialogTrigger>
           <DialogContent className="sm:max-w-[625px]">
             <DialogHeader><DialogTitle>Add New Task</DialogTitle><DialogDescription>Enter task details.</DialogDescription></DialogHeader>
             <FormProvider {...addTaskForm}>
             <form onSubmit={addTaskForm.handleSubmit(handleActualAddTaskSubmit)}>
               <ScrollArea className="max-h-[60vh] p-1 pr-3">
                 <div className="grid gap-4 py-4">
-                  <FormField control={addTaskForm.control} name="title" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Title</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., Follow up with client" {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                  <FormField control={addTaskForm.control} name="description" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-start gap-4"><FormLabel className="text-right col-span-1 pt-2">Description</FormLabel><FormControl className="col-span-3"><Textarea placeholder="Provide details..." {...field} rows={3}/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                  <FormField control={addTaskForm.control} name="status" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                  <FormField control={addTaskForm.control} name="dueDate" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Due Date</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                  <FormField control={addTaskForm.control} name="priority" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Priority</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger></FormControl><SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priorityToDisplay[priority]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                  <FormField control={addTaskForm.control} name="assigneeName" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Assignee</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., John Doe" {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                  <FormField control={addTaskForm.control} name="tags" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Tags</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., urgent, client_x" {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                  <FormField control={addTaskForm.control} name="opportunityId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Opportunity</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to opportunity" /></SelectTrigger></FormControl><SelectContent>{mockOpportunitiesForSelect.map(opp => <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                  <FormField control={addTaskForm.control} name="projectId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Project</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to project" /></SelectTrigger></FormControl><SelectContent>{mockProjectsForSelect.map(proj => <SelectItem key={proj.id} value={proj.id}>{proj.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="title" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Title *</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., Follow up with client" {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="description" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-start gap-4"><FormLabel className="text-right col-span-1 pt-2">Description</FormLabel><FormControl className="col-span-3"><Textarea placeholder="Provide details..." {...field} value={field.value ?? ""} rows={3}/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="status" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Status *</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{TaskStatusEnumClient.options.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="dueDate" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Due Date</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} value={field.value ?? ''} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="priority" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Priority</FormLabel><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger></FormControl><SelectContent>{TaskPriorityEnumClient.options.map(priority => <SelectItem key={priority} value={priority}>{priorityToDisplayClient[priority]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="assignedToUserId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Assignee</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Assign to user" /></SelectTrigger></FormControl><SelectContent>{usersForSelect.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="tagNames" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Tags</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., urgent, client_x (comma-separated)" {...field} value={field.value ?? ""} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="relatedToLeadId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Opportunity</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to opportunity" /></SelectTrigger></FormControl><SelectContent>{opportunitiesForSelect.map(opp => <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                  <FormField control={addTaskForm.control} name="relatedToProjectId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Project</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to project" /></SelectTrigger></FormControl><SelectContent>{projectsForSelect.map(proj => <SelectItem key={proj.id} value={proj.id}>{proj.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                 </div>
               </ScrollArea>
-              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={addTaskForm.formState.isSubmitting}>Save Task</Button></DialogFooter>
+              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={addTaskForm.formState.isSubmitting}>{addTaskForm.formState.isSubmitting ? "Saving..." : "Save Task"}</Button></DialogFooter>
             </form>
             </FormProvider>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Edit Task Dialog */}
       <Dialog open={isEditTaskDialogOpen} onOpenChange={(isOpen) => {
+          if (!isOpen) { setEditingTask(null); editTaskForm.reset(); }
           setIsEditTaskDialogOpen(isOpen);
-          if (!isOpen) setEditingTask(null);
       }}>
         <DialogContent className="sm:max-w-[625px]">
           <DialogHeader><DialogTitle>Edit Task: {editingTask?.title}</DialogTitle><DialogDescription>Update task details.</DialogDescription></DialogHeader>
@@ -429,25 +411,24 @@ export default function CrmTasksPage() {
             <form onSubmit={editTaskForm.handleSubmit(handleActualEditTaskSubmit)}>
               <ScrollArea className="max-h-[60vh] p-1 pr-3">
                 <div className="grid gap-4 py-4">
-                    <FormField control={editTaskForm.control} name="title" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Title</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                    <FormField control={editTaskForm.control} name="description" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-start gap-4"><FormLabel className="text-right col-span-1 pt-2">Description</FormLabel><FormControl className="col-span-3"><Textarea {...field} rows={3}/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                    <FormField control={editTaskForm.control} name="status" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Status</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                    <FormField control={editTaskForm.control} name="dueDate" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Due Date</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                    <FormField control={editTaskForm.control} name="priority" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Priority</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priorityToDisplay[priority]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                    <FormField control={editTaskForm.control} name="assigneeName" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Assignee</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                    <FormField control={editTaskForm.control} name="tags" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Tags</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><p className="col-start-2 col-span-3 text-xs text-muted-foreground">Comma-separated tags.</p><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                    <FormField control={editTaskForm.control} name="opportunityId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Opportunity</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to opportunity" /></SelectTrigger></FormControl><SelectContent>{mockOpportunitiesForSelect.map(opp => <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
-                    <FormField control={editTaskForm.control} name="projectId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Project</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to project" /></SelectTrigger></FormControl><SelectContent>{mockProjectsForSelect.map(proj => <SelectItem key={proj.id} value={proj.id}>{proj.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="title" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Title *</FormLabel><FormControl className="col-span-3"><Input {...field} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="description" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-start gap-4"><FormLabel className="text-right col-span-1 pt-2">Description</FormLabel><FormControl className="col-span-3"><Textarea {...field} value={field.value ?? ""} rows={3}/></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="status" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Status *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl className="col-span-3"><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{TaskStatusEnumClient.options.map(status => <SelectItem key={status} value={status}>{statusToColumnTitle[status]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="dueDate" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Due Date</FormLabel><div className="col-span-3 relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="date" className="pl-10" {...field} value={field.value ?? ''} /></FormControl></div></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="priority" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Priority</FormLabel><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl className="col-span-3"><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{TaskPriorityEnumClient.options.map(priority => <SelectItem key={priority} value={priority}>{priorityToDisplayClient[priority]}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="assignedToUserId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Assignee</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Assign to user" /></SelectTrigger></FormControl><SelectContent>{usersForSelect.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="tagNames" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Tags</FormLabel><FormControl className="col-span-3"><Input placeholder="e.g., urgent, client_x (comma-separated)" {...field} value={field.value ?? ""} /></FormControl></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="relatedToLeadId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Opportunity</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to opportunity" /></SelectTrigger></FormControl><SelectContent>{opportunitiesForSelect.map(opp => <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
+                    <FormField control={editTaskForm.control} name="relatedToProjectId" render={({ field }) => (<FormItem><div className="grid grid-cols-4 items-center gap-4"><FormLabel className="text-right col-span-1">Project</FormLabel><Select onValueChange={field.onChange} value={field.value || ""}><FormControl className="col-span-3"><SelectTrigger><SelectValue placeholder="Link to project" /></SelectTrigger></FormControl><SelectContent>{projectsForSelect.map(proj => <SelectItem key={proj.id} value={proj.id}>{proj.name}</SelectItem>)}</SelectContent></Select></div><FormMessage className="col-start-2 col-span-3" /></FormItem>)} />
                 </div>
               </ScrollArea>
-              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={editTaskForm.formState.isSubmitting}>Save Changes</Button></DialogFooter>
+              <DialogFooter className="pt-4 border-t mt-2"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={editTaskForm.formState.isSubmitting}>{editTaskForm.formState.isSubmitting ? "Saving..." : "Save Changes"}</Button></DialogFooter>
             </form>
             </FormProvider>
           )}
         </DialogContent>
       </Dialog>
-      
-      {/* View Task Dialog */}
+
       <Dialog open={isViewTaskDialogOpen} onOpenChange={setIsViewTaskDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -460,46 +441,45 @@ export default function CrmTasksPage() {
               <div><p className="font-medium text-muted-foreground">Title:</p><p>{viewingTask.title}</p></div>
               {viewingTask.description && (<div><p className="font-medium text-muted-foreground">Description:</p><p className="whitespace-pre-wrap">{viewingTask.description}</p></div>)}
               <div><p className="font-medium text-muted-foreground">Status:</p><div><Badge variant="outline">{statusToColumnTitle[viewingTask.status]}</Badge></div></div>
-              {viewingTask.dueDate && (<div><p className="font-medium text-muted-foreground">Due Date:</p><p>{viewingTask.dueDate}</p></div>)}
-              {viewingTask.priority && (<div><p className="font-medium text-muted-foreground">Priority:</p><div><Badge variant={viewingTask.priority === 'HIGH' ? 'destructive' : viewingTask.priority === 'MEDIUM' ? 'secondary' : 'outline'}>{priorityToDisplay[viewingTask.priority]}</Badge></div></div>)}
-              {viewingTask.assignee && (
+              {viewingTask.dueDate && (<div><p className="font-medium text-muted-foreground">Due Date:</p><p>{new Date(viewingTask.dueDate).toLocaleDateString()}</p></div>)}
+              {viewingTask.priority && (<div><p className="font-medium text-muted-foreground">Priority:</p><div><Badge variant={viewingTask.priority === 'HIGH' ? 'destructive' : viewingTask.priority === 'MEDIUM' ? 'secondary' : 'outline'}>{priorityToDisplayClient[viewingTask.priority]}</Badge></div></div>)}
+              {viewingTask.assignedTo && (
                  <div><p className="font-medium text-muted-foreground">Assigned To:</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <Avatar className="h-7 w-7"><AvatarImage src={viewingTask.assignee.avatarUrl} alt={viewingTask.assignee.name} data-ai-hint={viewingTask.assignee.dataAiHint || "avatar person"} /><AvatarFallback>{viewingTask.assignee.avatarFallback}</AvatarFallback></Avatar>
-                    <span>{viewingTask.assignee.name}</span>
+                    <Avatar className="h-7 w-7"><AvatarImage src={viewingTask.assignedTo.avatarUrl || `https://placehold.co/40x40.png`} alt={viewingTask.assignedTo.name || 'U'} data-ai-hint={viewingTask.assignedTo.dataAiHint || "avatar person"} /><AvatarFallback className="text-xs">{(viewingTask.assignedTo.name || 'U').substring(0,2).toUpperCase()}</AvatarFallback></Avatar>
+                    <span>{viewingTask.assignedTo.name}</span>
                   </div>
                 </div>
               )}
-              {viewingTask.opportunityName && (<div><p className="font-medium text-muted-foreground">Linked Opportunity:</p><div className="flex items-center gap-1"><OpportunityIcon className="h-4 w-4 text-blue-500"/><p>{viewingTask.opportunityName}</p></div></div>)}
-              {viewingTask.projectName && (<div><p className="font-medium text-muted-foreground">Linked Project:</p><div className="flex items-center gap-1"><Briefcase className="h-4 w-4 text-purple-500"/><p>{viewingTask.projectName}</p></div></div>)}
+              {viewingTask.relatedToLead?.name && (<div><p className="font-medium text-muted-foreground">Linked Opportunity:</p><div className="flex items-center gap-1"><OpportunityIcon className="h-4 w-4 text-blue-500"/><p>{viewingTask.relatedToLead.name}</p></div></div>)}
+              {viewingTask.relatedToProject?.name && (<div><p className="font-medium text-muted-foreground">Linked Project:</p><div className="flex items-center gap-1"><Briefcase className="h-4 w-4 text-purple-500"/><p>{viewingTask.relatedToProject.name}</p></div></div>)}
               {viewingTask.tags && viewingTask.tags.length > 0 && (
                 <div><p className="font-medium text-muted-foreground">Tags:</p>
                   <div className="flex flex-wrap gap-1 mt-1">{viewingTask.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs flex items-center"><Tag className="h-3 w-3 mr-1"/>{tag}</Badge>)}</div>
                 </div>
               )}
+               <div><p className="font-medium text-muted-foreground">Created At:</p><p>{new Date(viewingTask.createdAt).toLocaleString()}</p></div>
+               <div><p className="font-medium text-muted-foreground">Last Updated:</p><p>{new Date(viewingTask.updatedAt).toLocaleString()}</p></div>
             </div>
             </ScrollArea>
           )}
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Close</Button>
-            </DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
 
       <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete task 
-              "{Object.values(tasksByStatus).flat().find(t => t.id === taskToDeleteId)?.title || 'this task'}".
+              This action will mark task
+              "{Object.values(tasksByStatus).flat().find(t => t.id === taskToDeleteId)?.title || 'this task'}" as deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {setTaskToDeleteId(null); setIsDeleteConfirmOpen(false);}}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {setTaskToDeleteId(null); setIsDeleteConfirmOpen(false);}} type="button">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteTask} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
               Delete Task
             </AlertDialogAction>
@@ -514,9 +494,9 @@ export default function CrmTasksPage() {
           onViewTask={openViewTaskDialog}
           onDeleteTask={triggerDeleteConfirmation}
       />
+       <div className="text-xs text-muted-foreground text-center flex-shrink-0 py-2">
+        Showing {Object.values(tasksByStatus).flat().length} tasks.
+      </div>
     </div>
   );
 }
-
-
-    
