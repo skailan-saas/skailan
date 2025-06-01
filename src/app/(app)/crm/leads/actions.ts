@@ -8,6 +8,9 @@ import type { Lead as PrismaLead, LeadStatus, LeadSource, Tag as PrismaTag } fro
 
 const prisma = new PrismaClient();
 
+// IMPORTANT: Replace with actual tenantId from user session or context
+const tenantIdPlaceholder = "your-tenant-id"; 
+
 // Zod Enums from Prisma Enums
 const LeadStatusEnum = z.enum(["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "CONVERTED", "CLOSED_WON", "CLOSED_LOST", "UNQUALIFIED", "ARCHIVED"]);
 const LeadSourceEnum = z.enum(["WhatsApp", "WebChat", "Messenger", "Instagram", "Manual", "Referral", "API", "Other"]);
@@ -22,28 +25,34 @@ const LeadFormSchema = z.object({
   status: LeadStatusEnum,
   tags: z.string().optional(), // Comma-separated string of tag names
   notes: z.string().optional(),
-  assignedToUserId: z.string().optional(), // Assuming you might add a selector for this
+  assignedToUserId: z.string().optional().nullable(), 
 });
 
 export type LeadFormValues = z.infer<typeof LeadFormSchema>;
 
 // Frontend Lead type, might differ slightly from PrismaLead for UI needs
-export interface LeadFE extends Omit<PrismaLead, 'companyId' | 'assignedToUserId' | 'opportunityId' | 'chatbotFlowState' | 'tenantId'> {
+export interface LeadFE extends Omit<PrismaLead, 'companyId' | 'assignedToUserId' | 'chatbotFlowState' | 'tenantId'> {
   companyName?: string; // For display
   assignedTo?: { id: string; name: string | null; } | null; // For display
   tags: string[]; // Array of tag names
   dataAiHint?: string; // For UI only
+  // Explicitly include fields that might be null in Prisma but handled as undefined or string in FE
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  expectedCloseDate?: Date | null;
+  opportunityValue?: number | null;
 }
 
 
-async function findOrCreateCompany(name: string, tenantId: string): Promise<string | undefined> {
+async function findOrCreateCompany(prismaTx: Prisma.TransactionClient, name: string, tenantId: string): Promise<string | undefined> {
   if (!name.trim()) return undefined;
   try {
-    let company = await prisma.company.findFirst({
+    let company = await prismaTx.company.findFirst({
       where: { name, tenantId, deletedAt: null },
     });
     if (!company) {
-      company = await prisma.company.create({
+      company = await prismaTx.company.create({
         data: {
           name,
           tenantId,
@@ -53,116 +62,129 @@ async function findOrCreateCompany(name: string, tenantId: string): Promise<stri
     return company.id;
   } catch (error) {
     console.error("Error finding or creating company:", error);
-    return undefined; // Or throw error
+    return undefined; 
   }
 }
 
-async function manageTags(tagNames: string[], tenantId: string): Promise<Array<{ tagId: string }>> {
-  if (!tagNames || tagNames.length === 0) return [];
-  const tagOperations = tagNames.map(async (name) => {
-    let tag = await prisma.tag.findUnique({
-      where: { tenantId_name: { tenantId, name }, deletedAt: null },
-    });
-    if (!tag) {
-      tag = await prisma.tag.create({
-        data: { name, tenantId },
+async function manageLeadTags(prismaTx: Prisma.TransactionClient, leadId: string, tagNamesString: string | undefined, tenantId: string) {
+  // Delete existing tags for this lead
+  await prismaTx.leadTag.deleteMany({
+    where: { leadId, tenantId },
+  });
+
+  if (tagNamesString && tagNamesString.trim() !== "") {
+    const tagNamesArray = tagNamesString.split(',').map(t => t.trim()).filter(t => t);
+    if (tagNamesArray.length > 0) {
+      const tagOperations = tagNamesArray.map(name =>
+        prismaTx.tag.upsert({
+          where: { tenantId_name: { tenantId, name } },
+          update: {},
+          create: { name, tenantId },
+        })
+      );
+      const createdOrFoundTags = await Promise.all(tagOperations);
+
+      await prismaTx.leadTag.createMany({
+        data: createdOrFoundTags.map(tag => ({
+          leadId,
+          tagId: tag.id,
+          tenantId,
+        })),
+        skipDuplicates: true,
       });
     }
-    return { tagId: tag.id };
-  });
-  return Promise.all(tagOperations);
+  }
 }
 
 
 export async function getLeads(): Promise<LeadFE[]> {
-  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
   try {
     const leadsFromDb = await prisma.lead.findMany({
       where: { tenantId: tenantIdPlaceholder, deletedAt: null },
       include: {
         company: { select: { name: true } },
-        assignedTo: { select: { id: true, fullName: true, email: true } }, // Fetching more from TenantUser
+        assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true } } } },
         tags: { include: { tag: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });
 
     return leadsFromDb.map(lead => ({
-      ...lead,
+      ...lead, // Spread Prisma lead
+      id: lead.id,
+      name: lead.name,
       email: lead.email ?? undefined,
       phone: lead.phone ?? undefined,
+      source: lead.source as LeadSource, 
+      status: lead.status as LeadStatus,
       notes: lead.notes ?? undefined,
+      lastContacted: lead.lastContacted,
+      opportunityValue: lead.opportunityValue,
+      expectedCloseDate: lead.expectedCloseDate,
       companyName: lead.company?.name ?? undefined,
-      assignedTo: lead.assignedTo ? { id: lead.assignedTo.id, name: lead.assignedTo.fullName || lead.assignedTo.email } : null,
+      assignedTo: lead.assignedTo ? { id: lead.assignedTo.userId, name: lead.assignedTo.user.fullName || lead.assignedTo.user.email } : null,
       tags: lead.tags.map(leadTag => leadTag.tag.name),
-      source: lead.source as LeadSource, // Prisma enum to page enum (assuming they match)
-      status: lead.status as LeadStatus, // Prisma enum to page enum
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
+      deletedAt: lead.deletedAt ?? undefined,
     }));
   } catch (error) {
-    console.error("Failed to fetch leads:", error);
+    console.error("ERROR DETAILED getLeads:", error);
     throw new Error("Could not fetch leads.");
   }
 }
 
 export async function createLead(data: LeadFormValues): Promise<LeadFE> {
-  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
   const validation = LeadFormSchema.safeParse(data);
   if (!validation.success) {
     throw new Error(`Invalid lead data: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
   }
   const { companyName, tags: tagsString, ...leadData } = validation.data;
-
-  const companyId = companyName ? await findOrCreateCompany(companyName, tenantIdPlaceholder) : undefined;
-  const tagNamesArray = tagsString ? tagsString.split(',').map(t => t.trim()).filter(t => t) : [];
   
   try {
-    const newLead = await prisma.lead.create({
-      data: {
-        ...leadData,
-        tenantId: tenantIdPlaceholder,
-        companyId: companyId,
-        email: leadData.email || null,
-        phone: leadData.phone || null,
-        notes: leadData.notes || null,
-        assignedToUserId: leadData.assignedToUserId || null,
-        tags: tagNamesArray.length > 0 ? {
-          create: tagNamesArray.map(name => ({
-            tenantId: tenantIdPlaceholder,
-            tag: {
-              connectOrCreate: {
-                where: { tenantId_name: { tenantId: tenantIdPlaceholder, name } },
-                create: { name, tenantId: tenantIdPlaceholder },
-              },
-            },
-          })),
-        } : undefined,
-      },
-      include: {
-        company: { select: { name: true } },
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-        tags: { include: { tag: { select: { name: true } } } },
-      },
+    const newLead = await prisma.$transaction(async (prismaTx) => {
+      const companyId = companyName ? await findOrCreateCompany(prismaTx, companyName, tenantIdPlaceholder) : undefined;
+      
+      const createdLead = await prismaTx.lead.create({
+        data: {
+          ...leadData,
+          tenantId: tenantIdPlaceholder,
+          companyId: companyId,
+          email: leadData.email || null,
+          phone: leadData.phone || null,
+          notes: leadData.notes || null,
+          assignedToUserId: leadData.assignedToUserId || null,
+        },
+      });
+
+      await manageLeadTags(prismaTx, createdLead.id, tagsString, tenantIdPlaceholder);
+      return createdLead;
     });
+    
     revalidatePath('/crm/leads');
-    return {
-        ...newLead,
-        email: newLead.email ?? undefined,
-        phone: newLead.phone ?? undefined,
-        notes: newLead.notes ?? undefined,
-        companyName: newLead.company?.name ?? undefined,
-        assignedTo: newLead.assignedTo ? { id: newLead.assignedTo.id, name: newLead.assignedTo.fullName || newLead.assignedTo.email } : null,
-        tags: newLead.tags.map(leadTag => leadTag.tag.name),
-        source: newLead.source as LeadSource,
-        status: newLead.status as LeadStatus,
-        createdAt: newLead.createdAt,
-        updatedAt: newLead.updatedAt,
+    // Fetch the newly created lead with all relations to match LeadFE
+    const result = await prisma.lead.findUniqueOrThrow({
+        where: { id: newLead.id },
+        include: {
+            company: { select: { name: true } },
+            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true } } } },
+            tags: { include: { tag: { select: { name: true } } } },
+        }
+    });
+     return {
+        ...result,
+        email: result.email ?? undefined,
+        phone: result.phone ?? undefined,
+        notes: result.notes ?? undefined,
+        companyName: result.company?.name ?? undefined,
+        assignedTo: result.assignedTo ? { id: result.assignedTo.userId, name: result.assignedTo.user.fullName || result.assignedTo.user.email } : null,
+        tags: result.tags.map(leadTag => leadTag.tag.name),
+        source: result.source as LeadSource,
+        status: result.status as LeadStatus,
     };
   } catch (error) {
     console.error("Failed to create lead:", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      // Assuming the target is the email unique constraint
       if ((error.meta?.target as string[])?.includes('email') && (error.meta?.target as string[])?.includes('tenantId')) {
         throw new Error("A lead with this email already exists in this tenant.");
       }
@@ -172,63 +194,52 @@ export async function createLead(data: LeadFormValues): Promise<LeadFE> {
 }
 
 export async function updateLead(id: string, data: LeadFormValues): Promise<LeadFE> {
-  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
   const validation = LeadFormSchema.safeParse(data);
   if (!validation.success) {
     throw new Error(`Invalid lead data: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
   }
   const { companyName, tags: tagsString, ...leadData } = validation.data;
 
-  const companyId = companyName ? await findOrCreateCompany(companyName, tenantIdPlaceholder) : undefined;
-  const tagNamesArray = tagsString ? tagsString.split(',').map(t => t.trim()).filter(t => t) : [];
-
   try {
-    // For tags, a common strategy is to disconnect all existing tags and then connect/create the new ones.
-    // More complex logic would involve diffing, but this is simpler for now.
-    await prisma.leadTag.deleteMany({
-        where: { leadId: id, tenantId: tenantIdPlaceholder },
+    const updatedLead = await prisma.$transaction(async (prismaTx) => {
+        const companyId = companyName ? await findOrCreateCompany(prismaTx, companyName, tenantIdPlaceholder) : undefined;
+
+        const currentLead = await prismaTx.lead.update({
+            where: { id, tenantId: tenantIdPlaceholder, deletedAt: null },
+            data: {
+            ...leadData,
+            companyId: companyId,
+            email: leadData.email || null,
+            phone: leadData.phone || null,
+            notes: leadData.notes || null,
+            assignedToUserId: leadData.assignedToUserId || null,
+            updatedAt: new Date(),
+            },
+        });
+
+        await manageLeadTags(prismaTx, currentLead.id, tagsString, tenantIdPlaceholder);
+        return currentLead;
     });
 
-    const updatedLead = await prisma.lead.update({
-      where: { id, tenantId: tenantIdPlaceholder, deletedAt: null },
-      data: {
-        ...leadData,
-        companyId: companyId,
-        email: leadData.email || null,
-        phone: leadData.phone || null,
-        notes: leadData.notes || null,
-        assignedToUserId: leadData.assignedToUserId || null,
-        tags: tagNamesArray.length > 0 ? {
-          create: tagNamesArray.map(name => ({
-            tenantId: tenantIdPlaceholder,
-            tag: {
-              connectOrCreate: {
-                where: { tenantId_name: { tenantId: tenantIdPlaceholder, name } },
-                create: { name, tenantId: tenantIdPlaceholder },
-              },
-            },
-          })),
-        } : undefined,
-      },
-      include: {
-        company: { select: { name: true } },
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-        tags: { include: { tag: { select: { name: true } } } },
-      },
-    });
     revalidatePath('/crm/leads');
+    const result = await prisma.lead.findUniqueOrThrow({
+        where: { id: updatedLead.id },
+        include: {
+            company: { select: { name: true } },
+            assignedTo: { select: { userId: true, user: { select: { fullName: true, email: true } } } },
+            tags: { include: { tag: { select: { name: true } } } },
+        }
+    });
      return {
-        ...updatedLead,
-        email: updatedLead.email ?? undefined,
-        phone: updatedLead.phone ?? undefined,
-        notes: updatedLead.notes ?? undefined,
-        companyName: updatedLead.company?.name ?? undefined,
-        assignedTo: updatedLead.assignedTo ? { id: updatedLead.assignedTo.id, name: updatedLead.assignedTo.fullName || updatedLead.assignedTo.email } : null,
-        tags: updatedLead.tags.map(leadTag => leadTag.tag.name),
-        source: updatedLead.source as LeadSource,
-        status: updatedLead.status as LeadStatus,
-        createdAt: updatedLead.createdAt,
-        updatedAt: updatedLead.updatedAt,
+        ...result,
+        email: result.email ?? undefined,
+        phone: result.phone ?? undefined,
+        notes: result.notes ?? undefined,
+        companyName: result.company?.name ?? undefined,
+        assignedTo: result.assignedTo ? { id: result.assignedTo.userId, name: result.assignedTo.user.fullName || result.assignedTo.user.email } : null,
+        tags: result.tags.map(leadTag => leadTag.tag.name),
+        source: result.source as LeadSource,
+        status: result.status as LeadStatus,
     };
   } catch (error) {
     console.error(`Failed to update lead ${id}:`, error);
@@ -245,7 +256,6 @@ export async function updateLead(id: string, data: LeadFormValues): Promise<Lead
 }
 
 export async function deleteLead(id: string): Promise<{ success: boolean; message?: string }> {
-  const tenantIdPlaceholder = "your-tenant-id"; // Replace with actual tenantId logic
   try {
     await prisma.lead.update({
       where: { id, tenantId: tenantIdPlaceholder, deletedAt: null },
@@ -260,4 +270,24 @@ export async function deleteLead(id: string): Promise<{ success: boolean; messag
     }
     return { success: false, message: "Could not delete lead." };
   }
+}
+
+// Function to get leads for select components (used by Quotes, Tasks, Projects if Lead acts as Opportunity)
+export async function getLeadsForSelect(): Promise<{ id: string; name: string }[]> {
+    try {
+      const leads = await prisma.lead.findMany({
+        where: {
+          tenantId: tenantIdPlaceholder,
+          deletedAt: null,
+          // Optionally filter by statuses that represent opportunities, e.g., not 'CLOSED_LOST', 'UNQUALIFIED'
+          // status: { notIn: ['CLOSED_LOST', 'UNQUALIFIED', 'ARCHIVED'] } 
+        },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      });
+      return leads;
+    } catch (error) {
+      console.error("Failed to fetch leads for select:", error);
+      throw new Error("Could not fetch leads for selection.");
+    }
 }
