@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer, Zap as OpportunityIcon, Textarea as TextareaIcon } from "lucide-react";
+import { PlusCircle, FileText, Search, Filter, MoreHorizontal, Edit, Eye, Trash2, Send, Download, CalendarDays, PackagePlus, Printer, Zap as OpportunityIcon } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect, useMemo, useCallback, type FormEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -22,10 +22,12 @@ import type { ProductType as PrismaProductType, QuoteStatus as PrismaQuoteStatus
 import { 
     getQuotes, createQuote, updateQuote, deleteQuote,
     getLeadsForSelect, getProductsForSelect,
-    type QuoteFE, type QuoteLineItemFE, type QuoteFormValues as ServerQuoteFormValues, QuoteFormSchema as ServerQuoteFormSchema
+    type QuoteFE, type QuoteLineItemFE 
 } from './actions';
-import { Textarea } from "@/components/ui/textarea"; // Added import
+import { QuoteFormSchema, type QuoteFormValues } from '@/lib/schemas/crm/quote-schema'; // Updated import
+import { Textarea } from "@/components/ui/textarea"; 
 
+// Client-side enum for form status, consistent with Prisma schema
 const QUOTE_STATUSES_CLIENT = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED", "CANCELED"] as const;
 type QuoteStatusClient = typeof QUOTE_STATUSES_CLIENT[number];
 
@@ -40,14 +42,6 @@ interface OpportunityForSelect {
   id: string;
   name: string;
 }
-
-// Client-side Zod schema for form validation, ensuring client-side enum matches
-const QuoteLineItemSchemaClient = ServerQuoteFormSchema.shape.lineItems.element;
-const QuoteFormSchemaClient = ServerQuoteFormSchema.extend({
-    status: z.enum(QUOTE_STATUSES_CLIENT)
-});
-type QuoteFormValuesClient = z.infer<typeof QuoteFormSchemaClient>;
-
 
 export default function CrmQuotesPage() {
   const { toast } = useToast();
@@ -66,8 +60,8 @@ export default function CrmQuotesPage() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [quoteToDeleteId, setQuoteToDeleteId] = useState<string | null>(null);
 
-  const quoteForm = useForm<QuoteFormValuesClient>({
-    resolver: zodResolver(QuoteFormSchemaClient),
+  const quoteForm = useForm<QuoteFormValues>({ // Use QuoteFormValues from lib
+    resolver: zodResolver(QuoteFormSchema), // Use QuoteFormSchema from lib
     defaultValues: {
         opportunityId: "", 
         expiryDate: "",
@@ -90,7 +84,7 @@ export default function CrmQuotesPage() {
         getLeadsForSelect(),
         getProductsForSelect(),
       ]);
-      setQuotes(fetchedQuotes);
+      setQuotes(fetchedQuotes.map(q => ({...q, dataAiHint: "document paper invoice"})));
       setOpportunitiesForSelect(fetchedOpportunities);
       setProductsForSelect(fetchedProducts);
     } catch (error: any) {
@@ -118,7 +112,7 @@ export default function CrmQuotesPage() {
           expiryDate: editingQuote.expiryDate ? new Date(editingQuote.expiryDate).toISOString().split('T')[0] : "",
           status: editingQuote.status as QuoteStatusClient,
           lineItems: editingQuote.lineItems.map(li => ({
-            id: li.id, // Keep existing ID for updates if necessary
+            id: li.id, 
             productId: li.productId,
             productName: li.productName,
             quantity: li.quantity,
@@ -127,17 +121,25 @@ export default function CrmQuotesPage() {
           notes: editingQuote.notes || "",
         });
       } else {
-        quoteForm.reset({ opportunityId: "", expiryDate: "", status: "DRAFT", lineItems: [], notes: "" });
+        // Reset with potentially new default values if opportunities/products have loaded
+        quoteForm.reset({ 
+            opportunityId: opportunitiesForSelect.length > 0 ? opportunitiesForSelect[0].id : "", 
+            expiryDate: "", 
+            status: "DRAFT", 
+            lineItems: [], 
+            notes: "" 
+        });
       }
     }
-  }, [isAddOrEditQuoteDialogOpen, editingQuote, quoteForm]);
+  }, [isAddOrEditQuoteDialogOpen, editingQuote, quoteForm, opportunitiesForSelect]);
 
 
   const handleProductSelectionForLineItem = (index: number, productId: string) => {
     const product = productsForSelect.find(p => p.id === productId);
     if (product) {
+      // Use update from useFieldArray to correctly update the form state
       updateLineItem(index, {
-        ...currentLineItemsWatch[index],
+        ...currentLineItemsWatch[index], // Spread existing values of the item
         productId: product.id,
         productName: product.name,
         unitPrice: product.price,
@@ -145,32 +147,30 @@ export default function CrmQuotesPage() {
     }
   };
 
-  const handleActualSaveQuote = async (values: QuoteFormValuesClient) => {
+  const handleActualSaveQuote = async (values: QuoteFormValues) => {
     try {
       quoteForm.control._formState.isSubmitting = true;
-      const serverValues: ServerQuoteFormValues = {
+      // Ensure lineItems have product name before sending to server
+      const processedValues: QuoteFormValues = {
         ...values,
-        lineItems: values.lineItems.map(li => ({ // Ensure only necessary fields are sent
-            productId: li.productId,
-            productName: productsForSelect.find(p => p.id === li.productId)?.name || 'Unknown Product', // Ensure product name is current
-            quantity: Number(li.quantity),
-            unitPrice: Number(li.unitPrice),
-            ...(li.id && { id: li.id }) // Include ID if it exists (for updates)
+        lineItems: values.lineItems.map(li => ({
+            ...li,
+            productName: productsForSelect.find(p => p.id === li.productId)?.name || li.productName || 'Unknown Product',
         })),
-        status: values.status as PrismaQuoteStatus, // Cast to Prisma type
+        status: values.status as PrismaQuoteStatus, 
       };
 
       if (editingQuote) {
-        await updateQuote(editingQuote.id, serverValues);
+        await updateQuote(editingQuote.id, processedValues);
         toast({ title: "Quote Updated", description: `Quote ${editingQuote.quoteNumber} has been updated.` });
       } else {
-        await createQuote(serverValues);
-        toast({ title: "Quote Added", description: `Quote for opportunity has been added.` });
+        await createQuote(processedValues);
+        toast({ title: "Quote Added", description: `New quote has been added.` });
       }
       
       setIsAddOrEditQuoteDialogOpen(false);
       setEditingQuote(null);
-      fetchPageData(); // Refresh data
+      fetchPageData(); 
     } catch (error: any) {
       toast({ title: "Error Saving Quote", description: error.message || "Could not save quote.", variant: "destructive" });
     } finally {
@@ -185,6 +185,13 @@ export default function CrmQuotesPage() {
 
   const openAddQuoteDialog = () => {
     setEditingQuote(null); 
+    quoteForm.reset({ // Explicitly reset form for new quote
+        opportunityId: opportunitiesForSelect.length > 0 ? opportunitiesForSelect[0].id : "",
+        expiryDate: "",
+        status: "DRAFT",
+        lineItems: [],
+        notes: "",
+    });
     setIsAddOrEditQuoteDialogOpen(true);
   };
 
@@ -200,7 +207,7 @@ export default function CrmQuotesPage() {
         const result = await deleteQuote(quoteToDeleteId);
         if (result.success) {
             toast({ title: "Quote Deleted", description: `Quote "${quoteNameToDelete}" has been marked as deleted.` });
-            fetchPageData(); // Refresh list
+            fetchPageData(); 
         } else {
             toast({ title: "Error Deleting Quote", description: result.message || "Could not delete quote.", variant: "destructive" });
         }
@@ -220,7 +227,7 @@ export default function CrmQuotesPage() {
     window.print();
   };
   
-  if (isLoading) {
+  if (isLoading && !quotes.length) { // Show loading only if quotes array is empty
     return <div className="p-6 text-center text-muted-foreground">Loading quotes...</div>;
   }
 
@@ -252,7 +259,7 @@ export default function CrmQuotesPage() {
               <ScrollArea className="max-h-[65vh] p-1 pr-3">
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={quoteForm.control} name="opportunityId" render={({ field }) => ( <FormItem> <FormLabel>Opportunity</FormLabel> <Select onValueChange={field.onChange} value={field.value}> <FormControl> <SelectTrigger><SelectValue placeholder="Select an opportunity" /></SelectTrigger> </FormControl> <SelectContent>{opportunitiesForSelect.map(opp => ( <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem> ))}</SelectContent> </Select> <FormMessage /> </FormItem> )}/>
+                    <FormField control={quoteForm.control} name="opportunityId" render={({ field }) => ( <FormItem> <FormLabel>Opportunity</FormLabel> <Select onValueChange={field.onChange} value={field.value || ""}> <FormControl> <SelectTrigger><SelectValue placeholder="Select an opportunity" /></SelectTrigger> </FormControl> <SelectContent>{opportunitiesForSelect.map(opp => ( <SelectItem key={opp.id} value={opp.id}>{opp.name}</SelectItem> ))}</SelectContent> </Select> <FormMessage /> </FormItem> )}/>
                     <FormField control={quoteForm.control} name="expiryDate" render={({ field }) => ( <FormItem> <FormLabel>Expiry Date</FormLabel> <div className="relative"> <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /> <FormControl><Input type="date" className="pl-10" {...field} value={field.value || ''} /></FormControl> </div> <FormMessage /> </FormItem> )}/>
                   </div>
                   <FormField control={quoteForm.control} name="status" render={({ field }) => ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} value={field.value}> <FormControl> <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger> </FormControl> <SelectContent>{QUOTE_STATUSES_CLIENT.map(status => <SelectItem key={status} value={status}>{status.charAt(0) + status.slice(1).toLowerCase()}</SelectItem>)}</SelectContent> </Select> <FormMessage /> </FormItem> )}/>
@@ -271,7 +278,7 @@ export default function CrmQuotesPage() {
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
                                 <div className="sm:col-span-6">
-                                <FormField control={quoteForm.control} name={`lineItems.${index}.productId`} render={({ field: itemField }) => ( <FormItem> <FormLabel className="text-xs">Product/Service</FormLabel> <Select onValueChange={(value) => { itemField.onChange(value); handleProductSelectionForLineItem(index, value); }} value={itemField.value}> <FormControl><SelectTrigger className="h-9"><SelectValue placeholder="Select item" /></SelectTrigger></FormControl> <SelectContent>{productsForSelect.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.type})</SelectItem>)}</SelectContent> </Select> <FormMessage /> </FormItem> )}/>
+                                <FormField control={quoteForm.control} name={`lineItems.${index}.productId`} render={({ field: itemField }) => ( <FormItem> <FormLabel className="text-xs">Product/Service</FormLabel> <Select onValueChange={(value) => { itemField.onChange(value); handleProductSelectionForLineItem(index, value); }} value={itemField.value}> <FormControl><SelectTrigger className="h-9"><SelectValue placeholder="Select item" /></SelectTrigger></FormControl> <SelectContent>{productsForSelect.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.type === "PRODUCTO" ? "Product" : "Service"})</SelectItem>)}</SelectContent> </Select> <FormMessage /> </FormItem> )}/>
                                 </div>
                                 <div className="sm:col-span-2">
                                 <FormField control={quoteForm.control} name={`lineItems.${index}.quantity`} render={({ field: itemField }) => ( <FormItem> <FormLabel className="text-xs">Qty</FormLabel> <FormControl><Input type="number" min="1" {...itemField} onChange={e => itemField.onChange(parseFloat(e.target.value) || 1)} className="h-9 text-center" /></FormControl> <FormMessage /> </FormItem> )}/>
@@ -279,7 +286,6 @@ export default function CrmQuotesPage() {
                                 <div className="sm:col-span-3">
                                 <FormField control={quoteForm.control} name={`lineItems.${index}.unitPrice`} render={({ field: itemField }) => ( <FormItem> <FormLabel className="text-xs">Unit Price ($)</FormLabel> <FormControl><Input type="number" step="0.01" min="0" {...itemField} onChange={e => itemField.onChange(parseFloat(e.target.value) || 0)} className="h-9" /></FormControl> <FormMessage /> </FormItem> )}/>
                                 </div>
-                                {/* Total per item (display only) */}
                                 <div className="sm:col-span-1 flex items-end pb-1">
                                     <p className="text-sm font-medium text-right w-full">
                                         ${((currentLineItemsWatch?.[index]?.quantity || 0) * (currentLineItemsWatch?.[index]?.unitPrice || 0)).toFixed(2)}
@@ -397,4 +403,3 @@ export default function CrmQuotesPage() {
     </div>
   );
 }
-
