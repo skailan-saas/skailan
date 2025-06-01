@@ -191,7 +191,14 @@ const ProjectKanbanBoard: FC<ProjectKanbanBoardProps> = ({ projectsByStatus, onD
         <div className="flex-1 overflow-x-auto pb-4">
           <div className="flex gap-4 min-w-max h-full">
             {PROJECT_STATUSES_CLIENT.map((statusKey) => (
-              <Droppable key={statusKey} droppableId={statusKey} type="PROJECT" isDropDisabled={false}>
+              <Droppable 
+                key={statusKey} 
+                droppableId={statusKey} 
+                type="PROJECT" 
+                isDropDisabled={false}
+                isCombineEnabled={false}
+                ignoreContainerClipping={false}
+              >
                 {(provided, snapshot) => (
                   <div
                     ref={provided.innerRef}
