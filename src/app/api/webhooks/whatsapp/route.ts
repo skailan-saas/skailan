@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import {
+  Conversation,
+  Message,
+  ConversationChannel,
+  MessageType,
+  MessageSender,
+  WhatsappMessageStatus,
+} from "@prisma/client";
+import { markWhatsappMessageAsRead } from "@/lib/whatsapp/whatsapp-api";
+import { FlowEngine } from "@/lib/flows/flow-engine";
 import crypto from "crypto";
 import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
@@ -252,6 +262,7 @@ async function processIncomingMessages(messageData: any) {
       let content = "";
       let imageUrl = null;
       let fileUrl = null;
+      let interactiveData = null;
 
       if (message.text) {
         content = message.text.body;
@@ -274,6 +285,31 @@ async function processIncomingMessages(messageData: any) {
       } else if (message.location) {
         messageType = "LOCATION";
         content = `Ubicación: ${message.location.latitude}, ${message.location.longitude}`;
+      } else if (message.interactive) {
+        messageType = "INTERACTIVE";
+        interactiveData = message.interactive;
+
+        // Extraer información dependiendo del tipo de interacción
+        if (message.interactive.type === "button_reply") {
+          const reply = message.interactive.button_reply;
+          content = `[Botón seleccionado: ${reply.title}]`;
+          interactiveData = {
+            type: "button_reply",
+            id: reply.id,
+            title: reply.title
+          };
+        } else if (message.interactive.type === "list_reply") {
+          const reply = message.interactive.list_reply;
+          content = `[Opción seleccionada: ${reply.title}]`;
+          interactiveData = {
+            type: "list_reply",
+            id: reply.id,
+            title: reply.title,
+            description: reply.description || ""
+          };
+        } else {
+          content = "[Interacción no reconocida]";
+        }
       }
 
       // Crear el mensaje en la base de datos
@@ -288,7 +324,7 @@ async function processIncomingMessages(messageData: any) {
           whatsappStatus: "DELIVERED",
           imageUrl,
           fileUrl,
-          metadata: message,
+          metadata: interactiveData || message,
         },
       });
 
@@ -304,6 +340,7 @@ async function processIncomingMessages(messageData: any) {
         whatsappStatus: newMessage.whatsappStatus,
         imageUrl: newMessage.imageUrl,
         fileUrl: newMessage.fileUrl,
+        metadata: newMessage.metadata
       });
 
       // También emitir actualización de la conversación
@@ -314,6 +351,89 @@ async function processIncomingMessages(messageData: any) {
         unreadCount: conversation.unreadCount + 1,
         lastMessage: content,
       });
+
+      // Procesar respuesta si es parte de un flujo activo
+      if (messageType === "INTERACTIVE" && interactiveData) {
+        try {
+          // Verificar si la conversación tiene un flowState activo
+          const conversationWithFlow = await prisma.conversation.findUnique({
+            where: { id: conversation.id },
+            select: { flowState: true }
+          });
+
+          if (conversationWithFlow?.flowState) {
+            const flowState = conversationWithFlow.flowState as any;
+            
+            // Verificar si el flujo está esperando una respuesta
+            if (flowState.waitingForInput) {
+              if (flowState.inputType === "button" || flowState.inputType === "carousel_selection") {
+                // Procesar la selección del usuario en el flujo activo
+                const selectedId = interactiveData.id;
+                const selectedTitle = interactiveData.title;
+                
+                // Actualizar variables del flujo con la selección
+                flowState.variables.selected_option_id = selectedId;
+                flowState.variables.selected_option = selectedTitle;
+                flowState.waitingForInput = false;
+                
+                // Guardar el estado actualizado
+                await prisma.conversation.update({
+                  where: { id: conversation.id },
+                  data: { flowState: flowState }
+                });
+                
+                // Continuar la ejecución del flujo con la nueva información
+                const flowEngine = new FlowEngine(channel.tenantId);
+                await flowEngine.executeFlow(
+                  conversation.id, 
+                  flowState.currentFlowId,
+                  selectedTitle
+                );
+              }
+            }
+          }
+        } catch (flowError) {
+          console.error("Error procesando respuesta interactiva para flujo:", flowError);
+        }
+      }
+
+      // Ejecutar flujos automáticos después de procesar el mensaje
+      try {
+        // Verificar si es una nueva conversación
+        const isNewConversation =
+          !conversation.lastMessageAt ||
+          new Date().getTime() -
+            new Date(conversation.lastMessageAt).getTime() >
+            24 * 60 * 60 * 1000; // 24 horas
+
+        if (isNewConversation) {
+          // Ejecutar flujos de "conversation_started"
+          await FlowEngine.findAndExecuteTriggeredFlows(
+            channel.tenantId,
+            conversation.id,
+            content,
+            "conversation_started"
+          );
+        } else {
+          // Ejecutar flujos de "message_received" y "keyword_detected"
+          await FlowEngine.findAndExecuteTriggeredFlows(
+            channel.tenantId,
+            conversation.id,
+            content,
+            "message_received"
+          );
+
+          await FlowEngine.findAndExecuteTriggeredFlows(
+            channel.tenantId,
+            conversation.id,
+            content,
+            "keyword_detected"
+          );
+        }
+      } catch (flowError) {
+        console.error("Error executing flows:", flowError);
+        // No interrumpir el procesamiento del webhook por errores de flujos
+      }
     }
   } catch (error) {
     console.error("Error processing incoming messages:", error);

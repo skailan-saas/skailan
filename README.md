@@ -14,7 +14,9 @@ Sistema completo de gestión de conversaciones con integración WhatsApp Busines
 
 1. **Fork/Clone este repositorio**
 
-2. **Configurar variables de entorno en Vercel:**
+2. **Configurar variables de entorno en Vercel Dashboard:**
+
+   Ve a tu proyecto en Vercel > Settings > Environment Variables y agrega:
 
    ```bash
    DATABASE_URL=postgresql://...
@@ -23,6 +25,8 @@ Sistema completo de gestión de conversaciones con integración WhatsApp Busines
    OPENAI_API_KEY=your-openai-key (opcional)
    GEMINI_API_KEY=your-gemini-key (opcional)
    ```
+
+   **Importante:** Configura estas variables directamente en el dashboard de Vercel, no uses secretos.
 
    **Nota:** Las credenciales de WhatsApp Business API se configuran por tenant en Settings > Channels
 

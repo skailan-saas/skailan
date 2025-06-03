@@ -66,6 +66,15 @@ export interface WhatsappMessageTemplate {
   id?: string;
 }
 
+// Añadiendo interfaces para mensajes interactivos de WhatsApp
+export interface WhatsappInteractiveMessage {
+  messaging_product: string;
+  recipient_type: string;
+  to: string;
+  type: string;
+  interactive: any; // Este tipo puede ser button, list, product, etc.
+}
+
 export class WhatsappApiService {
   private phoneNumberId: string;
   private accessToken: string;
@@ -373,6 +382,121 @@ export class WhatsappApiService {
       return null;
     } catch (error) {
       console.error("Error procesando webhook:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Envía un mensaje interactivo a un destinatario
+   * @param to Número de teléfono del destinatario
+   * @param interactive Configuración del mensaje interactivo (botones, listas, etc.)
+   */
+  async sendInteractiveMessage(
+    to: string,
+    interactive: any
+  ): Promise<any> {
+    try {
+      const message: WhatsappInteractiveMessage = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "interactive",
+        interactive
+      };
+
+      return await this.sendMessage(message);
+    } catch (error) {
+      console.error("Error enviando mensaje interactivo:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Envía un mensaje con botones a un destinatario
+   * @param to Número de teléfono del destinatario
+   * @param headerText Texto del encabezado (opcional)
+   * @param bodyText Texto principal del mensaje
+   * @param footerText Texto del pie (opcional)
+   * @param buttons Arreglo de botones [{id, title}]
+   */
+  async sendButtonsMessage(
+    to: string,
+    bodyText: string,
+    buttons: Array<{id: string, title: string}>,
+    headerText?: string,
+    footerText?: string
+  ): Promise<any> {
+    try {
+      const buttonObjects = buttons.map(button => ({
+        type: "reply",
+        reply: {
+          id: button.id,
+          title: button.title
+        }
+      }));
+
+      const interactive: any = {
+        type: "button",
+        body: { text: bodyText },
+        action: { buttons: buttonObjects }
+      };
+
+      if (headerText) {
+        interactive.header = { type: "text", text: headerText };
+      }
+
+      if (footerText) {
+        interactive.footer = { text: footerText };
+      }
+
+      return await this.sendInteractiveMessage(to, interactive);
+    } catch (error) {
+      console.error("Error enviando mensaje con botones:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Envía un mensaje con lista de opciones a un destinatario
+   * @param to Número de teléfono del destinatario
+   * @param buttonText Texto del botón que muestra la lista
+   * @param headerText Texto del encabezado (opcional)
+   * @param bodyText Texto principal del mensaje
+   * @param footerText Texto del pie (opcional)
+   * @param sections Secciones de la lista [{ title, rows: [{ id, title, description }] }]
+   */
+  async sendListMessage(
+    to: string,
+    buttonText: string,
+    bodyText: string,
+    sections: Array<{
+      title: string,
+      rows: Array<{id: string, title: string, description?: string}>
+    }>,
+    headerText?: string,
+    footerText?: string
+  ): Promise<any> {
+    try {
+      const interactive: any = {
+        type: "list",
+        body: { text: bodyText },
+        action: {
+          button: buttonText,
+          sections: sections
+        }
+      };
+
+      if (headerText) {
+        interactive.header = { type: "text", text: headerText };
+      }
+
+      if (footerText) {
+        interactive.footer = { text: footerText };
+      }
+
+      return await this.sendInteractiveMessage(to, interactive);
+    } catch (error) {
+      console.error("Error enviando mensaje con lista:", error);
       throw error;
     }
   }

@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,7 +9,7 @@ body {
 @layer base {
   :root {
     /* Skailan Neutrals & Base */
-    --background: 0 0% 95%; /* Gris Claro Skailan #F2F2F2 */
+    --background: 0 0% 95%; /* Azul Noche Skailan #0B1633 */
     --foreground: 0 0% 20%; /* Gris Oscuro Skailan #333333 */
 
     --card: 0 0% 100%; /* Blanco #FFFFFF */
@@ -39,11 +38,11 @@ body {
     --border: 0 0% 80%; /* Un gris para bordes */
     --input: 0 0% 88%; /* Un gris más claro para inputs */
     --ring: 261 100% 35%; /* Índigo Skailan #4000B2 para focus rings */
-    
+
     /* Skailan Chart Colors */
     --chart-1: 323 100% 37%; /* Magenta Skailan #BD0079 */
     --chart-2: 250 67% 65%; /* Violeta Skailan #846FDE */
-    --chart-3: 27 100% 50%;  /* Naranja Skailan #FF6F00 */
+    --chart-3: 27 100% 50%; /* Naranja Skailan #FF6F00 */
     --chart-4: 176 100% 33%; /* Teal de Crecimiento #00A99D */
     --chart-5: 261 100% 35%; /* Índigo Skailan #4000B2 */
 
@@ -96,7 +95,7 @@ body {
     --border: 227 30% 30%; /* Borde sutil en dark mode */
     --input: 227 30% 28%; /* Input en dark mode */
     --ring: 27 100% 50%; /* Naranja Skailan para focus rings */
-    
+
     /* Chart colors remain the same or can be adjusted if needed for dark mode */
     --chart-1: 323 100% 37%;
     --chart-2: 250 67% 65%;
@@ -137,7 +136,8 @@ body {
     box-shadow: none !important;
     border: none !important;
   }
-  .quote-print-area, .quote-print-area * {
+  .quote-print-area,
+  .quote-print-area * {
     visibility: visible !important;
   }
   .quote-print-area {
@@ -150,24 +150,34 @@ body {
     background-color: white !important; /* Ensure background is white for print */
     color: black !important; /* Ensure text is black for print */
   }
-  .no-print, .no-print * {
+  .no-print,
+  .no-print * {
     display: none !important;
     visibility: hidden !important;
   }
   /* Ensure table borders are visible for print */
-  .quote-print-area table, .quote-print-area th, .quote-print-area td {
+  .quote-print-area table,
+  .quote-print-area th,
+  .quote-print-area td {
     border: 1px solid #ccc !important; /* Light gray border */
   }
-  .quote-print-area th, .quote-print-area td {
+  .quote-print-area th,
+  .quote-print-area td {
     padding: 0.5rem !important; /* Adjust padding for print */
   }
-  .quote-print-area h1, .quote-print-area h2, .quote-print-area h3, .quote-print-area h4, .quote-print-area p, .quote-print-area span, .quote-print-area div {
+  .quote-print-area h1,
+  .quote-print-area h2,
+  .quote-print-area h3,
+  .quote-print-area h4,
+  .quote-print-area p,
+  .quote-print-area span,
+  .quote-print-area div {
     color: black !important; /* Ensure all text is black */
   }
   .quote-print-area .text-primary {
-      color: black !important; /* Override primary color for print if needed, or set specific print primary */
+    color: black !important; /* Override primary color for print if needed, or set specific print primary */
   }
   .quote-print-area .bg-primary {
-      background-color: transparent !important; /* Remove colored backgrounds */
+    background-color: transparent !important; /* Remove colored backgrounds */
   }
 }

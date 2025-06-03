@@ -362,6 +362,8 @@ model ChatbotFlow {
   definition      Json // Store the flow structure as JSON (nodes, edges, configurations)
   status          FlowStatus @default(DRAFT) // DRAFT, PUBLISHED, ARCHIVED
   version         Int        @default(1)
+  triggerType     String?    // 'message_received', 'conversation_started', 'keyword_detected'
+  triggerKeywords Json?      // Array of keywords for keyword_detected trigger
   lastPublishedAt DateTime?
 
   createdAt DateTime  @default(now())
@@ -471,6 +473,11 @@ model Conversation {
   // WhatsApp specific data
   whatsappPhoneNumber String?         // The customer's WhatsApp phone number (if WhatsApp channel)
   whatsappProfileName String?         // Customer's WhatsApp profile name
+  
+  // For chatbot integration:
+  chatbotFlowId     String?           // Current active flow
+  chatbotFlowState  Json?             // Store current state if conversation is in a flow
+  flowState         Json?             // Store flow execution state
   
   messages          Message[]         // All messages in this conversation
   

@@ -81,3 +81,8 @@ export async function getCurrentTenant(): Promise<Tenant | null> {
     return null;
   }
 }
+
+export async function getTenantId(): Promise<string | null> {
+  const tenant = await getCurrentTenant();
+  return tenant?.id || null;
+}

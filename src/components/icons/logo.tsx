@@ -1,5 +1,6 @@
-import type { SVGProps } from 'react';
-import { MessageSquareText } from 'lucide-react'; // Using as a placeholder for the complex isotipo
+import type { SVGProps } from "react";
+import LogoSkailan from "@/assets/logo-skailan.svg"; // Importing the Skailan isotipo SVG
+import { MessageSquareText } from "lucide-react"; // Using as a placeholder for the complex isotipo
 
 export function Logo(props: SVGProps<SVGSVGElement> & { collapsed?: boolean }) {
   const { collapsed, ...rest } = props;
@@ -11,7 +12,9 @@ export function Logo(props: SVGProps<SVGSVGElement> & { collapsed?: boolean }) {
     <div className="flex items-center gap-2" {...rest}>
       {/* Placeholder for actual Skailan isotipo SVG */}
       <MessageSquareText className="h-8 w-8 text-primary" />
-      <span className="text-2xl font-bold text-primary whitespace-nowrap font-display">Skailan</span>
+      <span className="text-2xl font-bold text-primary whitespace-nowrap font-display">
+        Skailan
+      </span>
     </div>
   );
 }
