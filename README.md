@@ -150,4 +150,4 @@ Para soporte técnico o consultas sobre implementación, contactar al equipo de 
 
 ## 📄 Licencia
 
-Proyecto propietario - Todos los derechos reservados.
+Proyecto de IA Punto Soluciones Tecnológicas - Todos los derechos reservados.
