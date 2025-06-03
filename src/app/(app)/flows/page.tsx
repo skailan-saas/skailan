@@ -460,11 +460,11 @@ export default function FlowsPage() {
     }
   };
 
-  const handleGeneratedFlowAndCreate = () => {
+  const handleGeneratedFlowAndCreate = async () => {
     if (!generatedConfig) {
       toast({
         title: "No Configuration",
-        description: "Generate a flow configuration first.",
+        description: "Genera primero una configuración de flujo.",
         variant: "destructive",
       });
       return;
@@ -484,37 +484,75 @@ export default function FlowsPage() {
       console.error("Error parsing generated flow config:", e);
       toast({
         title: "Parsing Error",
-        description: "Could not parse. Using default flow structure.",
+        description: "No se pudo parsear el flujo generado. Intenta de nuevo.",
         variant: "destructive",
       });
-      parsedNodes = [
-        ...initialNodesData.map((n) => ({ ...n, id: `${n.id}-${Date.now()}` })),
-      ]; // Make IDs unique
-      parsedEdges = [
-        ...initialEdgesData.map((e) => ({ ...e, id: `${e.id}-${Date.now()}` })),
-      ]; // Make IDs unique
+      return; // No continúes si el flujo es inválido
     }
 
-    const newFlowId = `flow-${Date.now()}`;
-    const newFlow: FlowListItem = {
-      id: newFlowId,
-      name: flowName,
-      description: flowDesc,
-      lastModified: new Date().toISOString().split("T")[0],
-      status: "Draft",
-      icon: Bot,
-      nodes: parsedNodes,
-      edges: parsedEdges,
-    };
+    // --- GUARDAR EN LA BASE DE DATOS ---
+    try {
+      const response = await fetch("/api/flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: flowName,
+          description: flowDesc,
+          definition: { nodes: parsedNodes, edges: parsedEdges },
+          status: "DRAFT",
+        }),
+      });
 
-    setFlows((prevFlows) => [newFlow, ...prevFlows]);
-    setSelectedFlow(newFlow);
-    setFlowPrompt("");
-    setGeneratedConfig(null);
-    toast({
-      title: "New Flow Created",
-      description: `Flow "${newFlow.name}" added and selected.`,
-    });
+      if (!response.ok) {
+        const error = await response.json();
+        toast({
+          title: "Error al guardar",
+          description: error.error || "No se pudo guardar el flujo.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const flowGuardado = await response.json();
+
+      // Opcional: refresca la lista de flows desde la BD
+      setFlows((prev) => [
+        {
+          id: flowGuardado.id,
+          name: flowGuardado.name,
+          description: flowGuardado.description,
+          lastModified: flowGuardado.updatedAt.split("T")[0],
+          status: flowGuardado.status,
+          icon: Bot,
+          nodes: flowGuardado.definition.nodes,
+          edges: flowGuardado.definition.edges,
+        },
+        ...prev,
+      ]);
+      setSelectedFlow({
+        id: flowGuardado.id,
+        name: flowGuardado.name,
+        description: flowGuardado.description,
+        lastModified: flowGuardado.updatedAt.split("T")[0],
+        status: flowGuardado.status,
+        icon: Bot,
+        nodes: flowGuardado.definition.nodes,
+        edges: flowGuardado.definition.edges,
+      });
+      setFlowPrompt("");
+      setGeneratedConfig(null);
+      toast({
+        title: "Flujo creado",
+        description: `El flujo "${flowGuardado.name}" fue guardado y seleccionado.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Error inesperado",
+        description: "No se pudo guardar el flujo. Intenta de nuevo.",
+        variant: "destructive",
+      });
+      console.error("Error al guardar el flujo:", err);
+    }
   };
 
   const handleAddNode = (nodePaletteItem: (typeof nodeTypesForPalette)[0]) => {
