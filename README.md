@@ -20,11 +20,11 @@ Sistema completo de gestión de conversaciones con integración WhatsApp Busines
    DATABASE_URL=postgresql://...
    NEXTAUTH_SECRET=your-secret-key
    NEXTAUTH_URL=https://your-app.vercel.app
-   WHATSAPP_ACCESS_TOKEN=your-token
-   WHATSAPP_PHONE_NUMBER_ID=your-phone-id
-   WHATSAPP_WEBHOOK_VERIFY_TOKEN=your-verify-token
-   WHATSAPP_WEBHOOK_SECRET=your-webhook-secret
+   OPENAI_API_KEY=your-openai-key (opcional)
+   GEMINI_API_KEY=your-gemini-key (opcional)
    ```
+
+   **Nota:** Las credenciales de WhatsApp Business API se configuran por tenant en Settings > Channels
 
 3. **Deploy en Vercel:**
 
@@ -40,9 +40,10 @@ Sistema completo de gestión de conversaciones con integración WhatsApp Busines
    npx prisma db push
    ```
 
-5. **Configurar webhooks de WhatsApp:**
-   - URL: `https://your-app.vercel.app/api/webhooks/whatsapp`
-   - Verify Token: el configurado en `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+5. **Configurar WhatsApp Business API:**
+   - Acceder a Settings > Channels en la aplicación
+   - Configurar las credenciales de WhatsApp por tenant
+   - URL del webhook: `https://your-app.vercel.app/api/webhooks/whatsapp`
 
 ## 🛠️ Tecnologías
 
