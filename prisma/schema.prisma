@@ -28,6 +28,7 @@ model Tenant {
   id             String  @id @default(uuid())
   name           String
   subdomain      String  @unique // e.g., company.yourapp.com
+  customDomain   String? @unique // e.g., skailan.company.com
   logoUrl        String?
   primaryColor   String?
   secondaryColor String?
@@ -41,8 +42,12 @@ model Tenant {
   quotes       Quote[]
   tasks        Task[]
   projects     Project[]
-  tags         Tag[]
-  chatbotFlows ChatbotFlow[] // Added ChatbotFlow relation
+  tags          Tag[]
+  chatbotFlows  ChatbotFlow[] // Added ChatbotFlow relation
+  conversations Conversation[] // Added Conversation relation
+  whatsappConfigurations WhatsappConfiguration[] // Added WhatsApp configuration
+  whatsappTemplates WhatsappTemplate[] // Added WhatsApp templates
+  channels          Channel[] // Added Channel relation
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -58,9 +63,11 @@ model TenantUser {
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   role     String // e.g., "admin", "agent", "viewer" - maps to Role name or ID
 
-  assignedLeads      Lead[]              @relation("LeadAssignedTo")
-  assignedTasks      Task[]              @relation("TaskAssignedTo")
-  projectMemberships ProjectTeamMember[] // User's project memberships within this tenant
+  assignedLeads         Lead[]              @relation("LeadAssignedTo")
+  assignedTasks         Task[]              @relation("TaskAssignedTo")
+  projectMemberships    ProjectTeamMember[] // User's project memberships within this tenant
+  assignedConversations Conversation[]      @relation("ConversationAssignedTo")
+  sentMessages          Message[]           @relation("MessageSender")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -127,7 +134,8 @@ model Lead {
   chatbotFlowState  Json? // Store current state if lead is interacting with a flow
   channelSpecificId String? // e.g., WhatsApp ID, Messenger PSID (unique per channel for this tenant)
 
-  tags LeadTag[] // Many-to-many with Tag
+  tags          LeadTag[]      // Many-to-many with Tag
+  conversations Conversation[] // Conversations linked to this lead
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -363,6 +371,160 @@ model ChatbotFlow {
   @@index([tenantId])
 }
 
+// Model for WhatsApp Business API Configuration
+model WhatsappConfiguration {
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  phoneNumberId   String   // Meta Business API Phone Number ID
+  businessAccountId String // Meta Business Account ID
+  accessToken     String   // Meta Business API permanent access token
+  webhookVerifyToken String // Custom token for webhook verification
+  displayPhoneNumber String // For display purposes (formatted number with country code)
+  isActive        Boolean  @default(true)
+  
+  // Business profile information
+  businessName    String?
+  businessDescription String?
+  businessWebsite String?
+  businessEmail   String?
+  businessAddress String?
+  businessVertical String? // Industry/vertical of the business
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, phoneNumberId])
+  @@index([tenantId])
+}
+
+// Model for WhatsApp Message Templates
+model WhatsappTemplate {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String   // Template name
+  status     String   // APPROVED, PENDING, REJECTED
+  category   String   // MARKETING, UTILITY, AUTHENTICATION
+  language   String   // e.g., en_US, es_MX
+  components Json     // Template components (header, body, footer, buttons)
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([tenantId, name, language])
+  @@index([tenantId])
+  @@index([status])
+}
+
+// Model for Communication Channels
+model Channel {
+  id                String        @id @default(uuid())
+  tenantId          String
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  instanceName      String        // Friendly name for the channel instance
+  channelType       ConversationChannel // Type of channel (WHATSAPP, MESSENGER, etc.)
+  status            ChannelStatus @default(DISCONNECTED)
+  webhookUrl        String?       // Webhook URL for channels that use webhooks
+  verifyToken       String?       // Verification token for webhook setup
+  details           String?       // Channel-specific configuration details (JSON string)
+  
+  // Channel-specific fields
+  phoneNumberId     String?       // For WhatsApp: Phone Number ID
+  phoneNumber       String?       // For WhatsApp: Display phone number
+  wabaId            String?       // For WhatsApp: WhatsApp Business Account ID
+  accessToken       String?       // For WhatsApp: Access token
+  pageId            String?       // For Messenger/Instagram: Page ID
+  appSecret         String?       // For Messenger/Instagram: App Secret
+  botToken          String?       // For Telegram: Bot token
+  apiEndpoint       String?       // For custom API channels
+  
+  isActive          Boolean       @default(true)
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  @@index([tenantId])
+  @@index([tenantId, channelType])
+  @@index([tenantId, status])
+}
+
+// Model for Conversations
+model Conversation {
+  id                String            @id @default(uuid())
+  tenantId          String
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadId            String?           // Optional: Link to a Lead if this conversation is with a lead
+  lead              Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  channel           ConversationChannel
+  channelSpecificId String?           // e.g., WhatsApp phone number, Messenger PSID, etc.
+  status            ConversationStatus @default(ACTIVE)
+  assignedToUserId  String?           // References TenantUser.userId
+  assignedTo        TenantUser?       @relation("ConversationAssignedTo", fields: [tenantId, assignedToUserId], references: [tenantId, userId], onDelete: NoAction, onUpdate: Cascade)
+  
+  // Conversation metadata
+  title             String?           // Optional title for the conversation
+  lastMessageAt     DateTime?         // Timestamp of the last message
+  unreadCount       Int               @default(0) // Number of unread messages for agents
+  
+  // WhatsApp specific data
+  whatsappPhoneNumber String?         // The customer's WhatsApp phone number (if WhatsApp channel)
+  whatsappProfileName String?         // Customer's WhatsApp profile name
+  
+  messages          Message[]         // All messages in this conversation
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+
+  @@unique([tenantId, channelSpecificId, channel]) // Unique conversation per channel contact
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([tenantId, assignedToUserId])
+  @@index([tenantId, status])
+  @@index([whatsappPhoneNumber]) // Index for searching by WhatsApp number
+}
+
+// Model for Messages within Conversations
+model Message {
+  id             String         @id @default(uuid())
+  tenantId       String
+  conversationId String
+  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  // Message content
+  content        String         // The actual message text
+  messageType    MessageType    @default(TEXT)
+  sender         MessageSender  // USER (customer) or AGENT
+  senderUserId   String?        // If sender is AGENT, reference to TenantUser.userId
+  senderUser     TenantUser?    @relation("MessageSender", fields: [tenantId, senderUserId], references: [tenantId, userId], onDelete: NoAction, onUpdate: Cascade)
+  
+  // Message metadata
+  isRead         Boolean        @default(false) // Whether the message has been read by the recipient
+  deliveredAt    DateTime?      // When the message was delivered
+  readAt         DateTime?      // When the message was read
+  
+  // Rich content support
+  imageUrl       String?        // For image messages
+  fileUrl        String?        // For file attachments
+  metadata       Json?          // Additional metadata (buttons, quick replies, etc.)
+  
+  // WhatsApp specific fields
+  whatsappMessageId String?     // ID from WhatsApp API for tracking status
+  whatsappStatus    WhatsappMessageStatus? // Current status from WhatsApp API
+  templateName      String?     // If message is a template, store the template name
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  @@index([conversationId])
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+  @@index([whatsappMessageId]) // Index for looking up messages by WhatsApp ID
+}
+
 // Enums
 enum LeadStatus {
   NEW
@@ -427,4 +589,61 @@ enum FlowStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+}
+
+// Enums for Conversations and Messages
+enum ConversationChannel {
+  WHATSAPP
+  WEBCHAT
+  MESSENGER
+  INSTAGRAM
+  TELEGRAM
+  EMAIL
+  SMS
+  API
+}
+
+// Channel status enum
+enum ChannelStatus {
+  CONNECTED
+  DISCONNECTED
+  PENDING_WEBHOOK
+  NEEDS_ATTENTION
+  ERROR
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ASSIGNED
+  RESOLVED
+  ARCHIVED
+  PENDING
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  AUDIO
+  VIDEO
+  LOCATION
+  CONTACT
+  TEMPLATE
+  INTERACTIVE
+}
+
+enum MessageSender {
+  USER      // Customer/Lead
+  AGENT     // Human agent
+  SYSTEM    // Automated system messages
+  BOT       // Chatbot responses
+}
+
+// WhatsApp specific enums
+enum WhatsappMessageStatus {
+  SENT        // Message has been sent to WhatsApp
+  DELIVERED   // Message has been delivered to recipient's device
+  READ        // Message has been read by recipient
+  FAILED      // Message failed to send
+  DELETED     // Message was deleted
 }

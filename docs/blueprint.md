@@ -1,4 +1,4 @@
-# **App Name**: Conecta Hub
+# **App Name**: Skailan
 
 ## Core Features:
 

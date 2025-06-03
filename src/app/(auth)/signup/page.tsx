@@ -1,16 +1,21 @@
-// src/app/(auth)/signup/page.tsx
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons/logo";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { signupAction } from "./actions";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -22,6 +27,20 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [baseDomain, setBaseDomain] = useState("localhost");
+
+  useEffect(() => {
+    // Determinar el dominio base según el entorno
+    const isDevelopment =
+      process.env.NODE_ENV === "development" ||
+      window.location.hostname === "localhost";
+    setBaseDomain(isDevelopment ? "localhost" : "skailan.com");
+  }, []);
+
+  const getFullDomain = (sub: string) => {
+    if (!sub) return baseDomain;
+    return `${sub}.${baseDomain}`;
+  };
 
   const handleSignup = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -29,74 +48,82 @@ export default function SignupPage() {
     setError(null);
     setMessage(null);
 
-    if (!tenantName.trim() || !subdomain.trim()) {
-      setError("Tenant Name and Subdomain are required.");
+    if (
+      !tenantName.trim() ||
+      !subdomain.trim() ||
+      !email.trim() ||
+      !password.trim()
+    ) {
+      setError("Todos los campos son requeridos");
       setLoading(false);
       toast({
-        title: "Signup Failed",
-        description: "Tenant Name and Subdomain are required.",
+        title: "Error de validación",
+        description: "Todos los campos son requeridos",
         variant: "destructive",
       });
       return;
     }
-    
-    // Basic subdomain validation (you might want more robust validation)
+
+    // Validación básica del subdomain
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(subdomain)) {
-        setError("Subdomain can only contain lowercase letters, numbers, and hyphens, and cannot start or end with a hyphen.");
-        setLoading(false);
-        toast({
-            title: "Invalid Subdomain",
-            description: "Subdomain format is invalid.",
-            variant: "destructive",
-        });
-        return;
-    }
-
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          tenant_name: tenantName, // Supabase convention is often snake_case for metadata
-          subdomain: subdomain,
-        },
-        // emailRedirectTo: `${window.location.origin}/auth/callback`, 
-      },
-    });
-
-    setLoading(false);
-    if (signUpError) {
-      setError(signUpError.message);
+      setError(
+        "El subdominio solo puede contener letras minúsculas, números y guiones, y no puede empezar o terminar con guión."
+      );
+      setLoading(false);
       toast({
-        title: "Signup Failed",
-        description: signUpError.message,
+        title: "Subdominio inválido",
+        description: "El formato del subdominio es inválido.",
         variant: "destructive",
       });
-    } else {
-      if (data.user && !data.session) {
-        setMessage("Signup successful! Please check your email to confirm your account. Tenant creation will be finalized after confirmation.");
+      return;
+    }
+
+    try {
+      console.log("[DEBUG] Iniciando registro con JWT...");
+
+      // Crear FormData para el server action
+      const formData = new FormData();
+      formData.append("email", email);
+      formData.append("password", password);
+      formData.append("tenantName", tenantName);
+      formData.append("subdomain", subdomain);
+
+      const result = await signupAction(formData);
+
+      setLoading(false);
+      console.log("[DEBUG] Resultado del registro:", result);
+
+      if (result.error) {
+        console.error("[ERROR] Error en registro:", result.error);
+        setError(result.error);
         toast({
-          title: "Confirmation Email Sent",
-          description: "Please check your email to complete the signup process. Tenant setup will follow.",
+          title: "Error en el registro",
+          description: result.error,
+          variant: "destructive",
         });
-      } else if (data.user && data.session) {
-        setMessage("Signup successful! Redirecting... Tenant setup will follow.");
+      } else if (result.success) {
+        console.log("[DEBUG] Registro exitoso");
+        setMessage(result.message || "Registro exitoso! Redirigiendo...");
         toast({
-          title: "Signup Successful!",
-          description: "You are now logged in. Tenant setup will proceed.",
+          title: "¡Registro exitoso!",
+          description: `Bienvenido ${result.userName}! Tu workspace ${result.tenantName} está listo.`,
         });
-        // You might want to redirect to a "tenant pending creation" page or dashboard
-        // The actual creation of Tenant record and linking happens via backend logic (e.g., Supabase Trigger)
-        router.push("/dashboard"); 
-        router.refresh();
-      } else {
-        setMessage("Signup request processed. Please follow any instructions sent to your email.");
-        toast({
-          title: "Signup Request Processed",
-          description: "Please follow instructions sent to your email. Tenant setup will follow.",
-        });
+
+        // Redirigir al dashboard
+        setTimeout(() => {
+          router.push(result.redirectTo || "/dashboard");
+        }, 1500);
       }
+    } catch (error: any) {
+      console.error("Error durante el registro:", error);
+      setError("Error interno del servidor");
+      setLoading(false);
+      toast({
+        title: "Error del servidor",
+        description:
+          "Ocurrió un error inesperado. Por favor intenta nuevamente.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -105,67 +132,93 @@ export default function SignupPage() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="items-center text-center">
           <Logo />
-          <CardTitle className="mt-4 text-2xl">Create Your Account & Tenant</CardTitle>
-          <CardDescription>Sign up to start using Conecta Hub with your own workspace.</CardDescription>
+          <CardTitle className="mt-4 text-2xl">
+            Crear Cuenta y Workspace
+          </CardTitle>
+          <CardDescription>
+            Regístrate para comenzar a usar Conecta Hub con tu propio workspace.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignup} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="tenantName">Tenant Name</Label>
-              <Input 
-                id="tenantName" 
-                type="text" 
-                placeholder="Your Company Name" 
+              <Label htmlFor="tenantName">Nombre del Workspace</Label>
+              <Input
+                id="tenantName"
+                type="text"
+                placeholder="Nombre de tu empresa"
                 value={tenantName}
                 onChange={(e) => setTenantName(e.target.value)}
-                required 
+                required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="subdomain">Subdomain</Label>
-              <Input 
-                id="subdomain" 
-                type="text" 
-                placeholder="your-company" 
+              <Label htmlFor="subdomain">Subdominio</Label>
+              <Input
+                id="subdomain"
+                type="text"
+                placeholder="tu-empresa"
                 value={subdomain}
                 onChange={(e) => setSubdomain(e.target.value.toLowerCase())}
-                required 
+                required
               />
-              <p className="text-xs text-muted-foreground">This will be part of your workspace URL (e.g., your-company.conectahub.app)</p>
+              <p className="text-xs text-muted-foreground">
+                Tu URL será:{" "}
+                <strong>{getFullDomain(subdomain || "tu-empresa")}</strong>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {baseDomain === "localhost"
+                  ? "Entorno de desarrollo - usando localhost"
+                  : "Entorno de producción - usando skailan.com"}
+              </p>
             </div>
-             <div className="space-y-2">
-              <Label htmlFor="email">Your Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="you@example.com" 
+            <div className="space-y-2">
+              <Label htmlFor="email">Tu Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="tu@ejemplo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required 
+                required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                placeholder="Create a strong password" 
+              <Label htmlFor="password">Contraseña</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Crea una contraseña segura"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required 
+                required
                 minLength={6}
               />
+              <p className="text-xs text-muted-foreground">
+                Mínimo 6 caracteres
+              </p>
             </div>
-            {error && <p className="text-sm text-destructive text-center">{error}</p>}
-            {message && <p className="text-sm text-green-600 text-center">{message}</p>}
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={loading}>
-              {loading ? "Signing up..." : "Sign Up & Create Tenant"}
+            {error && (
+              <p className="text-sm text-destructive text-center">{error}</p>
+            )}
+            {message && (
+              <p className="text-sm text-green-600 text-center">{message}</p>
+            )}
+            <Button
+              type="submit"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={loading}
+            >
+              {loading ? "Creando cuenta..." : "Crear Cuenta y Workspace"}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              Login
+            ¿Ya tienes una cuenta?{" "}
+            <Link
+              href="/login"
+              className="font-medium text-primary hover:underline"
+            >
+              Iniciar Sesión
             </Link>
           </p>
         </CardContent>

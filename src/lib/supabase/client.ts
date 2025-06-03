@@ -1,19 +1,17 @@
-// src/lib/supabase/client.ts
-"use client";
+// Este archivo ha sido deshabilitado - el proyecto ahora usa autenticación JWT
+// import { createBrowserClient } from '@supabase/ssr';
 
-import { createBrowserClient } from '@supabase/ssr';
+// export const supabase = createBrowserClient(
+//   process.env.NEXT_PUBLIC_SUPABASE_URL!,
+//   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// );
 
-// Ensure these environment variables are defined in your .env file
-// and prefixed with NEXT_PUBLIC_ if they are used in the browser.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-if (!supabaseUrl) {
-  throw new Error("Missing env.NEXT_PUBLIC_SUPABASE_URL");
-}
-if (!supabaseAnonKey) {
-  throw new Error("Missing env.NEXT_PUBLIC_SUPABASE_ANON_KEY");
-}
-
-// This instance is safe to use in Browser/Client Components.
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+// Exportar un objeto vacío para evitar errores de importación
+export const supabase = {
+  auth: {
+    signUp: () =>
+      Promise.resolve({ error: new Error("Supabase deshabilitado") }),
+    signIn: () =>
+      Promise.resolve({ error: new Error("Supabase deshabilitado") }),
+  },
+};
