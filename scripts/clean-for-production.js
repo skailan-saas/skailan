@@ -100,7 +100,7 @@ async function cleanForProduction() {
       console.log(
         "Para crear el primer usuario y tenant, usar la página de registro:"
       );
-      console.log("http://tu-dominio.com/signup");
+      console.log("http://skailan.com/signup");
     } else {
       console.log(
         `\n⚠️  Aún quedan ${totalRecords} registros en la base de datos`

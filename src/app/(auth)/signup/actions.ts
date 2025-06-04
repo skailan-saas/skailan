@@ -32,7 +32,7 @@ export async function signupAction(formData: FormData) {
     };
   }
 
-  const supabase = createClient(cookies());
+  const supabase = createClient(await cookies());
   // Crear usuario en Supabase
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -71,7 +71,16 @@ export async function signupAction(formData: FormData) {
       tenantName: tenant.name,
       message: "Cuenta creada exitosamente",
     };
-  } catch (e) {
-    return { error: "Error al crear el tenant" };
+  } catch (e: any) {
+    console.error("[ERROR][signupAction] Error al crear el tenant:", e);
+    if (e.code === "P2002") {
+      // Violación de unicidad
+      return { error: "El subdominio o dominio ya está en uso." };
+    }
+    if (e.code === "P2003") {
+      // Violación de clave foránea
+      return { error: "El usuario no existe o hay un problema de integridad." };
+    }
+    return { error: e.message || "Error al crear el tenant" };
   }
 }

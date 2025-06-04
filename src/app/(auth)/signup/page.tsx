@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, useEffect } from "react";
+import { useState, type FormEvent, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,9 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [baseDomain, setBaseDomain] = useState("localhost");
+  const [subdomainAvailable, setSubdomainAvailable] = useState<null | boolean>(null);
+  const [subdomainCheckMsg, setSubdomainCheckMsg] = useState<string>("");
+  const subdomainTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Determinar el dominio base según el entorno
@@ -36,6 +39,39 @@ export default function SignupPage() {
       window.location.hostname === "localhost";
     setBaseDomain(isDevelopment ? "localhost" : "skailan.com");
   }, []);
+
+  // Verificación automática de subdominio
+  useEffect(() => {
+    if (!subdomain) {
+      setSubdomainAvailable(null);
+      setSubdomainCheckMsg("");
+      return;
+    }
+    if (subdomainTimeout.current) clearTimeout(subdomainTimeout.current);
+    subdomainTimeout.current = setTimeout(async () => {
+      setSubdomainCheckMsg("Verificando disponibilidad...");
+      setSubdomainAvailable(null);
+      try {
+        const res = await fetch("/api/verify-tenant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subdomain }),
+        });
+        const data = await res.json();
+        if (data.available) {
+          setSubdomainAvailable(true);
+          setSubdomainCheckMsg("Subdominio disponible ✔");
+        } else {
+          setSubdomainAvailable(false);
+          setSubdomainCheckMsg(data.reason || "Subdominio no disponible");
+        }
+      } catch (err) {
+        setSubdomainAvailable(false);
+        setSubdomainCheckMsg("Error al verificar subdominio");
+      }
+    }, 500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subdomain]);
 
   const getFullDomain = (sub: string) => {
     if (!sub) return baseDomain;
@@ -48,23 +84,29 @@ export default function SignupPage() {
     setError(null);
     setMessage(null);
 
-    if (
-      !tenantName.trim() ||
-      !subdomain.trim() ||
-      !email.trim() ||
-      !password.trim()
-    ) {
-      setError("Todos los campos son requeridos");
+    // Validación de nombre de workspace
+    if (!tenantName.trim()) {
+      setError("El nombre del workspace es requerido");
       setLoading(false);
       toast({
         title: "Error de validación",
-        description: "Todos los campos son requeridos",
+        description: "El nombre del workspace es requerido",
         variant: "destructive",
       });
       return;
     }
 
-    // Validación básica del subdomain
+    // Validación de subdominio
+    if (!subdomain.trim()) {
+      setError("El subdominio es requerido");
+      setLoading(false);
+      toast({
+        title: "Error de validación",
+        description: "El subdominio es requerido",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(subdomain)) {
       setError(
         "El subdominio solo puede contener letras minúsculas, números y guiones, y no puede empezar o terminar con guión."
@@ -73,6 +115,73 @@ export default function SignupPage() {
       toast({
         title: "Subdominio inválido",
         description: "El formato del subdominio es inválido.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (subdomain.length < 3 || subdomain.length > 32) {
+      setError("El subdominio debe tener entre 3 y 32 caracteres");
+      setLoading(false);
+      toast({
+        title: "Subdominio inválido",
+        description: "El subdominio debe tener entre 3 y 32 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validación de email
+    if (!email.trim()) {
+      setError("El email es requerido");
+      setLoading(false);
+      toast({
+        title: "Error de validación",
+        description: "El email es requerido",
+        variant: "destructive",
+      });
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("El formato del email es inválido");
+      setLoading(false);
+      toast({
+        title: "Email inválido",
+        description: "El formato del email es inválido.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validación de contraseña
+    if (!password.trim()) {
+      setError("La contraseña es requerida");
+      setLoading(false);
+      toast({
+        title: "Error de validación",
+        description: "La contraseña es requerida",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres");
+      setLoading(false);
+      toast({
+        title: "Contraseña inválida",
+        description: "La contraseña debe tener al menos 6 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validación de subdominio disponible
+    if (subdomainAvailable === false) {
+      setError("El subdominio no está disponible");
+      setLoading(false);
+      toast({
+        title: "Subdominio ocupado",
+        description: subdomainCheckMsg || "El subdominio no está disponible.",
         variant: "destructive",
       });
       return;
@@ -161,10 +270,10 @@ export default function SignupPage() {
                 value={subdomain}
                 onChange={(e) => setSubdomain(e.target.value.toLowerCase())}
                 required
+                autoComplete="off"
               />
-              <p className="text-xs text-muted-foreground">
-                Tu URL será:{" "}
-                <strong>{getFullDomain(subdomain || "tu-empresa")}</strong>
+              <p className={`text-xs ${subdomainAvailable === false ? "text-destructive" : "text-muted-foreground"}`}>
+                {subdomainCheckMsg || `Tu URL será: ${getFullDomain(subdomain || "tu-empresa")}`}
               </p>
               <p className="text-xs text-muted-foreground">
                 {baseDomain === "localhost"
@@ -207,9 +316,9 @@ export default function SignupPage() {
             <Button
               type="submit"
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={loading}
+              disabled={loading || subdomainAvailable === false}
             >
-              {loading ? "Creando cuenta..." : "Crear Cuenta y Workspace"}
+              {loading ? "Registrando..." : "Registrarse"}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
