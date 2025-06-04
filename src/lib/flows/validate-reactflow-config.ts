@@ -3,6 +3,8 @@ import { z } from "zod";
 export const reactFlowNodeSchema = z.object({
   id: z.string(),
   type: z.enum([
+    "input",
+    "output",
     "text",
     "image",
     "buttons",
