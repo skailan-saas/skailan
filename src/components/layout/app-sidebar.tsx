@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -55,17 +54,15 @@ export function AppSidebar() {
       </SidebarContent>
       <Separator className="mt-auto mb-2 bg-sidebar-border" />
       <SidebarFooter className="p-3">
-        {isCollapsed && (
-           <Button variant="ghost" size="icon" className="w-full justify-center text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" onClick={handleLogout} title="Logout">
-            <LogOut className="h-5 w-5" />
-           </Button>
-        )}
-         {!isCollapsed && (
-           <Button variant="ghost" className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" onClick={handleLogout}>
-            <LogOut className="mr-2 h-5 w-5" />
-            Logout
-           </Button>
-        )}
+        <Button
+          variant="ghost"
+          className={`w-full justify-${isCollapsed ? "center" : "start"} text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground`}
+          onClick={handleLogout}
+          title="Cerrar sesión"
+        >
+          <LogOut className={`h-5 w-5${isCollapsed ? "" : " mr-2"}`} />
+          {!isCollapsed && "Cerrar sesión"}
+        </Button>
       </SidebarFooter>
     </Sidebar>
   );
