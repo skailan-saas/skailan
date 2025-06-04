@@ -46,8 +46,20 @@ export async function signupAction(formData: FormData) {
     return { error: error?.message || "No se pudo crear el usuario" };
   }
 
-  // Crear tenant en la base de datos
+  // Crear usuario en la tabla local antes de crear el tenant
   const userId = data.user.id;
+  await prisma.user.upsert({
+    where: { id: userId },
+    create: {
+      id: userId,
+      email: email,
+      fullName: email.split("@")[0],
+      hashedPassword: "", // o null si no usas auth local
+    },
+    update: {},
+  });
+
+  // Crear tenant en la base de datos
   const fullDomain = getFullDomain(subdomain);
   try {
     const tenant = await prisma.tenant.create({
