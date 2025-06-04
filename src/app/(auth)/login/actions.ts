@@ -74,6 +74,7 @@ export async function loginAction(formData: FormData) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 días
+      domain: process.env.NODE_ENV === "production" ? ".skailan.com" : "localhost",
     });
 
     // Asegurar que tenant_id también esté establecido
@@ -82,6 +83,7 @@ export async function loginAction(formData: FormData) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 días
+      domain: process.env.NODE_ENV === "production" ? ".skailan.com" : "localhost",
     });
 
     // Determinar la URL de redirección correcta
