@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
 
 // Tipo para el usuario autenticado
@@ -16,6 +17,7 @@ export interface UserSession {
  * @returns Información del usuario autenticado o null si no hay sesión
  */
 export async function getCurrentUser(): Promise<UserSession | null> {
+  const supabase = createClient(cookies());
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
   return {
@@ -27,6 +29,7 @@ export async function getCurrentUser(): Promise<UserSession | null> {
 }
 
 export async function getCurrentUserWithTenant(): Promise<UserSession | null> {
+  const supabase = createClient(cookies());
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
   const userId = data.user.id;

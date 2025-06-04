@@ -1,6 +1,7 @@
 "use server";
 
-import { supabase } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
 import { getFullDomain } from "@/lib/domain";
 
@@ -31,6 +32,7 @@ export async function signupAction(formData: FormData) {
     };
   }
 
+  const supabase = createClient(cookies());
   // Crear usuario en Supabase
   const { data, error } = await supabase.auth.signUp({
     email,

@@ -1,6 +1,7 @@
 "use server";
 
-import { supabase } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
 
 export async function loginAction(formData: FormData) {
@@ -11,6 +12,7 @@ export async function loginAction(formData: FormData) {
     return { error: "Email y contraseña son requeridos" };
   }
 
+  const supabase = createClient(cookies());
   // Login con Supabase
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -53,6 +55,7 @@ export async function loginAction(formData: FormData) {
 }
 
 export async function logoutAction() {
+  const supabase = createClient(cookies());
   const { error } = await supabase.auth.signOut();
   if (error) {
     return { error: error.message };
