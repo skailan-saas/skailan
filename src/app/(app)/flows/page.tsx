@@ -98,6 +98,7 @@ import {
   type FlowFE,
 } from "./actions";
 import { validateReactFlowConfig } from "@/ai/flows/generate-flow-from-prompt";
+import type { FlowNode } from "@/lib/flows/flow-engine";
 
 let generateFlowFn: typeof genFlowFnType | null = null;
 
@@ -240,6 +241,28 @@ let nodeIdCounter =
   ) + 1;
 let buttonIdCounter = 0;
 
+// Helper para convertir Node de React Flow a FlowNode
+const validTypes = [
+  "text",
+  "image",
+  "buttons",
+  "carousel",
+  "userInput",
+  "condition",
+  "action",
+] as const;
+function toFlowNode(node: Node): FlowNode {
+  if (!node.type || !(validTypes as readonly string[]).includes(node.type)) {
+    throw new Error(`Tipo de nodo inválido: ${node.type}`);
+  }
+  return {
+    id: node.id,
+    type: node.type as FlowNode["type"],
+    data: node.data,
+    position: node.position,
+  };
+}
+
 export default function FlowsPage() {
   const { toast } = useToast();
   const [flowPrompt, setFlowPrompt] = useState("");
@@ -347,46 +370,44 @@ export default function FlowsPage() {
     if (selectedFlow && (nodes.length > 0 || edges.length > 0)) {
       const saveTimeout = setTimeout(async () => {
         try {
-          // First check if flow exists in database
           let dbFlow;
           try {
             dbFlow = await getFlow(selectedFlow.id).catch(() => null);
           } catch {
             dbFlow = null;
           }
+          const flowNodes: FlowNode[] = nodes
+            .filter((n) => n.type && (validTypes as readonly string[]).includes(n.type))
+            .map(toFlowNode);
           if (!dbFlow) {
             console.log("Flow not found in DB, creating new version");
             await createFlow({
               name: selectedFlow.name,
               description: selectedFlow.description,
-              definition: { nodes, edges },
+              definition: { nodes: flowNodes, edges },
             });
           } else {
             await updateFlow(selectedFlow.id, {
-              definition: { nodes: nodes as any, edges: edges as any },
+              definition: { nodes: flowNodes, edges },
             });
           }
-
-          // Update local state
           setFlows((prevFlows) =>
             prevFlows.map((flow) =>
               flow.id === selectedFlow.id
                 ? {
                     ...flow,
-                    nodes: nodes,
+                    nodes: flowNodes,
                     edges: edges,
                     lastModified: new Date().toISOString().split("T")[0],
                   }
                 : flow
             )
           );
-
           console.log("Flow auto-saved");
         } catch (error) {
           console.error("Error auto-saving flow:", error);
         }
-      }, 2000); // Auto-save after 2 seconds of inactivity
-
+      }, 2000);
       return () => clearTimeout(saveTimeout);
     }
   }, [nodes, edges, selectedFlow?.id]);
