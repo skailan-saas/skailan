@@ -237,7 +237,7 @@ export async function createLead(data: LeadFormValues): Promise<LeadFE> {
       console.log("createLead: Iniciando transacción...");
 
       const companyId = companyName
-        ? await findOrCreateCompany(prismaTx, companyName, user.tenantId)
+        ? await findOrCreateCompany(prismaTx, companyName, user.tenantId!)
         : undefined;
 
       if (companyId) {
@@ -247,7 +247,7 @@ export async function createLead(data: LeadFormValues): Promise<LeadFE> {
       const createdLead = await prismaTx.lead.create({
         data: {
           ...leadData,
-          tenantId: user.tenantId,
+          tenantId: user.tenantId!,
           companyId: companyId,
           email: leadData.email || null,
           phone: leadData.phone || null,
@@ -258,7 +258,7 @@ export async function createLead(data: LeadFormValues): Promise<LeadFE> {
 
       console.log("createLead: Lead creado con ID:", createdLead.id);
 
-      await manageLeadTags(prismaTx, createdLead.id, tagsString, user.tenantId);
+      await manageLeadTags(prismaTx, createdLead.id, tagsString, user.tenantId!);
       console.log("createLead: Tags procesados");
 
       return createdLead;
@@ -343,11 +343,11 @@ export async function updateLead(
 
     const updatedLead = await prisma.$transaction(async (prismaTx) => {
       const companyId = companyName
-        ? await findOrCreateCompany(prismaTx, companyName, user.tenantId)
+        ? await findOrCreateCompany(prismaTx, companyName, user.tenantId!)
         : undefined;
 
       const currentLead = await prismaTx.lead.update({
-        where: { id, tenantId: user.tenantId, deletedAt: null },
+        where: { id, tenantId: user.tenantId!, deletedAt: null },
         data: {
           ...leadData,
           companyId: companyId,
@@ -359,7 +359,7 @@ export async function updateLead(
         },
       });
 
-      await manageLeadTags(prismaTx, currentLead.id, tagsString, user.tenantId);
+      await manageLeadTags(prismaTx, currentLead.id, tagsString, user.tenantId!);
       return currentLead;
     });
 
@@ -425,7 +425,7 @@ export async function deleteLead(
     }
 
     await prisma.lead.update({
-      where: { id, tenantId: user.tenantId, deletedAt: null },
+      where: { id, tenantId: user.tenantId!, deletedAt: null },
       data: { deletedAt: new Date() },
     });
     revalidatePath("/crm/leads");
@@ -455,18 +455,10 @@ export async function getLeadsForSelect(): Promise<
   try {
     const user = await getCurrentUserWithTenant();
     if (!user || !user.tenantId) {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error("No tenant found");
+      throw new Error("No tenant found - please check your domain configuration");
     }
-
     const leads = await prisma.lead.findMany({
-      where: {
-        tenantId: tenant.id,
-        deletedAt: null,
-        // Optionally filter by statuses that represent opportunities, e.g., not 'CLOSED_LOST', 'UNQUALIFIED'
-        // status: { notIn: ['CLOSED_LOST', 'UNQUALIFIED', 'ARCHIVED'] }
-      },
+      where: { tenantId: user.tenantId!, deletedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     });
