@@ -86,7 +86,6 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import type { generateFlowFromPrompt as genFlowFnType } from "@/ai/flows";
 import { useToast } from "@/hooks/use-toast";
 import {
   getFlow,
@@ -97,10 +96,8 @@ import {
   deleteFlow,
   type FlowFE,
 } from "./actions";
-import { validateReactFlowConfig } from "@/ai/flows/generate-flow-from-prompt";
+import { validateReactFlowConfig } from "@/lib/flows/validate-reactflow-config";
 import type { FlowNode } from "@/lib/flows/flow-engine";
-
-let generateFlowFn: typeof genFlowFnType | null = null;
 
 interface FlowListItem {
   id: string;
@@ -295,14 +292,6 @@ export default function FlowsPage() {
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    import("@/ai/flows")
-      .then((module) => {
-        generateFlowFn = module.generateFlowFromPrompt;
-      })
-      .catch((err) => console.error("Failed to load AI module", err));
-  }, []);
-
   // Cargar flujos desde la base de datos
   useEffect(() => {
     async function loadFlows() {
@@ -425,11 +414,17 @@ export default function FlowsPage() {
   );
 
   const handleGenerateFlow = async () => {
-    if (!flowPrompt.trim() || !generateFlowFn) return;
+    if (!flowPrompt.trim()) return;
     setIsGenerating(true);
     setGeneratedConfig(null);
     try {
-      const result = await generateFlowFn({ flowDescription: flowPrompt });
+      const response = await fetch("/api/flows/generate-from-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flowDescription: flowPrompt }),
+      });
+      if (!response.ok) throw new Error("Error generando flujo");
+      const result = await response.json();
       setGeneratedConfig(result.flowConfiguration);
       toast({
         title: "Flow Configuration Generated",
@@ -843,7 +838,7 @@ export default function FlowsPage() {
                   <Button
                     onClick={handleGenerateFlow}
                     disabled={
-                      isGenerating || !flowPrompt.trim() || !generateFlowFn
+                      isGenerating || !flowPrompt.trim()
                     }
                   >
                     <Sparkles className="mr-2 h-4 w-4" />{" "}
