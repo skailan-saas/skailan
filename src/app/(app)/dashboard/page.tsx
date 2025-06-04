@@ -53,6 +53,8 @@ import {
   Target,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 // Datos de ejemplo para el dashboard
 const conversationMetrics = {
@@ -157,6 +159,21 @@ const chartConfig = {
 export default function AnalyticsDashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState("7d");
   const [isLoading, setIsLoading] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+      setCheckingSession(false);
+    };
+    checkSession();
+  }, [router]);
 
   useEffect(() => {
     // Simular carga de datos
@@ -165,6 +182,17 @@ export default function AnalyticsDashboard() {
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
+
+  if (checkingSession) {
+    return (
+      <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

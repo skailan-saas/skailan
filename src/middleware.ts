@@ -6,8 +6,8 @@ export async function middleware(request: NextRequest) {
   const domain = host?.replace("www.", "").split(":")[0];
   const pathname = request.nextUrl.pathname;
 
-  // Permitir acceso a páginas públicas sin validación de tenant
-  const publicPaths = ["/", "/login", "/signup"];
+  // Permitir acceso a páginas públicas sin validación de tenant ni sesión
+  const publicPaths = ["/", "/login", "/signup", "/auth/callback"];
   if (publicPaths.includes(pathname)) {
     return NextResponse.next();
   }
@@ -18,7 +18,6 @@ export async function middleware(request: NextRequest) {
 
   try {
     // Solo manejar la lógica de tenant para rutas protegidas
-
     const tenantApiUrl = new URL("/api/tenant", request.url);
     tenantApiUrl.searchParams.set("domain", domain);
 
@@ -36,6 +35,13 @@ export async function middleware(request: NextRequest) {
     }
 
     const tenant = await tenantResponse.json();
+
+    // Validar sesión de usuario con Supabase (cookie 'sb-access-token')
+    const accessToken = request.cookies.get("sb-access-token");
+    if (!accessToken) {
+      // No hay sesión, redirigir a login
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
 
     const response = NextResponse.next();
     response.cookies.set("tenant_id", tenant.id, {
@@ -61,7 +67,8 @@ export const config = {
      * - favicon.ico (favicon file)
      * - login (public login page)
      * - signup (public signup page)
+     * - auth/callback (callback de autenticación)
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|login|signup).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|login|signup|auth/callback).*)",
   ],
 };
