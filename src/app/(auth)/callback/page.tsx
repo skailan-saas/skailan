@@ -37,8 +37,9 @@ function CallbackContent() {
         setStatus("No se pudo obtener el usuario tras la confirmación.");
         return;
       }
+      console.log('User obtenido en callback:', user);
       // Llamar a un endpoint para obtener el tenant del usuario
-      const res = await fetch("/api/tenant?user_id=" + user.id);
+      const res = await fetch(`/api/tenant?user_id=${user.id}`);
       setStatus("Respuesta cruda del endpoint: " + res.status);
       if (!res.ok) {
         setStatus("No se pudo obtener el tenant del usuario. Código: " + res.status);
