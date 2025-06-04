@@ -513,6 +513,7 @@ export default function FlowsPage() {
           definition: { nodes: parsedNodes, edges: parsedEdges },
           status: "DRAFT",
         }),
+        credentials: "include",
       });
 
       if (!response.ok) {
