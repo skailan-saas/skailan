@@ -39,19 +39,22 @@ function CallbackContent() {
       }
       // Llamar a un endpoint para obtener el tenant del usuario
       const res = await fetch("/api/tenant?user_id=" + user.id);
+      setStatus("Respuesta cruda del endpoint: " + res.status);
       if (!res.ok) {
-        setStatus("No se pudo obtener el tenant del usuario.");
+        setStatus("No se pudo obtener el tenant del usuario. Código: " + res.status);
         return;
       }
       const tenant = await res.json();
+      setStatus("Tenant encontrado: " + JSON.stringify(tenant));
       if (!tenant || !tenant.subdomain) {
-        setStatus("No se encontró el subdominio del tenant.");
+        setStatus("No se encontró el subdominio del tenant. Respuesta: " + JSON.stringify(tenant));
         return;
       }
       // Redirigir al dashboard del subdominio
       const protocol = window.location.protocol;
       const port = window.location.port ? ":" + window.location.port : "";
       const domain = tenant.subdomain + "." + window.location.hostname.replace(/^([^.]+\.)?/, "");
+      setStatus("Redirigiendo a: " + `${protocol}//${domain}${port}/dashboard`);
       window.location.href = `${protocol}//${domain}${port}/dashboard`;
     };
     handleAuthCallback();
