@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/session";
-import { getTenantId } from "@/lib/tenant";
+import { getCurrentUserWithTenant } from "@/lib/session";
 import { updateFlowSchema } from "@/lib/schemas/flow-schema";
 
 // Helper para verificar acceso y obtener el flow
@@ -17,22 +16,20 @@ async function getFlowIfAuthorized(id: string, userId: string, tenantId: string)
 
 // GET /api/flows/[id]
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserWithTenant();
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-  const tenantId = await getTenantId();
-  if (!tenantId) return NextResponse.json({ error: "Tenant no encontrado" }, { status: 400 });
-  const flow = await getFlowIfAuthorized(params.id, user.id, tenantId);
+  if (!user.tenantId) return NextResponse.json({ error: "Tenant no encontrado" }, { status: 400 });
+  const flow = await getFlowIfAuthorized(params.id, user.id, user.tenantId);
   if (!flow) return NextResponse.json({ error: "No autorizado o no encontrado" }, { status: 404 });
   return NextResponse.json(flow);
 }
 
 // PUT /api/flows/[id]
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserWithTenant();
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-  const tenantId = await getTenantId();
-  if (!tenantId) return NextResponse.json({ error: "Tenant no encontrado" }, { status: 400 });
-  const flow = await getFlowIfAuthorized(params.id, user.id, tenantId);
+  if (!user.tenantId) return NextResponse.json({ error: "Tenant no encontrado" }, { status: 400 });
+  const flow = await getFlowIfAuthorized(params.id, user.id, user.tenantId);
   if (!flow) return NextResponse.json({ error: "No autorizado o no encontrado" }, { status: 404 });
   const body = await request.json();
   const parse = updateFlowSchema.safeParse(body);
@@ -48,11 +45,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
 // DELETE /api/flows/[id]
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserWithTenant();
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-  const tenantId = await getTenantId();
-  if (!tenantId) return NextResponse.json({ error: "Tenant no encontrado" }, { status: 400 });
-  const flow = await getFlowIfAuthorized(params.id, user.id, tenantId);
+  if (!user.tenantId) return NextResponse.json({ error: "Tenant no encontrado" }, { status: 400 });
+  const flow = await getFlowIfAuthorized(params.id, user.id, user.tenantId);
   if (!flow) return NextResponse.json({ error: "No autorizado o no encontrado" }, { status: 404 });
   await prisma.chatbotFlow.update({
     where: { id: params.id },

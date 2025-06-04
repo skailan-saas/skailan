@@ -1,15 +1,12 @@
-// Este archivo ha sido deshabilitado - el proyecto ahora usa autenticación JWT
-// import { createServerClient, type CookieOptions } from "@supabase/ssr";
-// import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-// Exportar funciones vacías para evitar errores de importación
 export function createClient() {
-  return {
-    auth: {
-      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
-      signOut: () => Promise.resolve({ error: null }),
-    },
-  };
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: cookies() }
+  );
 }
 
 export const supabase = createClient();

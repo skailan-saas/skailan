@@ -7,7 +7,7 @@ import {
   ProductFormSchema,
   type ProductFormValues,
 } from "@/lib/schemas/crm/product-schema";
-import { getCurrentTenant } from "@/lib/tenant";
+import { getCurrentUserWithTenant } from "@/lib/session";
 
 // Frontend Product type, might differ slightly from PrismaProduct for UI needs
 export interface ProductFE {
@@ -28,32 +28,14 @@ export interface ProductFE {
 
 export async function getProducts(): Promise<ProductFE[]> {
   try {
-    console.log("getProducts: Iniciando obtención de productos...");
-
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      console.error("getProducts: No se pudo obtener el tenant actual");
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
-
-    console.log("getProducts: Tenant obtenido:", {
-      id: tenant.id,
-      name: tenant.name,
-    });
-
     const productsFromDb = await prisma.product.findMany({
-      where: {
-        tenantId: tenant.id,
-        deletedAt: null,
-      },
+      where: { tenantId: user.tenantId, deletedAt: null },
       orderBy: { createdAt: "desc" },
     });
-
-    console.log(
-      `getProducts: Se encontraron ${productsFromDb.length} productos para el tenant ${tenant.id}`
-    );
 
     return productsFromDb.map((p) => ({
       ...p,
@@ -77,8 +59,8 @@ export async function getProductsForSelect(): Promise<
       "getProductsForSelect: Iniciando obtención de productos para select..."
     );
 
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       console.error(
         "getProductsForSelect: No se pudo obtener el tenant actual"
       );
@@ -89,7 +71,7 @@ export async function getProductsForSelect(): Promise<
 
     const productsFromDb = await prisma.product.findMany({
       where: {
-        tenantId: tenant.id,
+        tenantId: user.tenantId,
         deletedAt: null,
         isActive: true, // Only active products for selection
       },
@@ -136,8 +118,8 @@ export async function createProduct(
     validation.data;
 
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       console.error("createProduct: No se pudo obtener el tenant actual");
       throw new Error(
         "No tenant found - please check your domain configuration"
@@ -145,8 +127,8 @@ export async function createProduct(
     }
 
     console.log("createProduct: Tenant obtenido:", {
-      id: tenant.id,
-      name: tenant.name,
+      id: user.tenantId,
+      name: user.tenantName,
     });
     console.log("createProduct: Datos del producto procesados:", {
       name,
@@ -160,7 +142,7 @@ export async function createProduct(
 
     const newProduct = await prisma.product.create({
       data: {
-        tenantId: tenant.id,
+        tenantId: user.tenantId,
         name,
         type,
         description: description || null,
@@ -224,8 +206,8 @@ export async function updateProduct(
     validation.data;
 
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       console.error("updateProduct: No se pudo obtener el tenant actual");
       throw new Error(
         "No tenant found - please check your domain configuration"
@@ -233,12 +215,12 @@ export async function updateProduct(
     }
 
     console.log("updateProduct: Tenant obtenido:", {
-      id: tenant.id,
-      name: tenant.name,
+      id: user.tenantId,
+      name: user.tenantName,
     });
 
     const updatedProduct = await prisma.product.update({
-      where: { id, tenantId: tenant.id, deletedAt: null },
+      where: { id, tenantId: user.tenantId, deletedAt: null },
       data: {
         name,
         type,
@@ -291,8 +273,8 @@ export async function deleteProduct(
   try {
     console.log("deleteProduct: Iniciando eliminación de producto:", id);
 
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       console.error("deleteProduct: No se pudo obtener el tenant actual");
       throw new Error(
         "No tenant found - please check your domain configuration"
@@ -300,7 +282,7 @@ export async function deleteProduct(
     }
 
     await prisma.product.update({
-      where: { id, tenantId: tenant.id, deletedAt: null },
+      where: { id, tenantId: user.tenantId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
 

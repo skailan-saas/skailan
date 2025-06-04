@@ -4,7 +4,7 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import type { Company } from "./page";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getCurrentTenant } from "@/lib/tenant";
+import { getCurrentUserWithTenant } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
@@ -29,23 +29,19 @@ type CompanyFormValues = z.infer<typeof CompanyFormSchema>;
 
 export async function getCompanies(): Promise<Company[]> {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
-
     const companiesFromDb = await prisma.company.findMany({
       where: {
-        tenantId: tenant.id,
-        deletedAt: null, // Only fetch non-deleted companies
+        tenantId: user.tenantId,
+        deletedAt: null,
       },
       orderBy: {
         createdAt: "desc",
       },
     });
-    // Ensure all optional fields are handled correctly for the frontend interface
     return companiesFromDb.map((company) => ({
       ...company,
       id: company.id,
@@ -63,7 +59,7 @@ export async function getCompanies(): Promise<Company[]> {
       numberOfEmployees: company.numberOfEmployees ?? undefined,
       createdAt: company.createdAt,
       updatedAt: company.updatedAt,
-      deletedAt: company.deletedAt ?? undefined, // Include deletedAt if needed by UI, otherwise can omit
+      deletedAt: company.deletedAt ?? undefined,
     }));
   } catch (error) {
     console.error("Prisma error in getCompanies:", error);
@@ -95,11 +91,9 @@ export async function createCompany(data: CompanyFormValues): Promise<Company> {
   } = validation.data;
 
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
 
     const newCompany = await prisma.company.create({
@@ -114,7 +108,7 @@ export async function createCompany(data: CompanyFormValues): Promise<Company> {
         addressPostalCode: addressPostalCode || null,
         addressCountry: addressCountry || null,
         description: description || null,
-        tenantId: tenant.id,
+        tenantId: user.tenantId,
       },
     });
     revalidatePath("/crm/companies");
@@ -180,15 +174,13 @@ export async function updateCompany(
   } = validation.data;
 
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
 
     const updatedCompany = await prisma.company.update({
-      where: { id, tenantId: tenant.id, deletedAt: null }, // Ensure we only update non-deleted companies
+      where: { id, tenantId: user.tenantId, deletedAt: null }, // Ensure we only update non-deleted companies
       data: {
         name,
         email: email || null,
@@ -246,15 +238,13 @@ export async function deleteCompany(
   id: string
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
 
     await prisma.company.update({
-      where: { id, tenantId: tenant.id, deletedAt: null }, // Ensure we only soft-delete non-deleted companies
+      where: { id, tenantId: user.tenantId, deletedAt: null }, // Ensure we only soft-delete non-deleted companies
       data: {
         deletedAt: new Date(),
       },

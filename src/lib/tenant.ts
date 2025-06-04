@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
+import { supabase } from "@/lib/supabase/server";
 
 export interface Tenant {
   id: string;
@@ -24,62 +25,29 @@ export async function getTenantByDomain(
   });
 }
 
+export async function getCurrentTenantId(): Promise<string | null> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  const userId = data.user.id;
+  const tenantUser = await prisma.tenantUser.findFirst({
+    where: { userId },
+  });
+  return tenantUser?.tenantId || null;
+}
+
 export async function getCurrentTenant(): Promise<Tenant | null> {
-  try {
-    const cookieStore = await cookies();
-    const tenantId = cookieStore.get("tenant_id")?.value;
-
-    if (!tenantId) {
-      console.warn("No tenant_id found in cookies, trying fallback...");
-
-      // Fallback: intentar obtener el tenant desde headers o dominio
-      try {
-        // En desarrollo, usar el tenant demo por defecto
-        if (process.env.NODE_ENV === "development") {
-          const fallbackTenant = await prisma.tenant.findFirst({
-            where: {
-              OR: [{ subdomain: "demo" }, { customDomain: "demo.localhost" }],
-            },
-            select: {
-              id: true,
-              name: true,
-              subdomain: true,
-              customDomain: true,
-            },
-          });
-
-          if (fallbackTenant) {
-            console.log(`Using fallback tenant: ${fallbackTenant.name}`);
-            return fallbackTenant;
-          }
-        }
-      } catch (fallbackError) {
-        console.error("Fallback tenant lookup failed:", fallbackError);
-      }
-
-      return null;
-    }
-
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: {
-        id: true,
-        name: true,
-        subdomain: true,
-        customDomain: true,
-      },
-    });
-
-    if (!tenant) {
-      console.warn(`Tenant with ID ${tenantId} not found`);
-      return null;
-    }
-
-    return tenant;
-  } catch (error) {
-    console.error("Error getting current tenant:", error);
-    return null;
-  }
+  const tenantId = await getCurrentTenantId();
+  if (!tenantId) return null;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      id: true,
+      name: true,
+      subdomain: true,
+      customDomain: true,
+    },
+  });
+  return tenant;
 }
 
 export async function getTenantId(): Promise<string | null> {

@@ -1,70 +1,46 @@
-import { cookies } from "next/headers";
-// @ts-ignore
-import { jwtVerify } from "jose";
-import { db } from "./db";
+import { supabase } from "@/lib/supabase/server";
+import prisma from "@/lib/prisma";
 
 // Tipo para el usuario autenticado
-interface UserSession {
+export interface UserSession {
   id: string;
   email: string;
   fullName?: string;
   avatarUrl?: string;
+  tenantId?: string;
+  tenantName?: string;
 }
 
 /**
- * Obtiene el usuario actualmente autenticado
+ * Obtiene el usuario actualmente autenticado desde Supabase
  * @returns Información del usuario autenticado o null si no hay sesión
  */
 export async function getCurrentUser(): Promise<UserSession | null> {
-  try {
-    // Obtener token JWT de las cookies
-    const cookieStore = await cookies();
-    // Cambiado de 'auth_token' a 'auth-token' para coincidir con el seteo
-    const token = cookieStore.get("auth-token")?.value;
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  return {
+    id: data.user.id,
+    email: data.user.email || "",
+    fullName: data.user.user_metadata?.fullName || undefined,
+    avatarUrl: data.user.user_metadata?.avatarUrl || undefined,
+  };
+}
 
-    if (!token) {
-      return null;
-    }
-
-    // Verificar el token JWT
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-
-    try {
-      const { payload } = await jwtVerify(token, secret);
-
-      if (!payload.sub) {
-        return null;
-      }
-
-      // Obtener el usuario de la base de datos para asegurar que existe
-      const user = await db.user.findUnique({
-        where: {
-          id: payload.sub as string,
-        },
-        select: {
-          id: true,
-          email: true,
-          fullName: true,
-          avatarUrl: true,
-        },
-      });
-
-      if (!user) {
-        return null;
-      }
-
-      return {
-        id: user.id,
-        email: user.email || "",
-        fullName: user.fullName || undefined,
-        avatarUrl: user.avatarUrl || undefined,
-      };
-    } catch (verifyError) {
-      console.error("Error verificando token JWT:", verifyError);
-      return null;
-    }
-  } catch (error) {
-    console.error("Error obteniendo usuario actual:", error);
-    return null;
-  }
+export async function getCurrentUserWithTenant(): Promise<UserSession | null> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  const userId = data.user.id;
+  const tenantUser = await prisma.tenantUser.findFirst({
+    where: { userId },
+    include: { tenant: true },
+  });
+  if (!tenantUser) return null;
+  return {
+    id: data.user.id,
+    email: data.user.email || "",
+    fullName: data.user.user_metadata?.fullName || undefined,
+    avatarUrl: data.user.user_metadata?.avatarUrl || undefined,
+    tenantId: tenantUser.tenantId,
+    tenantName: tenantUser.tenant.name,
+  };
 }

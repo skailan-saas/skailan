@@ -1,0 +1,55 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Reglas de Codificación y Estilo para el Proyecto
+globs: 
+alwaysApply: true
+---
+
+Estas reglas definen las guías específicas para la codificación y el estilo dentro del proyecto, enfocándose en las tecnologías clave y las mejores prácticas.
+
+1. Tecnologías y Versiones
+Tecnologías Base: El proyecto utiliza TypeScript, Next.js (App Router), React, Node.js, Shadcn UI, Radix UI, Supabase, Tailwind CSS y Prisma.
+Versiones Actuales: Se utilizan las últimas versiones estables de las tecnologías mencionadas.
+2. Estilo y Estructura del Código
+TypeScript Obligatorio: Todo el código debe ser escrito en TypeScript, priorizando el uso de interfaces sobre tipos cuando sea aplicable.
+Programación Declarativa y Funcional: Favorecer los patrones de programación funcionales y declarativos, evitando el uso de clases cuando sea posible.
+Reusabilidad y Modularidad: Priorizar la iteración y la modularización para evitar la duplicación de código.
+Nombres Descriptivos: Utilizar nombres de variables descriptivos, incluyendo verbos auxiliares para estados (ej., isLoading, hasError).
+Estructura de Archivos: Las estructuras de archivo preferidas son: componente exportado, subcomponentes, funciones auxiliares (helpers), contenido estático y definiciones de tipos, todo dentro del mismo archivo cuando sea conciso.
+Convenciones de Nomenclatura:
+Componentes: Siempre usar kebab-case para los nombres de componentes (ej., my-component.tsx).
+Directorios: Utilizar minúsculas con guiones para los directorios (ej., components/auth-wizard).
+Exportaciones: Favorecer las exportaciones con nombre para los componentes.
+Sintaxis y Formato:
+Usar la palabra clave function para funciones puras.
+Evitar llaves innecesarias en condicionales, optando por una sintaxis concisa para sentencias simples.
+Utilizar JSX declarativo.
+3. Componentes y Renderizado (Next.js & React)
+Next.js SSR y RSC: Favorecer el uso de React Server Components (RSC) y las características de Server-Side Rendering (SSR) de Next.js siempre que sea posible.
+Uso Mínimo de 'use client': Minimizar el uso de use client a componentes pequeños y aislados.
+Estados de Carga y Error: Siempre incluir estados de carga (loading) y error (error) en los componentes que realizan data fetching.
+Componentes Clientes y Suspense: Envolver los componentes cliente en Suspense con un fallback apropiado.
+Carga Dinámica: Utilizar carga dinámica (dynamic loading) para componentes no críticos.
+Optimización de Imágenes: Optimizar las imágenes (formato WebP, inclusión de datos de tamaño, lazy loading).
+Web Vitals: Optimizar los Web Vitals (LCP, CLS, FID).
+Gestión de Parámetros URL: Utilizar una gestión adecuada del estado de los parámetros de búsqueda de URL.
+4. Gestión de Datos y Bases de Datos
+Manejo de Errores en Fetching: Implementar manejo de errores y registro de errores para las operaciones de data fetching.
+Modelado de Errores (Server Actions): Modelar los errores esperados como valores de retorno en las Server Actions.
+Prisma para Base de Datos: Utilizar Prisma para la interacción con la base de datos.
+Supabase: Integrar Supabase para funcionalidades de backend como autenticación y bases de datos.
+5. Manejo de Errores y Validación
+Prioridad al Manejo de Errores: Priorizar el manejo de errores, abordando errores y casos extremos de manera temprana.
+Retornos Tempranos y Cláusulas de Guarda: Utilizar early returns y guard clauses para una lógica de control de flujo más clara.
+Registro de Errores: Implementar un registro de errores adecuado y mensajes amigables para el usuario.
+Zod para Validación: Utilizar Zod para toda la validación de formularios.
+Error Boundaries: Usar error boundaries para capturar y manejar errores inesperados en la interfaz de usuario.
+6. UI y Estilado
+Componentes y Estilo: Utilizar Shadcn UI, Radix UI y Tailwind Aria para los componentes de interfaz de usuario y el estilado.
+Diseño Responsivo: Implementar diseño responsivo utilizando Tailwind CSS, con un enfoque de desktop-first.
+
+HTML Semántico: Utilizar elementos HTML semánticos siempre que sea posible.

@@ -4,7 +4,7 @@ import { PrismaClient, Prisma, type ProjectStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLeadsForSelect as getLeadsForSelectFromLeadsModule } from "@/app/(app)/crm/leads/actions";
-import { getCurrentTenant } from "@/lib/tenant";
+import { getCurrentUserWithTenant } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
@@ -116,14 +116,14 @@ async function manageProjectTeamMembers(
 
 export async function getProjects(): Promise<ProjectFE[]> {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       throw new Error(
         "No tenant found - please check your domain configuration"
       );
     }
     const projectsFromDb = await prisma.project.findMany({
-      where: { tenantId: tenant.id, deletedAt: null },
+      where: { tenantId: user.tenantId, deletedAt: null },
       include: {
         company: { select: { name: true } },
         opportunity: { select: { name: true } }, // This refers to Lead model as Opportunity
@@ -194,8 +194,8 @@ export async function createProject(
     validation.data;
 
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       throw new Error(
         "No tenant found - please check your domain configuration"
       );
@@ -204,7 +204,7 @@ export async function createProject(
       const created = await prismaTx.project.create({
         data: {
           ...projectData,
-          tenantId: tenant.id,
+          tenantId: user.tenantId,
           startDate: startDate ? new Date(startDate) : null,
           endDate: endDate ? new Date(endDate) : null,
           budget: projectData.budget ?? null,
@@ -213,12 +213,12 @@ export async function createProject(
         },
       });
 
-      await manageProjectTags(prismaTx, created.id, tagNames, tenant.id);
+      await manageProjectTags(prismaTx, created.id, tagNames, user.tenantId);
       await manageProjectTeamMembers(
         prismaTx,
         created.id,
         teamMemberIds,
-        tenant.id
+        user.tenantId
       );
 
       return created;
@@ -282,8 +282,8 @@ export async function updateProject(
   id: string,
   data: ProjectFormValues
 ): Promise<ProjectFE> {
-  const tenant = await getCurrentTenant();
-  if (!tenant) {
+  const user = await getCurrentUserWithTenant();
+  if (!user || !user.tenantId) {
     throw new Error("No tenant found - please check your domain configuration");
   }
   const validation = ProjectFormSchema.safeParse(data);
@@ -304,7 +304,7 @@ export async function updateProject(
   try {
     const updatedProjectTx = await prisma.$transaction(async (prismaTx) => {
       const updated = await prismaTx.project.update({
-        where: { id, tenantId: tenant.id, deletedAt: null },
+        where: { id, tenantId: user.tenantId, deletedAt: null },
         data: {
           ...projectData,
           startDate: startDate ? new Date(startDate) : null,
@@ -316,8 +316,8 @@ export async function updateProject(
         },
       });
 
-      await manageProjectTags(prismaTx, id, tagNames, tenant.id);
-      await manageProjectTeamMembers(prismaTx, id, teamMemberIds, tenant.id);
+      await manageProjectTags(prismaTx, id, tagNames, user.tenantId);
+      await manageProjectTeamMembers(prismaTx, id, teamMemberIds, user.tenantId);
 
       return updated;
     });
@@ -385,15 +385,15 @@ export async function updateProjectStatus(
   status: ProjectStatus
 ): Promise<ProjectFE> {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       throw new Error(
         "No tenant found - please check your domain configuration"
       );
     }
 
     const updatedProject = await prisma.project.update({
-      where: { id, tenantId: tenant.id, deletedAt: null },
+      where: { id, tenantId: user.tenantId, deletedAt: null },
       data: { status, updatedAt: new Date() },
     });
     revalidatePath("/crm/projects");
@@ -461,15 +461,15 @@ export async function deleteProject(
   id: string
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       throw new Error(
         "No tenant found - please check your domain configuration"
       );
     }
 
     await prisma.project.update({
-      where: { id, tenantId: tenant.id, deletedAt: null },
+      where: { id, tenantId: user.tenantId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
     revalidatePath("/crm/projects");
@@ -496,16 +496,15 @@ export async function getProjectsForSelect(): Promise<
   { id: string; name: string }[]
 > {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       throw new Error(
         "No tenant found - please check your domain configuration"
       );
     }
-
     const projects = await prisma.project.findMany({
       where: {
-        tenantId: tenant.id,
+        tenantId: user.tenantId,
         deletedAt: null,
       },
       select: { id: true, name: true },
@@ -531,15 +530,14 @@ export async function getUsersForSelect(): Promise<
   { id: string; name: string | null }[]
 > {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       throw new Error(
         "No tenant found - please check your domain configuration"
       );
     }
-
     const users = await prisma.tenantUser.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: user.tenantId },
       select: {
         userId: true,
         user: { select: { fullName: true, email: true } },

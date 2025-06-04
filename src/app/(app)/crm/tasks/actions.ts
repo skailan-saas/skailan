@@ -13,7 +13,7 @@ import {
   TaskFormSchema,
   type TaskFormValues,
 } from "@/lib/schemas/crm/task-schema";
-import { getCurrentTenant } from "@/lib/tenant";
+import { getCurrentUserWithTenant } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
@@ -78,14 +78,12 @@ async function manageTaskTags(
 
 export async function getTasks(): Promise<TaskFE[]> {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
     const tasksFromDb = await prisma.task.findMany({
-      where: { tenantId: tenant.id, deletedAt: null },
+      where: { tenantId: user.tenantId, deletedAt: null },
       include: {
         assignedTo: {
           select: {
@@ -99,7 +97,6 @@ export async function getTasks(): Promise<TaskFE[]> {
       },
       orderBy: { createdAt: "desc" },
     });
-
     return tasksFromDb.map((task) => ({
       id: task.id,
       title: task.title,
@@ -148,25 +145,23 @@ export async function createTask(data: TaskFormValues): Promise<TaskFE> {
   const { tagNames, dueDate, ...taskData } = validation.data;
 
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
     const newTask = await prisma.$transaction(async (prismaTx) => {
       const created = await prismaTx.task.create({
         data: {
           ...taskData,
           dueDate: dueDate ? new Date(dueDate) : null,
-          tenantId: tenant.id,
+          tenantId: user.tenantId,
           assignedToUserId: taskData.assignedToUserId || null,
           relatedToLeadId: taskData.relatedToLeadId || null,
           relatedToProjectId: taskData.relatedToProjectId || null,
           priority: taskData.priority || null,
         },
       });
-      await manageTaskTags(prismaTx, created.id, tagNames, tenant.id);
+      await manageTaskTags(prismaTx, created.id, tagNames, user.tenantId);
       return created;
     });
 
@@ -238,15 +233,13 @@ export async function updateTask(
   const { tagNames, dueDate, ...taskData } = validation.data;
 
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
     const updatedTask = await prisma.$transaction(async (prismaTx) => {
       const updated = await prismaTx.task.update({
-        where: { id, tenantId: tenant.id, deletedAt: null },
+        where: { id, tenantId: user.tenantId, deletedAt: null },
         data: {
           ...taskData,
           dueDate: dueDate ? new Date(dueDate) : null,
@@ -257,7 +250,7 @@ export async function updateTask(
           updatedAt: new Date(),
         },
       });
-      await manageTaskTags(prismaTx, updated.id, tagNames, tenant.id);
+      await manageTaskTags(prismaTx, updated.id, tagNames, user.tenantId);
       return updated;
     });
 
@@ -320,14 +313,12 @@ export async function updateTaskStatus(
   status: TaskStatus
 ): Promise<TaskFE> {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
     const updatedTask = await prisma.task.update({
-      where: { id, tenantId: tenant.id, deletedAt: null },
+      where: { id, tenantId: user.tenantId, deletedAt: null },
       data: { status, updatedAt: new Date() },
     });
     revalidatePath("/crm/tasks");
@@ -388,15 +379,15 @@ export async function deleteTask(
   id: string
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
       return {
         success: false,
         message: "No tenant found - please check your domain configuration",
       };
     }
     await prisma.task.update({
-      where: { id, tenantId: tenant.id, deletedAt: null },
+      where: { id, tenantId: user.tenantId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
     revalidatePath("/crm/tasks");
@@ -423,14 +414,12 @@ export async function getUsersForTasks(): Promise<
   { id: string; name: string | null }[]
 > {
   try {
-    const tenant = await getCurrentTenant();
-    if (!tenant) {
-      throw new Error(
-        "No tenant found - please check your domain configuration"
-      );
+    const user = await getCurrentUserWithTenant();
+    if (!user || !user.tenantId) {
+      throw new Error("No tenant found - please check your domain configuration");
     }
     const users = await prisma.tenantUser.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: user.tenantId },
       select: {
         userId: true,
         user: { select: { fullName: true, email: true } },
