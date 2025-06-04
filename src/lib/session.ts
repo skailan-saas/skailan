@@ -18,9 +18,9 @@ interface UserSession {
 export async function getCurrentUser(): Promise<UserSession | null> {
   try {
     // Obtener token JWT de las cookies
-    const cookieStore = cookies();
-    // @ts-ignore - El tipado de cookies() ha cambiado en versiones recientes
-    const token = cookieStore.get("auth_token")?.value;
+    const cookieStore = await cookies();
+    // Cambiado de 'auth_token' a 'auth-token' para coincidir con el seteo
+    const token = cookieStore.get("auth-token")?.value;
 
     if (!token) {
       return null;
