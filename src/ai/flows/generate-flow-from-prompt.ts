@@ -29,28 +29,85 @@ const GenerateFlowFromPromptOutputSchema = z.object({
 });
 export type GenerateFlowFromPromptOutput = z.infer<typeof GenerateFlowFromPromptOutputSchema>;
 
+// Esquema de validación para nodos y edges de React Flow
+export const reactFlowNodeSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  data: z.record(z.any()),
+  position: z.object({ x: z.number(), y: z.number() }),
+});
+
+export const reactFlowEdgeSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  target: z.string(),
+  // type, label, animated, etc. son opcionales
+});
+
+export const reactFlowConfigSchema = z.object({
+  nodes: z.array(reactFlowNodeSchema).min(1),
+  edges: z.array(reactFlowEdgeSchema),
+});
+
+export function validateReactFlowConfig(jsonString: string): { valid: boolean; error?: string; parsed?: any } {
+  try {
+    const parsed = JSON.parse(jsonString);
+    const result = reactFlowConfigSchema.safeParse(parsed);
+    if (!result.success) {
+      return { valid: false, error: result.error.message };
+    }
+    return { valid: true, parsed };
+  } catch (e: any) {
+    return { valid: false, error: e.message };
+  }
+}
+
 export async function generateFlowFromPrompt(input: GenerateFlowFromPromptInput): Promise<GenerateFlowFromPromptOutput> {
   return generateFlowFromPromptFlow(input);
 }
 
+// Prompt actualizado para la IA
 const prompt = ai.definePrompt({
   name: 'generateFlowFromPromptPrompt',
   input: {schema: GenerateFlowFromPromptInputSchema},
   output: {schema: GenerateFlowFromPromptOutputSchema},
-  prompt: `You are an expert chatbot flow designer.  You will generate a JSON configuration for a chatbot flow based on the user's description.
+  prompt: `Eres un experto en diseño de flujos conversacionales para chatbots. Genera un JSON válido para React Flow según la siguiente descripción:
 
-Description: {{{flowDescription}}}
+Descripción: {{{flowDescription}}}
 
-Ensure the output is valid JSON that can be parsed by a JSON.parse.
-Include a root node.
-Include nodes for any user input that is required.
-Include example text for the different types of messages the chatbot can send, like carousels, buttons, quick replies, images, and plain text.
-Do not include any comments in the JSON.
-Validate that the JSON is structured properly before returning it.
+El JSON debe tener la siguiente estructura:
+{
+  "nodes": [
+    {
+      "id": "1",
+      "type": "input",
+      "data": { "label": "Inicio" },
+      "position": { "x": 0, "y": 0 }
+    },
+    {
+      "id": "2",
+      "type": "text",
+      "data": { "label": "Mensaje", "messageText": "¡Hola!" },
+      "position": { "x": 0, "y": 100 }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1-2",
+      "source": "1",
+      "target": "2"
+    }
+  ]
+}
+- Cada nodo debe tener un id único, un type, un objeto data y una posición { x, y }.
+- Cada edge debe tener un id, un source y un target.
+- No incluyas comentarios ni texto adicional, solo el JSON.
+- Asegúrate de que haya al menos un nodo y que los nodos estén conectados correctamente.
+- Usa tipos de nodo como "input", "output", "text", "image", "buttons", "userInput", "condition", "action", "carousel" según corresponda.
 `,
 });
 
-const generateFlowFromPromptFlow = ai.defineFlow(
+export const generateFlowFromPromptFlow = ai.defineFlow(
   {
     name: 'generateFlowFromPromptFlow',
     inputSchema: GenerateFlowFromPromptInputSchema,
